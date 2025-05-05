@@ -29,5 +29,7 @@ let package = Package(
             name: "KuzuTests",
             dependencies: ["Kuzu"]
         ),
-    ]
+    ],
+    cLanguageStandard: .c11,
+    cxxLanguageStandard: .cxx20
 )
