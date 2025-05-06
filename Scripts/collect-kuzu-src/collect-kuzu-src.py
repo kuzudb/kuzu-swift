@@ -29,9 +29,6 @@ TARGET_INCLUDE_DIR = os.path.abspath(os.path.join(CXX_KUZU_ROOT_DIR, "include"))
 OUTPUT_PATH = os.path.abspath(os.path.join(ROOT_DIR, PACKAGE_SWIFT))
 MANUAL_INCLUDE_DIRS = [
     "kuzu/third_party/simsimd/include",
-    "kuzu/third_party/glob",
-    "kuzu/third_party/fastpfor",
-    "kuzu/build/src/extension/codegen/include",
 ]
 MANUAL_SRC_COPY = [
     "build/src/extension/codegen/",
@@ -68,41 +65,34 @@ if not os.path.exists(compile_commands_file):
     exit(1)
 compile_commands = json.load(open(compile_commands_file))
 
-command_to_decode = None
-for command in compile_commands:
-    if "c_api" in command["directory"]:
-        command_to_decode = command["command"]
-        break
-
-if command_to_decode is None:
-    logger.error("Failed to find c_api in compile_commands.json")
-    exit(1)
-
-logger.info("Decoding command...")
-command_to_decode = command_to_decode.split(" ")
-
+logger.info("Decoding commands...")
 include_dirs = set()
 defines = set()
-
-for command in command_to_decode:
-    if command.startswith("-I"):
-        include_dir = command.split("-I")[1]
-        include_dir = os.path.relpath(include_dir, KUZU_ROOT_DIR)
-        include_dir = os.path.join(KUZU, include_dir)
-        include_dirs.add(include_dir)
-
+command_to_decode = None
+for command in compile_commands:
+    command_to_decode = command["command"]
+    command_to_decode = command_to_decode.split(" ")
+    for arg in command_to_decode:
+        if arg.startswith("-I"):
+            include_dir = arg.split("-I")[1]
+            include_dir = os.path.relpath(include_dir, KUZU_ROOT_DIR)
+            include_dir = os.path.join(KUZU, include_dir)
+            include_dirs.add(include_dir)
+    for arg in command_to_decode:
+        if arg.startswith("-D"):
+            define = arg.split("-D")[1].replace("\\", "")
+            if define.startswith("KUZU_ROOT_DIRECTORY"):
+                define = define.replace(KUZU_ROOT_DIR, KUZU)
+            # Skip defines that are not relevant to the build
+            if define.startswith("__64BIT__") or define.startswith("__32BIT__"):
+                continue
+            if define == "NDEBUG" or define == "DEBUG" or define == "OS_MACOSX":
+                continue
+            if define == "HAVE_STDINT_H":
+                continue
+            defines.add(define)
+    
 include_dirs = include_dirs.union(MANUAL_INCLUDE_DIRS)
-
-for command in command_to_decode:
-    if command.startswith("-D"):
-        define = command.split("-D")[1].replace("\\", "")
-        if define.startswith("KUZU_ROOT_DIRECTORY"):
-            define = define.replace(KUZU_ROOT_DIR, KUZU)
-        if define.startswith("__64BIT__") or define.startswith("__32BIT__"):
-            continue
-        if define == "NDEBUG" or define == "DEBUG":
-            continue
-        defines.add(define)
 
 files_to_compile = set()
 for command in compile_commands:
@@ -130,7 +120,6 @@ shutil.copy(KUZU_C_HEADER, TARGET_INCLUDE_DIR)
 logger.info("Copying manually-defined source code...")
 for src in MANUAL_SRC_COPY:
     src_path = os.path.join(KUZU_ROOT_DIR, src)
-    print(src_path)
     if os.path.exists(src_path):
         shutil.copytree(src_path, os.path.join(TARGET_DIR, src))
     else:
@@ -150,7 +139,10 @@ for macro in sorted(defines):
             value = value[1:]
         if value.endswith('"'):
             value = value[:-1]
-        swift_defines.append(f'{INDENTATION}.define("{name.strip()}", to: "\\"{value}\\""),')
+        if not value:
+            swift_defines.append(f'{INDENTATION}.define("{name.strip()}", to: ""),')
+        else:
+            swift_defines.append(f'{INDENTATION}.define("{name.strip()}", to: "\\"{value}\\""),')
     else:
         swift_defines.append(f'{INDENTATION}.define("{macro.strip()}"),')
 

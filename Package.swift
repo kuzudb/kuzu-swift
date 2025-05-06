@@ -997,18 +997,25 @@ let package = Package(
                 .headerSearchPath("kuzu/third_party/pcg"),
                 .headerSearchPath("kuzu/third_party/pybind11/include"),
                 .headerSearchPath("kuzu/third_party/pyparse"),
+                .headerSearchPath("kuzu/third_party/re2"),
                 .headerSearchPath("kuzu/third_party/re2/include"),
                 .headerSearchPath("kuzu/third_party/roaring_bitmap"),
+                .headerSearchPath("kuzu/third_party/simsimd"),
                 .headerSearchPath("kuzu/third_party/simsimd/include"),
                 .headerSearchPath("kuzu/third_party/snappy"),
                 .headerSearchPath("kuzu/third_party/thrift"),
+                .headerSearchPath("kuzu/third_party/thrift/include"),
                 .headerSearchPath("kuzu/third_party/utf8proc/include"),
+                .headerSearchPath("kuzu/third_party/yyjson"),
                 .headerSearchPath("kuzu/third_party/zstd/include"),
                 .define("ANTLR4CPP_STATIC"),
                 .define("KUZU_CMAKE_VERSION", to: "\"0.9.2\""),
                 .define("KUZU_EXPORTS"),
                 .define("KUZU_EXTENSION_VERSION", to: "\"0.9.0\""),
-                .define("KUZU_ROOT_DIRECTORY", to: "\"kuzu\"")
+                .define("KUZU_ROOT_DIRECTORY", to: "\"kuzu\""),
+                .define("ZSTDERRORLIB_VISIBILITY", to: ""),
+                .define("ZSTDLIB_VISIBILITY", to: ""),
+                .define("zstd")
             ]
         ),
         .testTarget(
