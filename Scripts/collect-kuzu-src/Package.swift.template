@@ -20,9 +20,11 @@ let package = Package(
         ),
         .target(
             name: "cxx-kuzu",
-            sources: ["src/"],
+            sources: [
+$SOURCES
+            ],
             cxxSettings: [
-        
+$CXX_SETTINGS
             ]
         ),
         .testTarget(
