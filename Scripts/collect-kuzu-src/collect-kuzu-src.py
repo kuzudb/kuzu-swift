@@ -20,11 +20,21 @@ KUZU_ROOT_DIR = os.path.abspath(os.path.join(ROOT_DIR, KUZU))
 KUZU_SRC_DIR = os.path.abspath(os.path.join(KUZU_ROOT_DIR, "src"))
 KUZU_THIRD_PARTY_DIR = os.path.abspath(os.path.join(KUZU_ROOT_DIR, "third_party"))
 KUZU_BUILD_DIR = os.path.abspath(os.path.join(KUZU_ROOT_DIR, "build"))
+KUZU_C_HEADER = os.path.abspath(os.path.join(KUZU_SRC_DIR, "include", "c_api", "kuzu.h"))
 CXX_KUZU_ROOT_DIR = os.path.abspath(os.path.join(ROOT_DIR, "Sources", CXX_KUZU))
 TARGET_DIR = os.path.abspath(os.path.join(CXX_KUZU_ROOT_DIR, KUZU))
 TARGET_SRC_DIR = os.path.abspath(os.path.join(TARGET_DIR, "src"))
 TARGET_THIRD_PARTY_DIR = os.path.abspath(os.path.join(TARGET_DIR, "third_party"))
+TARGET_INCLUDE_DIR = os.path.abspath(os.path.join(CXX_KUZU_ROOT_DIR, "include"))
 OUTPUT_PATH = os.path.abspath(os.path.join(ROOT_DIR, PACKAGE_SWIFT))
+MANUAL_INCLUDE_DIRS = [
+    "kuzu/third_party/simsimd/include",
+    "kuzu/build/src/extension/codegen/include"
+]
+MANUAL_SRC_COPY = [
+    "build/src/extension/codegen/",
+    "build/src/include/",
+]
 
 PACKAGE_SWIFT_TEMPLATE = os.path.abspath(os.path.join(os.path.dirname(__file__), f"{PACKAGE_SWIFT}.template"))
 try:
@@ -79,6 +89,8 @@ for command in command_to_decode:
         include_dir = os.path.join(KUZU, include_dir)
         include_dirs.add(include_dir)
 
+include_dirs = include_dirs.union(MANUAL_INCLUDE_DIRS)
+
 for command in command_to_decode:
     if command.startswith("-D"):
         define = command.split("-D")[1].replace("\\", "")
@@ -103,12 +115,25 @@ logger.info("Definitions: %d", len(defines))
 
 shutil.rmtree(TARGET_DIR, ignore_errors=True)
 os.makedirs(TARGET_DIR, exist_ok=True)
-
+os.makedirs(TARGET_INCLUDE_DIR, exist_ok=True)
 logger.info("Copying third party dependencies...")
 shutil.copytree(KUZU_THIRD_PARTY_DIR, TARGET_THIRD_PARTY_DIR)
 
 logger.info("Copying source code...")
 shutil.copytree(KUZU_SRC_DIR, TARGET_SRC_DIR)
+
+logger.info("Copying include code...")
+shutil.copy(KUZU_C_HEADER, TARGET_INCLUDE_DIR)
+
+logger.info("Copying manually-defined source code...")
+for src in MANUAL_SRC_COPY:
+    src_path = os.path.join(KUZU_ROOT_DIR, src)
+    print(src_path)
+    if os.path.exists(src_path):
+        shutil.copytree(src_path, os.path.join(TARGET_DIR, src))
+    else:
+        logger.error("Source path %s does not exist", src_path)
+        exit(1)
 
 logger.info("Generating Package.swift...")
 swift_defines = []

@@ -974,6 +974,7 @@ let package = Package(
             ],
             cxxSettings: [
                 .headerSearchPath("kuzu/build/src"),
+                .headerSearchPath("kuzu/build/src/extension/codegen/include"),
                 .headerSearchPath("kuzu/build/src/include"),
                 .headerSearchPath("kuzu/src/include"),
                 .headerSearchPath("kuzu/third_party/alp/include"),
@@ -992,6 +993,7 @@ let package = Package(
                 .headerSearchPath("kuzu/third_party/pyparse"),
                 .headerSearchPath("kuzu/third_party/re2/include"),
                 .headerSearchPath("kuzu/third_party/roaring_bitmap"),
+                .headerSearchPath("kuzu/third_party/simsimd/include"),
                 .headerSearchPath("kuzu/third_party/snappy"),
                 .headerSearchPath("kuzu/third_party/thrift"),
                 .headerSearchPath("kuzu/third_party/utf8proc/include"),
