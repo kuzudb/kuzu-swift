@@ -93,13 +93,8 @@ offset_t ChunkedCSRHeader::getEndCSROffset(offset_t nodeOffset) const {
 }
 
 length_t ChunkedCSRHeader::getCSRLength(offset_t nodeOffset) const {
-    if (randomLookup) {
-        return length->getData().getValue<length_t>(0);
-    }
-    if (nodeOffset >= offset->getNumValues()) {
-        return 0;
-    }
-    return length->getData().getValue<length_t>(nodeOffset);
+    const auto offset = randomLookup ? 0 : nodeOffset;
+    return offset >= length->getNumValues() ? 0 : length->getData().getValue<length_t>(offset);
 }
 
 length_t ChunkedCSRHeader::getGapSize(offset_t nodeOffset) const {
@@ -314,9 +309,10 @@ std::unique_ptr<ChunkedCSRNodeGroup> ChunkedCSRNodeGroup::deserialize(MemoryMana
     deSer.validateDebuggingInfo(key, "chunks");
     deSer.deserializeVectorOfPtrs<ColumnChunk>(chunks,
         [&](Deserializer& deser) { return ColumnChunk::deserialize(memoryManager, deser); });
+    row_idx_t startRowIdx = 0;
+    deSer.deserializeValue<row_idx_t>(startRowIdx);
     auto chunkedGroup = std::make_unique<ChunkedCSRNodeGroup>(
-        ChunkedCSRHeader{std::move(offset), std::move(length)}, std::move(chunks),
-        0 /*startRowIdx*/);
+        ChunkedCSRHeader{std::move(offset), std::move(length)}, std::move(chunks), startRowIdx);
     bool hasVersions = false;
     deSer.validateDebuggingInfo(key, "has_version_info");
     deSer.deserializeValue<bool>(hasVersions);

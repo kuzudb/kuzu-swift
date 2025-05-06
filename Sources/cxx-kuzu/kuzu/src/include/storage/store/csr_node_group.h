@@ -135,11 +135,11 @@ struct CSRNodeGroupScanState final : NodeGroupScanState {
     explicit CSRNodeGroupScanState(common::idx_t numChunks)
         : NodeGroupScanState{numChunks}, header{nullptr}, numTotalRows{0}, numCachedRows{0},
           nextCachedRowToScan{0}, source{CSRNodeGroupScanSource::COMMITTED_PERSISTENT} {}
-    explicit CSRNodeGroupScanState(MemoryManager& mm)
+    explicit CSRNodeGroupScanState(MemoryManager& mm, bool randomLookup = false)
         : numTotalRows{0}, numCachedRows{0}, nextCachedRowToScan{0},
           source{CSRNodeGroupScanSource::COMMITTED_PERSISTENT} {
         header = std::make_unique<ChunkedCSRHeader>(mm, false,
-            common::StorageConfig::NODE_GROUP_SIZE, ResidencyState::IN_MEMORY);
+            randomLookup ? 1 : common::StorageConfig::NODE_GROUP_SIZE, ResidencyState::IN_MEMORY);
     }
 
     bool tryScanCachedTuples(RelTableScanState& tableScanState);
@@ -210,7 +210,7 @@ public:
         FileHandle* dataFH, ColumnStats* newColumnStats) override;
 
     void checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointState& state) override;
-    void reclaimStorage(FileHandle& dataFH) override;
+    void reclaimStorage(FileHandle& dataFH, const common::UniqLock& lock) const override;
 
     bool isEmpty() const override { return !persistentChunkGroup && NodeGroup::isEmpty(); }
 
@@ -236,7 +236,7 @@ private:
     NodeGroupScanResult scanCommittedPersistentWithCache(
         const transaction::Transaction* transaction, RelTableScanState& tableState,
         CSRNodeGroupScanState& nodeGroupScanState) const;
-    NodeGroupScanResult scanCommittedPersistentWtihoutCache(
+    NodeGroupScanResult scanCommittedPersistentWithoutCache(
         const transaction::Transaction* transaction, RelTableScanState& tableState,
         CSRNodeGroupScanState& nodeGroupScanState) const;
 

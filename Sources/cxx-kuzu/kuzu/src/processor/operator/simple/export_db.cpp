@@ -66,7 +66,7 @@ static void writeCopyStatement(stringstream& ss, const TableCatalogEntry* entry,
         if (prop.getType() == LogicalType::INTERNAL_ID()) {
             continue;
         }
-        columns += prop.getName();
+        columns += "`" + prop.getName() + "`";
         columns += i == numProperties - 1 ? "" : ",";
     }
     if (columns.empty()) {
@@ -105,7 +105,10 @@ std::string getSchemaCypher(ClientContext* clientContext) {
         ss << catalog->getScalarMacroFunction(transaction, macroName)->toCypher(macroName)
            << std::endl;
     }
-    ss << clientContext->getExtensionManager()->toCypher() << std::endl;
+    auto extensionCypher = clientContext->getExtensionManager()->toCypher();
+    if (!extensionCypher.empty()) {
+        ss << extensionCypher << std::endl;
+    }
     return ss.str();
 }
 
@@ -127,7 +130,10 @@ std::string getIndexCypher(ClientContext* clientContext, const FileScanInfo& exp
     IndexToCypherInfo info{clientContext, exportFileInfo};
     for (auto entry :
         clientContext->getCatalog()->getIndexEntries(clientContext->getTransaction())) {
-        ss << entry->toCypher(info) << std::endl;
+        auto indexCypher = entry->toCypher(info);
+        if (!indexCypher.empty()) {
+            ss << indexCypher << std::endl;
+        }
     }
     return ss.str();
 }
