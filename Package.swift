@@ -5,6 +5,10 @@ import PackageDescription
 
 let package = Package(
     name: "kuzu-swift",
+    platforms: [
+        .macOS(.v11),
+        .iOS(.v14),
+    ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
@@ -982,6 +986,8 @@ let package = Package(
                 .headerSearchPath("kuzu/third_party/antlr4_runtime/src"),
                 .headerSearchPath("kuzu/third_party/brotli/c/include"),
                 .headerSearchPath("kuzu/third_party/fast_float/include"),
+                .headerSearchPath("kuzu/third_party/fastpfor"),
+                .headerSearchPath("kuzu/third_party/glob"),
                 .headerSearchPath("kuzu/third_party/httplib"),
                 .headerSearchPath("kuzu/third_party/lz4"),
                 .headerSearchPath("kuzu/third_party/mbedtls/include"),

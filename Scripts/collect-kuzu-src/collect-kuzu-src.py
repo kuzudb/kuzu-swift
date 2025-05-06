@@ -29,7 +29,9 @@ TARGET_INCLUDE_DIR = os.path.abspath(os.path.join(CXX_KUZU_ROOT_DIR, "include"))
 OUTPUT_PATH = os.path.abspath(os.path.join(ROOT_DIR, PACKAGE_SWIFT))
 MANUAL_INCLUDE_DIRS = [
     "kuzu/third_party/simsimd/include",
-    "kuzu/build/src/extension/codegen/include"
+    "kuzu/third_party/glob",
+    "kuzu/third_party/fastpfor",
+    "kuzu/build/src/extension/codegen/include",
 ]
 MANUAL_SRC_COPY = [
     "build/src/extension/codegen/",
