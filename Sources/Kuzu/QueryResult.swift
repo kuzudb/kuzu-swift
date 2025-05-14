@@ -20,6 +20,10 @@ public final class QueryResult: CustomStringConvertible {
         self.connection = connection
     }
 
+    deinit {
+        kuzu_query_result_destroy(&cQueryResult)
+    }
+
     public var description: String {
         let cString: UnsafeMutablePointer<CChar> = kuzu_query_result_to_string(
             &cQueryResult
@@ -28,7 +32,9 @@ public final class QueryResult: CustomStringConvertible {
         return String(cString: cString)
 
     }
-    deinit {
-        kuzu_query_result_destroy(&cQueryResult)
+
+    public func hasNext() -> Bool {
+        return kuzu_query_result_has_next(&cQueryResult)
     }
+
 }

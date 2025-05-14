@@ -3,7 +3,7 @@ import Testing
 
 @Test func example() async throws {
     let systemConfig = Kuzu.SystemConfig()
-    let db = try Kuzu.Database("", systemConfig)
+    let db = try Kuzu.Database("")
     let conn = try Kuzu.Connection(db)
     var result = conn.query("CREATE NODE TABLE User(name STRING, age INT64, PRIMARY KEY (name))")
     print(result)

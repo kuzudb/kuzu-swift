@@ -20,6 +20,10 @@ public final class Connection {
         }
     }
 
+    deinit {
+        kuzu_connection_destroy(&cConnection)
+    }
+
     public func query(_ cypher: String) -> QueryResult {
         var cQueryResult = kuzu_query_result()
         kuzu_connection_query(&cConnection, cypher, &cQueryResult)
@@ -27,7 +31,21 @@ public final class Connection {
         return queryResult
     }
 
-    deinit {
-        kuzu_connection_destroy(&cConnection)
+    public func setMaxNumThreadForExec(_ numThreads: UInt64) {
+        kuzu_connection_set_max_num_thread_for_exec(&cConnection, numThreads)
+    }
+
+    public func getMaxNumThreadForExec() -> UInt64 {
+        var numThreads = UInt64()
+        kuzu_connection_get_max_num_thread_for_exec(&cConnection, &numThreads)
+        return numThreads
+    }
+
+    public func setQueryTimeout(_ milliseconds: UInt64) {
+        kuzu_connection_set_query_timeout(&cConnection, milliseconds)
+    }
+
+    public func interrupt() {
+        kuzu_connection_interrupt(&cConnection)
     }
 }
