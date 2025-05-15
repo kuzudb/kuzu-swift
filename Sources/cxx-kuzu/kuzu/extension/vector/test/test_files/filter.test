@@ -1,0 +1,250 @@
+-DATASET CSV empty
+-BUFFER_POOL_SIZE 134217728
+
+--
+
+-CASE Filtered8DimDotProduct
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', metric := 'dotproduct');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 100'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+58
+93
+28
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, directed_search_up_sel := 0.8, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+58
+93
+28
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, blind_search_up_sel := 0.8, directed_search_up_sel := 0.9, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+58
+93
+28
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 100 WITH n.id as id, array_dot_product(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+58
+93
+28
+
+-CASE Filtered8DimDotProduct2
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', metric := 'dotproduct');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 50'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+28
+0
+30
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 50 WITH n.id as id, array_dot_product(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+28
+0
+30
+
+-CASE Filtered8DimDotProduct3
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', metric := 'dotproduct');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 600'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+499
+581
+58
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 600 WITH n.id as id, array_dot_product(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+499
+581
+58
+
+-CASE Filtered8DimL2
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', metric := 'l2');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 100'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+37
+40
+52
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 100 WITH n.id as id, array_distance(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+37
+40
+52
+
+-CASE Filtered8DimL22
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', metric := 'l2');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 50'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+37
+40
+43
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 50 WITH n.id as id, array_distance(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+37
+40
+43
+
+-CASE Filtered8DimL23
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec', metric := 'l2');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 600'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+333
+444
+133
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 600 WITH n.id as id, array_distance(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+333
+444
+133
+
+-CASE Filtered8DimCos
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 100'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+37
+86
+40
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 100 WITH n.id as id, 1-array_cosine_similarity(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+37
+86
+40
+
+-CASE Filtered8DimCos2
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 50'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+37
+40
+43
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 50 WITH n.id as id, 1-array_cosine_similarity(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+37
+40
+43
+
+-CASE Filtered8DimCos3
+-STATEMENT LOAD EXTENSION '${KUZU_ROOT_DIRECTORY}/extension/vector/build/libvector.kuzu_extension';
+---- ok
+-STATEMENT CREATE NODE TABLE embeddings (id int64, vec FLOAT[8], PRIMARY KEY (id));
+---- ok
+-STATEMENT CALL threads=1;
+---- ok
+-STATEMENT COPY embeddings FROM "${KUZU_ROOT_DIRECTORY}/dataset/embeddings/embeddings-8-1k.csv" (deLim=',');
+---- ok
+-STATEMENT CALL CREATE_VECTOR_INDEX('embeddings', 'e_hnsw_index', 'vec');
+---- ok
+-STATEMENT CALL PROJECT_GRAPH('emb-graph', {'embeddings': 'n.id < 600'}, []);
+---- ok
+-STATEMENT CALL QUERY_VECTOR_INDEX('emb-graph', 'e_hnsw_index', CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]'), 3, efs := 500) RETURN node.id ORDER BY distance;
+-CHECK_ORDER
+---- 3
+333
+444
+146
+-STATEMENT MATCH (n:embeddings) WHERE n.id < 600 WITH n.id as id, 1-array_cosine_similarity(n.vec, CAST([0.1521,0.3021,0.5366,0.2774,0.5593,0.5589,0.1365,0.8557],'FLOAT[8]')) AS dist RETURN id ORDER BY dist LIMIT 3;
+-CHECK_ORDER
+---- 3
+333
+444
+146

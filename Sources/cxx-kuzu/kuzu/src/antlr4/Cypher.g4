@@ -92,7 +92,7 @@ kU_IfNotExists
     : IF SP NOT SP EXISTS ;
 
 kU_CreateNodeTable
-    : CREATE SP NODE SP TABLE SP (kU_IfNotExists SP)? oC_SchemaName SP? '(' SP? kU_PropertyDefinitions SP? ( ',' SP? kU_CreateNodeConstraint )? SP? ')' ;
+    : CREATE SP NODE SP TABLE SP (kU_IfNotExists SP)? oC_SchemaName ( SP? '(' SP? kU_PropertyDefinitions SP? ( ',' SP? kU_CreateNodeConstraint )? SP? ')' | SP AS SP? SP? oC_Query SP? ) ;
 
 kU_CreateRelTable
     : CREATE SP REL SP TABLE ( SP GROUP )? ( SP kU_IfNotExists )? SP oC_SchemaName
@@ -205,13 +205,21 @@ kU_Transaction
 
 kU_Extension
     : kU_LoadExtension
-        | kU_InstallExtension;
+        | kU_InstallExtension
+        | kU_UninstallExtension
+        | kU_UpdateExtension ;
 
 kU_LoadExtension
     : LOAD SP (EXTENSION SP)? ( StringLiteral | oC_Variable ) ;
 
 kU_InstallExtension
-    : INSTALL SP oC_Variable (SP FROM SP StringLiteral)?;
+    : (FORCE SP)? INSTALL SP oC_Variable (SP FROM SP StringLiteral)?;
+
+kU_UninstallExtension
+    : UNINSTALL SP oC_Variable;
+
+kU_UpdateExtension
+    : UPDATE SP oC_Variable;
 
 oC_Query
     : oC_RegularQuery ;
@@ -703,6 +711,7 @@ kU_NonReservedKeywords
         | EXPLAIN
         | EXPORT
         | EXTENSION
+        | FORCE
         | GRAPH
         | IF
         | IS
@@ -731,6 +740,8 @@ kU_NonReservedKeywords
         | TRANSACTION
         | TYPE
         | USE
+        | UNINSTALL
+        | UPDATE
         | WRITE
         | FROM
         | TO
