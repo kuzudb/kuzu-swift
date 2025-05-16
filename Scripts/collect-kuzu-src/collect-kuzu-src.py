@@ -37,6 +37,19 @@ MANUAL_SRC_COPY = [
     "build/src/include/",
 ]
 
+FILE_TYPES = [
+    '.c',
+    '.h',
+    '.cpp',
+    '.hpp',
+    '.cxx',
+    '.hxx',
+    '.cc',
+    '.hh',
+    '.tcc',
+]
+LICENSE_FILE = "LICENSE"
+
 PACKAGE_SWIFT_TEMPLATE = os.path.abspath(os.path.join(os.path.dirname(__file__), f"{PACKAGE_SWIFT}.template"))
 try:
     with open(PACKAGE_SWIFT_TEMPLATE, "r") as f:
@@ -130,6 +143,22 @@ for src in MANUAL_SRC_COPY:
     else:
         logger.error("Source path %s does not exist", src_path)
         exit(1)
+
+logger.info("Removing unneeded files...")
+for root, dirs, files in os.walk(TARGET_DIR):
+    for file in files:
+        if file.upper().startswith(LICENSE_FILE):
+            continue
+        if any(file.endswith(ext) for ext in FILE_TYPES):
+            continue
+        os.remove(os.path.join(root, file))
+
+logger.info("Removing empty directories...")
+for path, _, _ in os.walk(TARGET_DIR, topdown=False):
+    if len(os.listdir(path)) == 0:
+        os.rmdir(path)
+
+logger.info("Done removing unneeded files")
 
 logger.info("Generating Package.swift...")
 swift_defines = []
