@@ -76,8 +76,10 @@ public final class Connection {
     ) throws -> QueryResult {
         var cQueryResult = kuzu_query_result()
         for (key, value) in parameters {
-            var cValue = try swiftValueToKuzuValue(value)
-            defer { kuzu_value_destroy(cValue) }
+            let cValue = try swiftValueToKuzuValue(value)
+            defer {
+                kuzu_value_destroy(cValue)
+            }
             let state = kuzu_prepared_statement_bind_value(
                 &preparedStatement.cPreparedStatement,
                 key,
