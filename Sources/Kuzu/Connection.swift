@@ -24,11 +24,50 @@ public final class Connection {
         kuzu_connection_destroy(&cConnection)
     }
 
-    public func query(_ cypher: String) -> QueryResult {
+    public func query(_ cypher: String) throws -> QueryResult {
         var cQueryResult = kuzu_query_result()
         kuzu_connection_query(&cConnection, cypher, &cQueryResult)
+        if !kuzu_query_result_is_success(&cQueryResult) {
+            let cErrorMesage: UnsafeMutablePointer<CChar>? =
+                kuzu_query_result_get_error_message(&cQueryResult)
+            defer {
+                kuzu_query_result_destroy(&cQueryResult)
+                kuzu_destroy_string(cErrorMesage)
+            }
+            if cErrorMesage == nil {
+                throw KuzuError.queryExecutionFailed(
+                    "Query execution failed with an unknown error."
+                )
+            } else {
+                let errorMessage = String(cString: cErrorMesage!)
+                throw KuzuError.queryExecutionFailed(errorMessage)
+            }
+        }
         let queryResult = QueryResult(self, cQueryResult)
         return queryResult
+    }
+
+    public func prepare(_ cypher: String) throws -> PreparedStatement {
+        var cPreparedStatement = kuzu_prepared_statement()
+        kuzu_connection_prepare(&cConnection, cypher, &cPreparedStatement)
+        if !kuzu_prepared_statement_is_success(&cPreparedStatement) {
+            let cErrorMesage: UnsafeMutablePointer<CChar>? =
+                kuzu_prepared_statement_get_error_message(&cPreparedStatement)
+            defer {
+                kuzu_destroy_string(cErrorMesage)
+                kuzu_prepared_statement_destroy(&cPreparedStatement)
+            }
+            if cErrorMesage == nil {
+                throw KuzuError.prepareStatmentFailed(
+                    "Prepare statement failed with an unknown error."
+                )
+            } else {
+                let errorMessage = String(cString: cErrorMesage!)
+                throw KuzuError.prepareStatmentFailed(errorMessage)
+            }
+        }
+        let preparedStatement = PreparedStatement(self, cPreparedStatement)
+        return preparedStatement
     }
 
     public func setMaxNumThreadForExec(_ numThreads: UInt64) {

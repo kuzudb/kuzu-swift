@@ -36,5 +36,14 @@ public final class QueryResult: CustomStringConvertible {
     public func hasNext() -> Bool {
         return kuzu_query_result_has_next(&cQueryResult)
     }
+    
+    public func getNext() throws -> FlatTuple  {
+        var cFlatTuple: kuzu_flat_tuple = kuzu_flat_tuple()
+        let state = kuzu_query_result_get_next(&cQueryResult, &cFlatTuple)
+        if state != KuzuSuccess {
+            throw KuzuError.getFlatTupleFailed("Get next failed with error code: \(state)")
+        }
+        return FlatTuple(self, cFlatTuple)
+    }
 
 }

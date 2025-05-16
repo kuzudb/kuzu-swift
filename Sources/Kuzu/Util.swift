@@ -10,4 +10,8 @@ import Foundation
 enum KuzuError: Error {
     case databaseInitializationFailed(String)
     case connectionInitializationFailed(String)
+    case queryExecutionFailed(String)
+    case prepareStatmentFailed(String)
+    case valueConversionFailed(String)
+    case getFlatTupleFailed(String)
 }

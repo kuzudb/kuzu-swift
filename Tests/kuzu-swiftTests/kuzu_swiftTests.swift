@@ -5,24 +5,27 @@ import Testing
     let systemConfig = Kuzu.SystemConfig()
     let db = try Kuzu.Database("")
     let conn = try Kuzu.Connection(db)
-    var result = conn.query("CREATE NODE TABLE User(name STRING, age INT64, PRIMARY KEY (name))")
+    var result = try conn.query("CREATE NODE TABLE User(name STRING, age INT64, PRIMARY KEY (name))")
     print(result)
-    result = conn.query("CREATE NODE TABLE City(name STRING, population INT64, PRIMARY KEY (name))")
+    result = try conn.query("CREATE NODE TABLE City(name STRING, population INT64, PRIMARY KEY (name))")
     print(result)
-    result = conn.query("CREATE REL TABLE Follows(FROM User TO User, since INT64)")
+    result = try conn.query("CREATE REL TABLE Follows(FROM User TO User, since INT64)")
     print(result)
-    result = conn.query("CREATE REL TABLE LivesIn(FROM User TO City)")
+    result = try conn.query("CREATE REL TABLE LivesIn(FROM User TO City)")
     print(result)
-    result = conn.query("COPY User From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/user.csv'")
+    result = try conn.query("COPY User From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/user.csv'")
     print(result)
-    result = conn.query("COPY City From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/city.csv'")
+    result = try conn.query("COPY City From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/city.csv'")
     print(result)
-    result = conn.query("COPY Follows From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/follows.csv'")
+    result = try conn.query("COPY Follows From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/follows.csv'")
     print(result)
-    result = conn.query("COPY LivesIn From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/lives-in.csv'")
+    result = try conn.query("COPY LivesIn From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/lives-in.csv'")
     print(result)
-    result = conn.query("MATCH (u:User)-[l:LivesIn]->(c:City) RETURN u.name, c.name")
-    print(result)
+    result = try conn.query("MATCH (u:User)-[l:LivesIn]->(c:City) RETURN u.name, c.name")
+    while result.hasNext() {
+        let tuple = try result.getNext()
+        print(tuple)
+    }
     
     // Write your test here and use APIs like `#expect(...)` to check expected conditions.
 }
@@ -30,11 +33,11 @@ import Testing
 @Test func testGds() async throws {
     let db = try Kuzu.Database()
     let conn = try Kuzu.Connection(db)
-    var result = conn.query("CREATE NODE TABLE Node(id STRING PRIMARY KEY);")
+    var result = try conn.query("CREATE NODE TABLE Node(id STRING PRIMARY KEY);")
     print(result)
-    result = conn.query("CREATE REL TABLE Edge(FROM Node to Node, id INT64);")
+    result = try conn.query("CREATE REL TABLE Edge(FROM Node to Node, id INT64);")
     print(result)
-    result = conn.query("""
+    result = try conn.query("""
                         CREATE (u0:Node {id: 'A'}),
                                 (u1:Node {id: 'B'}),
                                 (u2:Node {id: 'C'}),
@@ -54,8 +57,8 @@ import Testing
                                 (u6)-[:Edge {id:7}]->(u5)
     """)
     print(result)
-    result = conn.query("CALL project_graph('Graph', ['Node'], ['Edge']);")
+    result = try conn.query("CALL project_graph('Graph', ['Node'], ['Edge']);")
     print(result)
-    result = conn.query("CALL weakly_connected_components('Graph') RETURN group_id, collect(node.id);")
+    result = try conn.query("CALL weakly_connected_components('Graph') RETURN group_id, collect(node.id);")
     print(result)
 }
