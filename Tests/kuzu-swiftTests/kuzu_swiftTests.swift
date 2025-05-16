@@ -62,3 +62,11 @@ import Testing
     result = try conn.query("CALL weakly_connected_components('Graph') RETURN group_id, collect(node.id);")
     print(result)
 }
+
+@Test func testParam() async throws {
+    let db = try Kuzu.Database()
+    let conn = try Kuzu.Connection(db)
+    let preparedStatement = try conn.prepare("RETURN $1")
+    var result = try conn.execute(preparedStatement, ["1": [[1,2], [3,4], [5]]])
+    print(result)
+}
