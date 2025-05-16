@@ -18,12 +18,14 @@ PACKAGE_SWIFT = "Package.swift"
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 KUZU_ROOT_DIR = os.path.abspath(os.path.join(ROOT_DIR, KUZU))
 KUZU_SRC_DIR = os.path.abspath(os.path.join(KUZU_ROOT_DIR, "src"))
+KUZU_EXTENSION_DIR = os.path.abspath(os.path.join(KUZU_ROOT_DIR, "extension"))
 KUZU_THIRD_PARTY_DIR = os.path.abspath(os.path.join(KUZU_ROOT_DIR, "third_party"))
 KUZU_BUILD_DIR = os.path.abspath(os.path.join(KUZU_ROOT_DIR, "build"))
 KUZU_C_HEADER = os.path.abspath(os.path.join(KUZU_SRC_DIR, "include", "c_api", "kuzu.h"))
 CXX_KUZU_ROOT_DIR = os.path.abspath(os.path.join(ROOT_DIR, "Sources", CXX_KUZU))
 TARGET_DIR = os.path.abspath(os.path.join(CXX_KUZU_ROOT_DIR, KUZU))
 TARGET_SRC_DIR = os.path.abspath(os.path.join(TARGET_DIR, "src"))
+TARGET_EXTENSION_DIR = os.path.abspath(os.path.join(TARGET_DIR, "extension"))
 TARGET_THIRD_PARTY_DIR = os.path.abspath(os.path.join(TARGET_DIR, "third_party"))
 TARGET_INCLUDE_DIR = os.path.abspath(os.path.join(CXX_KUZU_ROOT_DIR, "include"))
 OUTPUT_PATH = os.path.abspath(os.path.join(ROOT_DIR, PACKAGE_SWIFT))
@@ -34,6 +36,19 @@ MANUAL_SRC_COPY = [
     "build/src/extension/codegen/",
     "build/src/include/",
 ]
+
+FILE_TYPES = [
+    '.c',
+    '.h',
+    '.cpp',
+    '.hpp',
+    '.cxx',
+    '.hxx',
+    '.cc',
+    '.hh',
+    '.tcc',
+]
+LICENSE_FILE = "LICENSE"
 
 PACKAGE_SWIFT_TEMPLATE = os.path.abspath(os.path.join(os.path.dirname(__file__), f"{PACKAGE_SWIFT}.template"))
 try:
@@ -54,7 +69,7 @@ if status != 0:
 logger.info("Generating cmake compile commands...")
 os.makedirs(KUZU_BUILD_DIR, exist_ok=True)
 
-status = Popen("cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHELL=FALSE -DBUILD_BENCHMARK=FALSE -DBUILD_TESTS=FALSE ..", cwd=KUZU_BUILD_DIR, shell=True).wait()
+status = Popen("cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHELL=FALSE -DBUILD_BENCHMARK=FALSE -DBUILD_TESTS=FALSE -DBUILD_SWIFT=TRUE ..", cwd=KUZU_BUILD_DIR, shell=True).wait()
 if status != 0:
     logger.error("Failed to cmake kuzu")
     exit(1)
@@ -114,6 +129,9 @@ shutil.copytree(KUZU_THIRD_PARTY_DIR, TARGET_THIRD_PARTY_DIR)
 logger.info("Copying source code...")
 shutil.copytree(KUZU_SRC_DIR, TARGET_SRC_DIR)
 
+logger.info("Copying extension code...")
+shutil.copytree(KUZU_EXTENSION_DIR, TARGET_EXTENSION_DIR)
+
 logger.info("Copying include code...")
 shutil.copy(KUZU_C_HEADER, TARGET_INCLUDE_DIR)
 
@@ -125,6 +143,22 @@ for src in MANUAL_SRC_COPY:
     else:
         logger.error("Source path %s does not exist", src_path)
         exit(1)
+
+logger.info("Removing unneeded files...")
+for root, dirs, files in os.walk(TARGET_DIR):
+    for file in files:
+        if file.upper().startswith(LICENSE_FILE):
+            continue
+        if any(file.endswith(ext) for ext in FILE_TYPES):
+            continue
+        os.remove(os.path.join(root, file))
+
+logger.info("Removing empty directories...")
+for path, _, _ in os.walk(TARGET_DIR, topdown=False):
+    if len(os.listdir(path)) == 0:
+        os.rmdir(path)
+
+logger.info("Done removing unneeded files")
 
 logger.info("Generating Package.swift...")
 swift_defines = []

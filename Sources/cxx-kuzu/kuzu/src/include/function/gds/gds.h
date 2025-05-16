@@ -40,6 +40,7 @@ struct KUZU_API GDSBindData : public TableFuncBindData {
         std::unique_ptr<GDSOptionalParams> optionalParams = nullptr)
         : TableFuncBindData{std::move(columns)}, graphEntry{graphEntry.copy()},
           nodeOutput{std::move(nodeOutput)}, optionalParams{std::move(optionalParams)} {}
+
     GDSBindData(const GDSBindData& other)
         : TableFuncBindData{other}, graphEntry{other.graphEntry.copy()},
           nodeOutput{other.nodeOutput},
@@ -95,7 +96,7 @@ public:
         const TableFuncInitSharedStateInput& input);
     static void getLogicalPlan(planner::Planner* planner,
         const binder::BoundReadingClause& readingClause, binder::expression_vector predicates,
-        std::vector<std::unique_ptr<planner::LogicalPlan>>& logicalPlans);
+        planner::LogicalPlan& plan);
     static std::unique_ptr<processor::PhysicalOperator> getPhysicalPlan(
         processor::PlanMapper* planMapper, const planner::LogicalOperator* logicalOp);
 };

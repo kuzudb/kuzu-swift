@@ -63,9 +63,9 @@ void addFunc(main::Database& database, std::string name, catalog::CatalogEntryTy
 struct KUZU_API ExtensionUtils {
     static constexpr const char* OFFICIAL_EXTENSION_REPO = "http://extension.kuzudb.com/";
 
-    static constexpr const char* EXTENSION_FILE_REPO_PATH = "v{}/{}/{}/{}";
+    static constexpr const char* EXTENSION_FILE_REPO_PATH = "{}v{}/{}/{}/{}";
 
-    static constexpr const char* SHARED_LIB_REPO = "v{}/{}/common/{}";
+    static constexpr const char* SHARED_LIB_REPO = "{}v{}/{}/common/{}";
 
     static constexpr const char* EXTENSION_FILE_NAME = "lib{}.kuzu_extension";
 
@@ -101,7 +101,7 @@ struct KUZU_API ExtensionUtils {
     static std::string getLocalPathForExtensionInstaller(main::ClientContext* context,
         const std::string& extensionName);
 
-    static std::string getLocalExtensionDir(main::ClientContext* context,
+    static std::string getLocalDirForExtension(main::ClientContext* context,
         const std::string& extensionName);
 
     static std::string appendLibSuffix(const std::string& libName);
@@ -116,6 +116,12 @@ struct KUZU_API ExtensionUtils {
     template<typename T>
     static void addTableFunc(main::Database& database) {
         addFunc<T>(database, T::name, catalog::CatalogEntryType::TABLE_FUNCTION_ENTRY);
+    }
+
+    template<typename T>
+    static void addTableFuncAlias(main::Database& database) {
+        addFunc<typename T::alias>(database, T::name,
+            catalog::CatalogEntryType::TABLE_FUNCTION_ENTRY);
     }
 
     template<typename T>

@@ -3,7 +3,6 @@
 #include "common/exception/binder.h"
 #include "parser/query/reading_clause/yield_variable.h"
 #include "planner/operator/logical_table_function_call.h"
-#include "planner/operator/sip/logical_semi_masker.h"
 #include "planner/planner.h"
 #include "processor/data_pos.h"
 #include "processor/operator/table_function_call.h"
@@ -79,13 +78,11 @@ std::vector<std::string> TableFunction::extractYieldVariables(const std::vector<
     return variableNames;
 }
 
-void TableFunction::getLogicalPlan(planner::Planner* planner,
+void TableFunction::getLogicalPlan(Planner* planner,
     const binder::BoundReadingClause& boundReadingClause, binder::expression_vector predicates,
-    std::vector<std::unique_ptr<planner::LogicalPlan>>& plans) {
-    for (auto& plan : plans) {
-        auto op = planner->getTableFunctionCall(boundReadingClause);
-        planner->planReadOp(op, predicates, *plan);
-    }
+    LogicalPlan& plan) {
+    auto op = planner->getTableFunctionCall(boundReadingClause);
+    planner->planReadOp(op, predicates, plan);
 }
 
 std::unique_ptr<PhysicalOperator> TableFunction::getPhysicalPlan(PlanMapper* planMapper,
@@ -103,13 +100,6 @@ std::unique_ptr<PhysicalOperator> TableFunction::getPhysicalPlan(PlanMapper* pla
     auto initInput =
         TableFuncInitSharedStateInput(info.bindData.get(), planMapper->executionContext);
     auto sharedState = info.function.initSharedStateFunc(initInput);
-    if (!sharedState->semiMasks.getMasks().empty()) {
-        for (const auto& logicalRoot : call.getNodeMaskRoots()) {
-            auto logicalSemiMasker = planMapper->findSemiMaskerInPlan(logicalRoot.get());
-            KU_ASSERT(logicalSemiMasker);
-            logicalSemiMasker->addTarget(logicalOp);
-        }
-    }
     auto printInfo = std::make_unique<TableFunctionCallPrintInfo>(call.getTableFunc().name,
         call.getBindData()->columns);
     return std::make_unique<TableFunctionCall>(std::move(info), sharedState,

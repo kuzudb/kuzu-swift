@@ -20,16 +20,33 @@ static void bindInstallExtension(const ExtensionAuxInfo& auxInfo) {
     }
 }
 
-static void bindLoadExtension(const ExtensionAuxInfo& auxInfo) {
+static void bindLoadExtension(main::ClientContext* context, const ExtensionAuxInfo& auxInfo) {
+    auto localFileSystem = common::LocalFileSystem("");
     if (ExtensionUtils::isOfficialExtension(auxInfo.path)) {
+        auto extensionName = common::StringUtils::getLower(auxInfo.path);
+        if (!localFileSystem.fileOrPathExists(
+                ExtensionUtils::getLocalPathForExtensionLib(context, extensionName))) {
+            throw common::BinderException(
+                common::stringFormat("Extension: {} is an official extension and has not been "
+                                     "installed.\nYou can install it by: install {}.",
+                    extensionName, extensionName));
+        }
         return;
     }
-    auto localFileSystem = common::LocalFileSystem("");
     if (!localFileSystem.fileOrPathExists(auxInfo.path, nullptr /* clientContext */)) {
         throw common::BinderException(
             common::stringFormat("The extension {} is neither an official extension, nor does "
                                  "the extension path: '{}' exists.",
                 auxInfo.path, auxInfo.path));
+    }
+}
+
+static void bindUninstallExtension(const ExtensionAuxInfo& auxInfo) {
+    if (!ExtensionUtils::isOfficialExtension(auxInfo.path)) {
+        throw common::BinderException(
+            common::stringFormat("The extension {} is not an official extension.\nOnly official "
+                                 "extensions can be uninstalled.",
+                auxInfo.path));
     }
 }
 
@@ -41,7 +58,10 @@ std::unique_ptr<BoundStatement> Binder::bindExtension(const Statement& statement
         bindInstallExtension(*auxInfo);
         break;
     case ExtensionAction::LOAD:
-        bindLoadExtension(*auxInfo);
+        bindLoadExtension(clientContext, *auxInfo);
+        break;
+    case ExtensionAction::UNINSTALL:
+        bindUninstallExtension(*auxInfo);
         break;
     default:
         KU_UNREACHABLE;

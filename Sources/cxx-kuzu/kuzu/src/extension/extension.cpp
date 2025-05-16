@@ -69,9 +69,8 @@ std::string ExtensionSourceUtils::toString(ExtensionSource source) {
 
 static ExtensionRepoInfo getExtensionFilePath(const std::string& extensionName,
     const std::string& extensionRepo, const std::string& fileName) {
-    auto extensionURL =
-        common::stringFormat(extensionRepo + ExtensionUtils::EXTENSION_FILE_REPO_PATH,
-            KUZU_EXTENSION_VERSION, getPlatform(), extensionName, fileName);
+    auto extensionURL = common::stringFormat(ExtensionUtils::EXTENSION_FILE_REPO_PATH,
+        extensionRepo, KUZU_EXTENSION_VERSION, getPlatform(), extensionName, fileName);
     return getExtensionRepoInfo(extensionURL);
 }
 
@@ -94,8 +93,8 @@ ExtensionRepoInfo ExtensionUtils::getExtensionInstallerRepoInfo(const std::strin
 
 ExtensionRepoInfo ExtensionUtils::getSharedLibRepoInfo(const std::string& fileName,
     const std::string& extensionRepo) {
-    auto extensionURL = common::stringFormat(extensionRepo + SHARED_LIB_REPO,
-        KUZU_EXTENSION_VERSION, getPlatform(), fileName);
+    auto extensionURL = common::stringFormat(SHARED_LIB_REPO, extensionRepo, KUZU_EXTENSION_VERSION,
+        getPlatform(), fileName);
     return getExtensionRepoInfo(extensionURL);
 }
 
@@ -105,23 +104,23 @@ std::string ExtensionUtils::getExtensionFileName(const std::string& name) {
 
 std::string ExtensionUtils::getLocalPathForExtensionLib(main::ClientContext* context,
     const std::string& extensionName) {
-    return common::stringFormat("{}{}/{}", context->getExtensionDir(), extensionName,
+    return common::stringFormat("{}/{}", getLocalDirForExtension(context, extensionName),
         getExtensionFileName(extensionName));
 }
 
 std::string ExtensionUtils::getLocalPathForExtensionLoader(main::ClientContext* context,
     const std::string& extensionName) {
-    return common::stringFormat("{}{}/{}", context->getExtensionDir(), extensionName,
+    return common::stringFormat("{}/{}", getLocalDirForExtension(context, extensionName),
         getExtensionFileName(extensionName + EXTENSION_LOADER_SUFFIX));
 }
 
 std::string ExtensionUtils::getLocalPathForExtensionInstaller(main::ClientContext* context,
     const std::string& extensionName) {
-    return common::stringFormat("{}{}/{}", context->getExtensionDir(), extensionName,
+    return common::stringFormat("{}/{}", getLocalDirForExtension(context, extensionName),
         getExtensionFileName(extensionName + EXTENSION_INSTALLER_SUFFIX));
 }
 
-std::string ExtensionUtils::getLocalExtensionDir(main::ClientContext* context,
+std::string ExtensionUtils::getLocalDirForExtension(main::ClientContext* context,
     const std::string& extensionName) {
     return common::stringFormat("{}{}", context->getExtensionDir(), extensionName);
 }

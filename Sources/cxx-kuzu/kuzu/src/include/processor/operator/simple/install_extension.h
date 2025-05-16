@@ -1,26 +1,21 @@
 #pragma once
 
 #include "extension/extension_installer.h"
+#include "extension_print_info.h"
 #include "processor/operator/simple/simple.h"
 
 namespace kuzu {
 namespace processor {
 
-struct InstallExtensionPrintInfo final : OPPrintInfo {
-    std::string extensionName;
-
+struct InstallExtensionPrintInfo final : public ExtensionPrintInfo {
     explicit InstallExtensionPrintInfo(std::string extensionName)
-        : extensionName{std::move(extensionName)} {}
+        : ExtensionPrintInfo{std::move(extensionName)} {}
 
-    std::string toString() const override;
+    std::string toString() const override { return "Install " + extensionName; }
 
     std::unique_ptr<OPPrintInfo> copy() const override {
-        return std::unique_ptr<InstallExtensionPrintInfo>(new InstallExtensionPrintInfo(*this));
+        return std::make_unique<InstallExtensionPrintInfo>(*this);
     }
-
-private:
-    InstallExtensionPrintInfo(const InstallExtensionPrintInfo& other)
-        : OPPrintInfo{other}, extensionName{other.extensionName} {}
 };
 
 class InstallExtension final : public Simple {
@@ -39,10 +34,11 @@ public:
     }
 
 private:
-    void installExtension(main::ClientContext* context);
+    void setOutputMessage(bool installed);
 
 private:
     extension::InstallExtensionInfo info;
+    std::string outputMessage;
 };
 
 } // namespace processor
