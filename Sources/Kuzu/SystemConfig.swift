@@ -22,7 +22,7 @@ public final class SystemConfig {
         readOnly: Bool = false,
         maxDbSize: UInt64 = 0,
         autoCheckpoint: Bool = true,
-        checkpointThreshold: UInt64 = 0,
+        checkpointThreshold: UInt64 = 0
     ) {
         self.init()
         if bufferPoolSize > 0 {
