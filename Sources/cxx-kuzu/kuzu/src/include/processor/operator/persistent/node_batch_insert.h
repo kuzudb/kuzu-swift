@@ -36,7 +36,6 @@ private:
 };
 
 struct NodeBatchInsertInfo final : BatchInsertInfo {
-    std::vector<common::LogicalType> columnTypes;
     evaluator::evaluator_vector_t columnEvaluators;
     std::vector<common::ColumnEvaluateType> evaluateTypes;
 
@@ -44,19 +43,13 @@ struct NodeBatchInsertInfo final : BatchInsertInfo {
         std::vector<std::unique_ptr<evaluator::ExpressionEvaluator>> columnEvaluators,
         std::vector<common::ColumnEvaluateType> evaluateTypes,
         common::column_id_t numWarningDataColumns)
-        : BatchInsertInfo{nullptr, compressionEnabled, std::vector<common::column_id_t>{},
-              static_cast<common::column_id_t>(columnTypes.size() - numWarningDataColumns),
+        : BatchInsertInfo{nullptr, compressionEnabled, {}, std::move(columnTypes),
               numWarningDataColumns},
-          columnTypes{std::move(columnTypes)}, columnEvaluators{std::move(columnEvaluators)},
-          evaluateTypes{std::move(evaluateTypes)} {}
+          columnEvaluators{std::move(columnEvaluators)}, evaluateTypes{std::move(evaluateTypes)} {}
 
     NodeBatchInsertInfo(const NodeBatchInsertInfo& other)
-        : BatchInsertInfo{other.tableEntry, other.compressionEnabled, other.insertColumnIDs,
-              static_cast<common::column_id_t>(other.outputDataColumns.size()),
-              static_cast<common::column_id_t>(other.warningDataColumns.size())},
-          columnTypes{common::LogicalType::copy(other.columnTypes)},
-          columnEvaluators{copyVector(other.columnEvaluators)}, evaluateTypes{other.evaluateTypes} {
-    }
+        : BatchInsertInfo{other}, columnEvaluators{copyVector(other.columnEvaluators)},
+          evaluateTypes{other.evaluateTypes} {}
 
     std::unique_ptr<BatchInsertInfo> copy() const override {
         return std::make_unique<NodeBatchInsertInfo>(*this);
@@ -104,12 +97,10 @@ class NodeBatchInsert final : public BatchInsert {
 public:
     NodeBatchInsert(std::string tableName, std::unique_ptr<BatchInsertInfo> info,
         std::shared_ptr<BatchInsertSharedState> sharedState,
-        std::unique_ptr<ResultSetDescriptor> resultSetDescriptor,
         std::unique_ptr<PhysicalOperator> child, uint32_t id,
         std::unique_ptr<OPPrintInfo> printInfo)
-        : BatchInsert{std::move(info), std::move(sharedState), std::move(resultSetDescriptor), id,
-              std::move(printInfo)},
-          tableName{std::move(tableName)} {
+        : BatchInsert{std::move(tableName), std::move(info), std::move(sharedState), id,
+              std::move(printInfo)} {
         children.push_back(std::move(child));
     }
 
@@ -124,7 +115,7 @@ public:
 
     std::unique_ptr<PhysicalOperator> copy() override {
         return std::make_unique<NodeBatchInsert>(tableName, info->copy(), sharedState,
-            resultSetDescriptor->copy(), children[0]->copy(), id, printInfo->copy());
+            children[0]->copy(), id, printInfo->copy());
     }
 
     // The node group will be reset so that the only values remaining are the ones which were
@@ -134,8 +125,6 @@ public:
         std::optional<IndexBuilder>& indexBuilder, storage::MemoryManager* mm) const;
 
 private:
-    std::string tableName;
-
     void evaluateExpressions(uint64_t numTuples) const;
     void appendIncompleteNodeGroup(transaction::Transaction* transaction,
         std::unique_ptr<storage::ChunkedNodeGroup> localNodeGroup,
