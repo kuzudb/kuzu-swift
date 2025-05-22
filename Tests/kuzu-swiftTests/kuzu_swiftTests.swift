@@ -117,4 +117,5 @@ import Testing
         ]
     )
     print(result)
+    print(result.getColumnNames())
 }
