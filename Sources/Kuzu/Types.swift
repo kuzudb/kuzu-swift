@@ -13,4 +13,5 @@ enum KuzuError: Error {
     case valueConversionFailed(String)
     case getFlatTupleFailed(String)
     case getNextQueryResultFailed(String)
+    case getValueFailed(String)
 }

@@ -233,3 +233,66 @@ internal func swiftValueToKuzuValue(_ value: Any?)
     }
     return valuePtr
 }
+
+internal func kuzuValueToSwift(_ cValue: inout kuzu_value) throws -> Any? {
+    if kuzu_value_is_null(&cValue) {
+        return nil
+    }
+    var logicalType = kuzu_logical_type()
+    kuzu_value_get_data_type(&cValue, &logicalType)
+    defer { kuzu_data_type_destroy(&logicalType) }
+    let logicalTypeId = kuzu_data_type_get_id(&logicalType)
+    switch logicalTypeId {
+    case KUZU_BOOL:
+        var value: Bool = Bool()
+        let state = kuzu_value_get_bool(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get bool value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_INT64, KUZU_SERIAL:
+        var value: Int64 = Int64()
+        let state = kuzu_value_get_int64(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get int64 value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_INT32:
+        var value: Int32 = Int32()
+        let state = kuzu_value_get_int32(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get int32 value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_INT16:
+        var value: Int16 = Int16()
+        let state = kuzu_value_get_int16(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get int16 value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_INT8:
+        var value: Int8 = Int8()
+        let state = kuzu_value_get_int8(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get int8 value with status \(state)"
+            )
+        }
+        return value
+    default:
+        var valueString = kuzu_value_to_string(&cValue)
+        defer { kuzu_destroy_string(valueString) }
+        throw KuzuError.valueConversionFailed(
+            "Unsupported C type \(String(cString: valueString!))"
+        )
+    }
+}

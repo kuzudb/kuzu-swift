@@ -32,4 +32,37 @@ public final class FlatTuple: CustomStringConvertible {
         return String(cString: cString)
 
     }
+
+    public func getValue(_ index: UInt64) throws -> Any? {
+        var cValue = kuzu_value()
+        let state = kuzu_flat_tuple_get_value(&cFlatTuple, index, &cValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Get value failed with error code: \(state)"
+            )
+        }
+        defer { kuzu_value_destroy(&cValue) }
+        return try kuzuValueToSwift(&cValue)
+    }
+
+    public func getAsDictionary() throws -> [String: Any?] {
+        var result: [String: Any] = [:]
+        let keys = queryResult.getColumnNames()
+        for i in 0..<keys.count {
+            let key = keys[i]
+            let value = try getValue(UInt64(i))
+            result[key] = value
+        }
+        return result
+    }
+    
+    public func getAsArray() throws -> [Any?]{
+        var result: [Any?] = []
+        let count = queryResult.getColumnCount()
+        for i in UInt64(0)..<count {
+            let value = try getValue(i)
+            result.append(value)
+        }
+        return result
+    }
 }
