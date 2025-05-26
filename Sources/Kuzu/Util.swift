@@ -296,6 +296,217 @@ private func kuzuStructValueToSwiftDictionary(_ cValue: inout kuzu_value) throws
     return dict
 }
 
+private func kuzuNodeValueToSwiftNode(_ cValue: inout kuzu_value) throws
+    -> KuzuNode
+{
+    var idValue = kuzu_value()
+    let idState = kuzu_node_val_get_id_val(&cValue, &idValue)
+    if idState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get node ID with status: \(idState)"
+        )
+    }
+    defer { kuzu_value_destroy(&idValue) }
+    let id = try kuzuValueToSwift(&idValue) as! KuzuInternalId
+
+    var labelValue = kuzu_value()
+    let labelState = kuzu_node_val_get_label_val(&cValue, &labelValue)
+    if labelState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get node label with status: \(labelState)"
+        )
+    }
+    defer { kuzu_value_destroy(&labelValue) }
+    let label = try kuzuValueToSwift(&labelValue) as! String
+
+    var propertySize: UInt64 = 0
+    let propertySizeState = kuzu_node_val_get_property_size(
+        &cValue,
+        &propertySize
+    )
+    if propertySizeState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get property size with status: \(propertySizeState)"
+        )
+    }
+
+    var properties: [String: Any?] = [:]
+    var currentKey: UnsafeMutablePointer<CChar>?
+    var currentValue = kuzu_value()
+
+    for i in UInt64(0)..<propertySize {
+        let keyState = kuzu_node_val_get_property_name_at(
+            &cValue,
+            i,
+            &currentKey
+        )
+        if keyState != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get property name with status: \(keyState)"
+            )
+        }
+        defer { kuzu_destroy_string(currentKey) }
+        let key = String(cString: currentKey!)
+
+        let valueState = kuzu_node_val_get_property_value_at(
+            &cValue,
+            i,
+            &currentValue
+        )
+        if valueState != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get property value with status: \(valueState)"
+            )
+        }
+        defer { kuzu_value_destroy(&currentValue) }
+
+        let value = try kuzuValueToSwift(&currentValue)
+        properties[key] = value
+    }
+
+    return KuzuNode(id: id, label: label, properties: properties)
+}
+
+private func kuzuRelValueToSwiftRelationship(_ cValue: inout kuzu_value) throws
+    -> KuzuRelationship
+{
+    var idValue = kuzu_value()
+
+    let srcState = kuzu_rel_val_get_src_id_val(&cValue, &idValue)
+    if srcState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get relationship source ID with status: \(srcState)"
+        )
+    }
+    let sourceId = try kuzuValueToSwift(&idValue) as! KuzuInternalId
+    kuzu_value_destroy(&idValue)
+
+    let dstState = kuzu_rel_val_get_dst_id_val(&cValue, &idValue)
+    if dstState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get relationship target ID with status: \(dstState)"
+        )
+    }
+    let targetId = try kuzuValueToSwift(&idValue) as! KuzuInternalId
+    kuzu_value_destroy(&idValue)
+
+    var labelValue = kuzu_value()
+    let labelState = kuzu_rel_val_get_label_val(&cValue, &labelValue)
+    if labelState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get relationship label with status: \(labelState)"
+        )
+    }
+    let label = try kuzuValueToSwift(&labelValue) as! String
+
+    kuzu_value_destroy(&labelValue)
+
+    // Get Properties
+    var propertySize: UInt64 = 0
+    let propertySizeState = kuzu_rel_val_get_property_size(
+        &cValue,
+        &propertySize
+    )
+    if propertySizeState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get property size with status: \(propertySizeState)"
+        )
+    }
+
+    var properties: [String: Any?] = [:]
+    var currentKey: UnsafeMutablePointer<CChar>?
+    var currentValue = kuzu_value()
+
+    for i in UInt64(0)..<propertySize {
+        let keyState = kuzu_rel_val_get_property_name_at(
+            &cValue,
+            i,
+            &currentKey
+        )
+        if keyState != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get property name with status: \(keyState)"
+            )
+        }
+        defer { kuzu_destroy_string(currentKey) }
+        let key = String(cString: currentKey!)
+
+        let valueState = kuzu_rel_val_get_property_value_at(
+            &cValue,
+            i,
+            &currentValue
+        )
+        if valueState != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get property value with status: \(valueState)"
+            )
+        }
+        defer { kuzu_value_destroy(&currentValue) }
+
+        let value = try kuzuValueToSwift(&currentValue)
+        properties[key] = value
+    }
+
+    return KuzuRelationship(
+        sourceId: sourceId,
+        targetId: targetId,
+        label: label,
+        properties: properties
+    )
+}
+
+private func kuzuRecursiveRelValueToSwiftRecursiveRelationship(
+    _ cValue: inout kuzu_value
+) throws
+    -> KuzuRecursiveRelationship
+{
+    var nodesValue = kuzu_value()
+    let nodesState = kuzu_value_get_recursive_rel_node_list(
+        &cValue,
+        &nodesValue
+    )
+    if nodesState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get recursive relationship nodes with status: \(nodesState)"
+        )
+    }
+    defer { kuzu_value_destroy(&nodesValue) }
+
+    var relsValue = kuzu_value()
+    let relsState = kuzu_value_get_recursive_rel_rel_list(&cValue, &relsValue)
+    if relsState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get recursive relationship relationships with status: \(relsState)"
+        )
+    }
+    defer { kuzu_value_destroy(&relsValue) }
+
+    let nodesArray = try kuzuListToSwiftArray(&nodesValue)
+    let relsArray = try kuzuListToSwiftArray(&relsValue)
+
+    var nodes: [KuzuNode] = []
+    for node in nodesArray {
+        guard let kuzuNode = node as? KuzuNode else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to convert node to KuzuNode"
+            )
+        }
+        nodes.append(kuzuNode)
+    }
+
+    var relationships: [KuzuRelationship] = []
+    for rel in relsArray {
+        guard let kuzuRel = rel as? KuzuRelationship else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to convert relationship to KuzuRelationship"
+            )
+        }
+        relationships.append(kuzuRel)
+    }
+
+    return KuzuRecursiveRelationship(nodes: nodes, relationships: relationships)
+}
+
 internal func swiftValueToKuzuValue(_ value: Any?)
     throws -> UnsafeMutablePointer<kuzu_value>
 {
@@ -360,7 +571,6 @@ internal func swiftValueToKuzuValue(_ value: Any?)
             valuePtr = try swiftArrayToKuzuList(array)
         case let dictionary as NSDictionary:
             valuePtr = try swiftDictionaryToKuzuStruct(dictionary)
-
         default:
             throw KuzuError.valueConversionFailed(
                 "Unsupported Swift type \(dtype)"
@@ -633,6 +843,12 @@ internal func kuzuValueToSwift(_ cValue: inout kuzu_value) throws -> Any? {
         return try kuzuStructValueToSwiftDictionary(&cValue)
     case KUZU_MAP:
         return try kuzuMapToSwiftArrayOfMapItems(&cValue)
+    case KUZU_NODE:
+        return try kuzuNodeValueToSwiftNode(&cValue)
+    case KUZU_REL:
+        return try kuzuRelValueToSwiftRelationship(&cValue)
+    case KUZU_RECURSIVE_REL:
+        return try kuzuRecursiveRelValueToSwiftRecursiveRelationship(&cValue)
     default:
         let valueString = kuzu_value_to_string(&cValue)
         defer { kuzu_destroy_string(valueString) }

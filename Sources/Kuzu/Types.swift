@@ -17,8 +17,24 @@ enum KuzuError: Error {
 }
 
 struct KuzuInternalId {
-    let tableId : UInt64
-    let offset : UInt64
+    let tableId: UInt64
+    let offset: UInt64
 }
 
+struct KuzuNode {
+    let id: KuzuInternalId
+    let label: String
+    let properties: [String: Any?]
+}
 
+struct KuzuRelationship {
+    let sourceId: KuzuInternalId
+    let targetId: KuzuInternalId
+    let label: String
+    let properties: [String: Any?]
+}
+
+struct KuzuRecursiveRelationship {
+    let nodes: [KuzuNode]
+    let relationships: [KuzuRelationship]
+}

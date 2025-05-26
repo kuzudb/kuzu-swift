@@ -8,10 +8,30 @@
 import Foundation
 @_implementationOnly import cxx_kuzu
 
-public final class QueryResult: CustomStringConvertible {
+public final class QueryResult: CustomStringConvertible, Sequence {
     internal var cQueryResult: kuzu_query_result
     internal var connection: Connection
     internal var columnNames: [String]?
+
+    public struct Iterator: IteratorProtocol {
+        private let queryResult: QueryResult
+
+        init(_ queryResult: QueryResult) {
+            self.queryResult = queryResult
+        }
+
+        public mutating func next() -> FlatTuple? {
+            do {
+                return try queryResult.getNext()
+            } catch {
+                return nil
+            }
+        }
+    }
+
+    public func makeIterator() -> Iterator {
+        return Iterator(self)
+    }
 
     internal init(
         _ connection: Connection,
