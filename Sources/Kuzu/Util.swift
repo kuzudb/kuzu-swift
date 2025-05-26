@@ -8,6 +8,7 @@
 import Foundation
 @_implementationOnly import cxx_kuzu
 
+/// Constants for time unit conversions
 private let MILLISECONDS_IN_A_SECOND: Double = 1_000
 private let MICROSECONDS_IN_A_MILLISECOND: Double = 1_000
 private let MICROSECONDS_IN_A_SECOND: Double =
@@ -23,12 +24,18 @@ private let SECONDS_IN_A_DAY =
     HOURS_IN_A_DAY * MINUTES_IN_AN_HOUR * SECONDS_IN_A_MINUTE
 private let SECONDS_IN_A_MONTH = DAYS_IN_A_MONTH * SECONDS_IN_A_DAY
 
+/// Converts a Swift Date to a Kuzu timestamp.
+/// - Parameter date: The Swift Date to convert.
+/// - Returns: A Kuzu timestamp representing the same time.
 private func swiftDateToKuzuTimestamp(_ date: Date) -> kuzu_timestamp_t {
     let timeInterval = date.timeIntervalSince1970
     let microseconds = timeInterval * MICROSECONDS_IN_A_SECOND
     return kuzu_timestamp_t(value: Int64(microseconds))
 }
 
+/// Converts a Swift TimeInterval to a Kuzu interval.
+/// - Parameter timeInterval: The Swift TimeInterval to convert.
+/// - Returns: A Kuzu interval representing the same duration.
 private func swiftTimeIntervalToKuzuInterval(_ timeInterval: TimeInterval)
     -> kuzu_interval_t
 {
@@ -36,6 +43,9 @@ private func swiftTimeIntervalToKuzuInterval(_ timeInterval: TimeInterval)
     return kuzu_interval_t(months: 0, days: 0, micros: Int64(microseconds))
 }
 
+/// Converts a Kuzu interval to a Swift TimeInterval.
+/// - Parameter interval: The Kuzu interval to convert.
+/// - Returns: A Swift TimeInterval representing the same duration.
 private func kuzuIntervalToSwiftTimeInterval(_ interval: kuzu_interval_t)
     -> TimeInterval
 {
@@ -45,6 +55,10 @@ private func kuzuIntervalToSwiftTimeInterval(_ interval: kuzu_interval_t)
     return seconds
 }
 
+/// Converts a Swift array of key-value pairs to a Kuzu map value.
+/// - Parameter array: An array of tuples containing key-value pairs.
+/// - Returns: A Kuzu map value.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func swiftArrayOfMapItemsToKuzuMap(_ array: [(Any?, Any?)]) throws
     -> UnsafeMutablePointer<kuzu_value>
 {
@@ -86,6 +100,10 @@ private func swiftArrayOfMapItemsToKuzuMap(_ array: [(Any?, Any?)]) throws
     return valuePtr!
 }
 
+/// Converts a Kuzu map value to a Swift array of key-value pairs.
+/// - Parameter cValue: The Kuzu map value to convert.
+/// - Returns: An array of tuples containing key-value pairs.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func kuzuMapToSwiftArrayOfMapItems(_ cValue: inout kuzu_value) throws
     -> [(Any?, Any?)]
 {
@@ -123,6 +141,10 @@ private func kuzuMapToSwiftArrayOfMapItems(_ cValue: inout kuzu_value) throws
     return result
 }
 
+/// Converts a Swift array to a Kuzu list value.
+/// - Parameter array: The Swift array to convert.
+/// - Returns: A Kuzu list value.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func swiftArrayToKuzuList(_ array: NSArray)
     throws -> UnsafeMutablePointer<kuzu_value>
 {
@@ -161,6 +183,10 @@ private func swiftArrayToKuzuList(_ array: NSArray)
     return cKuzuListValue!
 }
 
+/// Converts a Kuzu list value to a Swift array.
+/// - Parameter cValue: The Kuzu list value to convert.
+/// - Returns: A Swift array containing the list elements.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func kuzuListToSwiftArray(_ cValue: inout kuzu_value) throws -> [Any?] {
     var numElements: UInt64 = 0
     var logicalType = kuzu_logical_type()
@@ -202,6 +228,10 @@ private func kuzuListToSwiftArray(_ cValue: inout kuzu_value) throws -> [Any?] {
     return result
 }
 
+/// Converts a Swift dictionary to a Kuzu struct value.
+/// - Parameter dictionary: The Swift dictionary to convert.
+/// - Returns: A Kuzu struct value.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func swiftDictionaryToKuzuStruct(_ dictionary: NSDictionary)
     throws -> UnsafeMutablePointer<kuzu_value>
 {
@@ -262,6 +292,10 @@ private func swiftDictionaryToKuzuStruct(_ dictionary: NSDictionary)
     return cStructValue!
 }
 
+/// Converts a Kuzu struct value to a Swift dictionary.
+/// - Parameter cValue: The Kuzu struct value to convert.
+/// - Returns: A Swift dictionary containing the struct fields.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func kuzuStructValueToSwiftDictionary(_ cValue: inout kuzu_value) throws
     -> [String: Any?]
 {
@@ -296,6 +330,10 @@ private func kuzuStructValueToSwiftDictionary(_ cValue: inout kuzu_value) throws
     return dict
 }
 
+/// Converts a Kuzu node value to a Swift KuzuNode.
+/// - Parameter cValue: The Kuzu node value to convert.
+/// - Returns: A Swift KuzuNode.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func kuzuNodeValueToSwiftNode(_ cValue: inout kuzu_value) throws
     -> KuzuNode
 {
@@ -367,6 +405,10 @@ private func kuzuNodeValueToSwiftNode(_ cValue: inout kuzu_value) throws
     return KuzuNode(id: id, label: label, properties: properties)
 }
 
+/// Converts a Kuzu relationship value to a Swift KuzuRelationship.
+/// - Parameter cValue: The Kuzu relationship value to convert.
+/// - Returns: A Swift KuzuRelationship.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func kuzuRelValueToSwiftRelationship(_ cValue: inout kuzu_value) throws
     -> KuzuRelationship
 {
@@ -455,6 +497,10 @@ private func kuzuRelValueToSwiftRelationship(_ cValue: inout kuzu_value) throws
     )
 }
 
+/// Converts a Kuzu recursive relationship value to a Swift KuzuRecursiveRelationship.
+/// - Parameter cValue: The Kuzu recursive relationship value to convert.
+/// - Returns: A Swift KuzuRecursiveRelationship.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 private func kuzuRecursiveRelValueToSwiftRecursiveRelationship(
     _ cValue: inout kuzu_value
 ) throws
@@ -507,6 +553,10 @@ private func kuzuRecursiveRelValueToSwiftRecursiveRelationship(
     return KuzuRecursiveRelationship(nodes: nodes, relationships: relationships)
 }
 
+/// Converts a Swift value to a Kuzu value.
+/// - Parameter value: The Swift value to convert.
+/// - Returns: A Kuzu value.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
 internal func swiftValueToKuzuValue(_ value: Any?)
     throws -> UnsafeMutablePointer<kuzu_value>
 {
@@ -580,6 +630,10 @@ internal func swiftValueToKuzuValue(_ value: Any?)
     return valuePtr
 }
 
+/// Converts a Kuzu value to a Swift value.
+/// - Parameter cValue: The Kuzu value to convert.
+/// - Returns: A Swift value.
+/// - Throws: `KuzuError.getValueFailed` if the conversion fails.
 internal func kuzuValueToSwift(_ cValue: inout kuzu_value) throws -> Any? {
     if kuzu_value_is_null(&cValue) {
         return nil
