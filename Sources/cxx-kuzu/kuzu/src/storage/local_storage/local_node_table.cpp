@@ -6,7 +6,7 @@
 #include "common/types/types.h"
 #include "storage/index/hash_index.h"
 #include "storage/storage_utils.h"
-#include "storage/store/node_table.h"
+#include "storage/table/node_table.h"
 
 using namespace kuzu::common;
 using namespace kuzu::transaction;
@@ -24,8 +24,8 @@ std::vector<LogicalType> LocalNodeTable::getNodeTableColumnTypes(
 }
 
 LocalNodeTable::LocalNodeTable(const catalog::TableCatalogEntry* tableEntry, Table& table)
-    : LocalTable{table}, nodeGroups{this->table.getMemoryManager(),
-                             getNodeTableColumnTypes(*tableEntry), false /*enableCompression*/} {
+    : LocalTable{table},
+      nodeGroups{getNodeTableColumnTypes(*tableEntry), false /*enableCompression*/} {
     initLocalHashIndex();
 }
 

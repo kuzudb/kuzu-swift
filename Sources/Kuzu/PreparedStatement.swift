@@ -8,17 +8,17 @@
 @_implementationOnly import cxx_kuzu
 
 public final class PreparedStatement {
-    internal var cPreparedStatement:kuzu_prepared_statement
-    internal var connection:Connection
+    internal var cPreparedStatement: kuzu_prepared_statement
+    internal var connection: Connection
     internal init(
-        _ connection:Connection,
-        _ cPreparedStatement:kuzu_prepared_statement) {
-            self.cPreparedStatement = cPreparedStatement
-            self.connection = connection
+        _ connection: Connection,
+        _ cPreparedStatement: kuzu_prepared_statement
+    ) {
+        self.cPreparedStatement = cPreparedStatement
+        self.connection = connection
     }
-    
+
     deinit {
         kuzu_prepared_statement_destroy(&cPreparedStatement)
     }
 }
-

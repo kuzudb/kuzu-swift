@@ -55,8 +55,8 @@ public final class FlatTuple: CustomStringConvertible {
         }
         return result
     }
-    
-    public func getAsArray() throws -> [Any?]{
+
+    public func getAsArray() throws -> [Any?] {
         var result: [Any?] = []
         let count = queryResult.getColumnCount()
         for i in UInt64(0)..<count {
