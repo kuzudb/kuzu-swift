@@ -14,7 +14,7 @@
 #include "processor/plan_mapper.h"
 #include "processor/result/factorized_table_util.h"
 #include "storage/storage_manager.h"
-#include "storage/store/node_table.h"
+#include "storage/table/node_table.h"
 
 using namespace kuzu::common;
 using namespace kuzu::function;
@@ -131,7 +131,7 @@ static std::unique_ptr<PhysicalOperator> getPhysicalPlan(PlanMapper* planMapper,
     finalizeFuncSharedState->maxMorselSize = 1;
     finalizeFuncSharedState->bindData = logicalCallBoundData->copy();
     auto finalizeCallOp = std::make_unique<TableFunctionCall>(std::move(info), sharedState,
-        planMapper->getOperatorID(), std::make_unique<OPPrintInfo>());
+        planMapper->getOperatorID(), OPPrintInfo::EmptyInfo());
     finalizeCallOp->addChild(std::move(createDummySink));
     // Append a dummy sink to the end of the second pipeline
     auto finalizeHNSWDummySink =
