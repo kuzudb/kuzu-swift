@@ -39,24 +39,19 @@ struct RelBatchInsertInfo final : BatchInsertInfo {
     common::RelDataDirection direction;
     uint64_t partitioningIdx;
     common::column_id_t boundNodeOffsetColumnID;
-    std::vector<common::LogicalType> columnTypes;
 
     RelBatchInsertInfo(catalog::TableCatalogEntry* tableEntry, bool compressionEnabled,
         common::RelDataDirection direction, uint64_t partitioningIdx,
         common::column_id_t offsetColumnID, std::vector<common::column_id_t> columnIDs,
         std::vector<common::LogicalType> columnTypes, common::column_id_t numWarningDataColumns)
         : BatchInsertInfo{tableEntry, compressionEnabled, std::move(columnIDs),
-              static_cast<common::column_id_t>(columnTypes.size() - numWarningDataColumns),
-              numWarningDataColumns},
+              std::move(columnTypes), numWarningDataColumns},
           direction{direction}, partitioningIdx{partitioningIdx},
-          boundNodeOffsetColumnID{offsetColumnID}, columnTypes{std::move(columnTypes)} {}
+          boundNodeOffsetColumnID{offsetColumnID} {}
     RelBatchInsertInfo(const RelBatchInsertInfo& other)
-        : BatchInsertInfo{other.tableEntry, other.compressionEnabled, other.insertColumnIDs,
-              static_cast<common::column_id_t>(other.outputDataColumns.size()),
-              static_cast<common::column_id_t>(other.warningDataColumns.size())},
-          direction{other.direction}, partitioningIdx{other.partitioningIdx},
-          boundNodeOffsetColumnID{other.boundNodeOffsetColumnID},
-          columnTypes{common::LogicalType::copy(other.columnTypes)} {}
+        : BatchInsertInfo{other}, direction{other.direction},
+          partitioningIdx{other.partitioningIdx},
+          boundNodeOffsetColumnID{other.boundNodeOffsetColumnID} {}
 
     std::unique_ptr<BatchInsertInfo> copy() const override {
         return std::make_unique<RelBatchInsertInfo>(*this);
@@ -70,25 +65,15 @@ struct RelBatchInsertLocalState final : BatchInsertLocalState {
 
 class RelBatchInsert final : public BatchInsert {
 public:
-    RelBatchInsert(std::unique_ptr<BatchInsertInfo> info,
+    RelBatchInsert(std::string tableName, std::unique_ptr<BatchInsertInfo> info,
         std::shared_ptr<PartitionerSharedState> partitionerSharedState,
-        std::shared_ptr<BatchInsertSharedState> sharedState,
-        std::unique_ptr<ResultSetDescriptor> resultSetDescriptor, uint32_t id,
+        std::shared_ptr<BatchInsertSharedState> sharedState, uint32_t id,
         std::unique_ptr<OPPrintInfo> printInfo,
         std::shared_ptr<RelBatchInsertProgressSharedState> progressSharedState)
-        : BatchInsert{std::move(info), std::move(sharedState), std::move(resultSetDescriptor), id,
+        : BatchInsert{std::move(tableName), std::move(info), std::move(sharedState), id,
               std::move(printInfo)},
           partitionerSharedState{std::move(partitionerSharedState)},
           progressSharedState{std::move(progressSharedState)} {}
-
-    RelBatchInsert(std::unique_ptr<BatchInsertInfo> info,
-        std::shared_ptr<PartitionerSharedState> partitionerSharedState,
-        std::shared_ptr<BatchInsertSharedState> sharedState,
-        std::unique_ptr<ResultSetDescriptor> resultSetDescriptor, uint32_t id,
-        std::unique_ptr<OPPrintInfo> printInfo)
-        : BatchInsert{std::move(info), std::move(sharedState), std::move(resultSetDescriptor), id,
-              std::move(printInfo)},
-          partitionerSharedState{std::move(partitionerSharedState)} {}
 
     bool isSource() const override { return true; }
 
@@ -99,8 +84,8 @@ public:
     void finalizeInternal(ExecutionContext* context) override;
 
     std::unique_ptr<PhysicalOperator> copy() override {
-        return std::make_unique<RelBatchInsert>(info->copy(), partitionerSharedState, sharedState,
-            resultSetDescriptor->copy(), id, printInfo->copy(), progressSharedState);
+        return std::make_unique<RelBatchInsert>(tableName, info->copy(), partitionerSharedState,
+            sharedState, id, printInfo->copy(), progressSharedState);
     }
 
     void updateProgress(const ExecutionContext* context) const;

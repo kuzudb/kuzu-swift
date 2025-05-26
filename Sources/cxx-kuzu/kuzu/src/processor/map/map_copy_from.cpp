@@ -40,10 +40,12 @@ std::unique_ptr<PhysicalOperator> PlanMapper::createRelBatchInsertOp(
     auto relBatchInsertInfo = std::make_unique<RelBatchInsertInfo>(catalogEntry,
         clientContext->getStorageManager()->compressionEnabled(), direction, partitioningIdx,
         offsetVectorIdx, std::move(columnIDs), std::move(columnTypes), numWarningDataColumns);
-    auto printInfo = std::make_unique<RelBatchInsertPrintInfo>(catalogEntry->getName());
-    return std::make_unique<RelBatchInsert>(std::move(relBatchInsertInfo),
-        std::move(partitionerSharedState), std::move(sharedState),
-        std::make_unique<ResultSetDescriptor>(outFSchema), operatorID, std::move(printInfo));
+    auto printInfo = std::make_unique<RelBatchInsertPrintInfo>(copyFromInfo.tableName);
+    auto batchInsert = std::make_unique<RelBatchInsert>(copyFromInfo.tableName,
+        std::move(relBatchInsertInfo), std::move(partitionerSharedState), std::move(sharedState),
+        operatorID, std::move(printInfo), nullptr);
+    batchInsert->setDescriptor(std::make_unique<ResultSetDescriptor>(outFSchema));
+    return batchInsert;
 }
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapCopyFrom(const LogicalOperator* logicalOperator) {
@@ -77,7 +79,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapCopyNodeFrom(
     auto& copyFrom = logicalOperator->constCast<LogicalCopyFrom>();
     const auto copyFromInfo = copyFrom.getInfo();
     const auto outFSchema = copyFrom.getSchema();
-    // Map reader.
+
     auto prevOperator = mapOperator(copyFrom.getChild(0).get());
     auto fTable =
         FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
@@ -104,9 +106,10 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapCopyNodeFrom(
 
     auto tableName = copyFromInfo->tableName;
     auto printInfo = std::make_unique<NodeBatchInsertPrintInfo>(tableName);
-    return std::make_unique<NodeBatchInsert>(tableName, std::move(info), std::move(sharedState),
-        std::make_unique<ResultSetDescriptor>(copyFrom.getSchema()), std::move(prevOperator),
-        getOperatorID(), std::move(printInfo));
+    auto batchInsert = std::make_unique<NodeBatchInsert>(tableName, std::move(info),
+        std::move(sharedState), std::move(prevOperator), getOperatorID(), std::move(printInfo));
+    batchInsert->setDescriptor(std::make_unique<ResultSetDescriptor>(copyFrom.getSchema()));
+    return batchInsert;
 }
 
 std::unique_ptr<PhysicalOperator> PlanMapper::mapPartitioner(
@@ -134,52 +137,42 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapPartitioner(
     for (auto idx : extraInfo.internalIDColumnIndices) {
         columnTypes[idx] = LogicalType::INTERNAL_ID();
     }
-    auto dataInfo = PartitionerDataInfo(LogicalType::copy(columnTypes), std::move(columnEvaluators),
-        copyFromInfo.columnEvaluateTypes);
+    auto dataInfo = PartitionerDataInfo(copyFromInfo.tableName, LogicalType::copy(columnTypes),
+        std::move(columnEvaluators), copyFromInfo.columnEvaluateTypes);
     auto sharedState = std::make_shared<PartitionerSharedState>(*clientContext->getMemoryManager());
     expression_vector expressions;
     for (auto& info : partitionerInfo.infos) {
         expressions.push_back(copyFromInfo.columnExprs[info.keyIdx]);
     }
     auto printInfo = std::make_unique<PartitionerPrintInfo>(expressions);
-    return std::make_unique<Partitioner>(std::make_unique<ResultSetDescriptor>(outFSchema),
-        std::move(partitionerInfo), std::move(dataInfo), std::move(sharedState),
-        std::move(prevOperator), getOperatorID(), std::move(printInfo));
+    auto partitioner =
+        std::make_unique<Partitioner>(std::move(partitionerInfo), std::move(dataInfo),
+            std::move(sharedState), std::move(prevOperator), getOperatorID(), std::move(printInfo));
+    partitioner->setDescriptor(std::make_unique<ResultSetDescriptor>(outFSchema));
+    return partitioner;
 }
 
 physical_op_vector_t PlanMapper::mapCopyRelFrom(const LogicalOperator* logicalOperator) {
     auto& copyFrom = logicalOperator->constCast<LogicalCopyFrom>();
     const auto copyFromInfo = copyFrom.getInfo();
-    auto tableEntry = copyFromInfo->tableEntry;
-    auto& relTableEntry = tableEntry->constCast<RelTableCatalogEntry>();
     auto partitioner = mapOperator(copyFrom.getChild(0).get());
     KU_ASSERT(partitioner->getOperatorType() == PhysicalOperatorType::PARTITIONER);
     const auto partitionerSharedState = partitioner->ptrCast<Partitioner>()->getSharedState();
     const auto storageManager = clientContext->getStorageManager();
-    partitionerSharedState->srcNodeTable =
-        storageManager->getTable(relTableEntry.getSrcTableID())->ptrCast<NodeTable>();
-    partitionerSharedState->dstNodeTable =
-        storageManager->getTable(relTableEntry.getDstTableID())->ptrCast<NodeTable>();
-    auto relTable = storageManager->getTable(relTableEntry.getTableID())->ptrCast<RelTable>();
-    partitionerSharedState->relTable = relTable;
-    // TODO(Xiyang): Move binding of column types to binder.
-    std::vector<LogicalType> columnTypes;
-    std::vector<column_id_t> columnIDs;
-    columnTypes.push_back(LogicalType::INTERNAL_ID()); // NBR_ID COLUMN.
-    columnIDs.push_back(0);                            // NBR_ID COLUMN.
-    for (auto& property : relTableEntry.getProperties()) {
-        columnTypes.push_back(property.getType().copy());
-        columnIDs.push_back(relTableEntry.getColumnID(property.getName()));
-    }
     auto fTable =
         FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
-    const auto batchInsertSharedState = std::make_shared<BatchInsertSharedState>(relTable, fTable,
+    const auto batchInsertSharedState = std::make_shared<BatchInsertSharedState>(nullptr, fTable,
         &storageManager->getWAL(), clientContext->getMemoryManager());
+    const auto tableEntry = copyFromInfo->tableEntry;
+    std::vector<RelDataDirection> directions = {RelDataDirection::FWD, RelDataDirection::BWD};
+    if (tableEntry) {
+        directions = tableEntry->constCast<RelTableCatalogEntry>().getRelDataDirections();
+    }
     physical_op_vector_t result;
-    for (auto direction : relTableEntry.getRelDataDirections()) {
-        auto copyRel = createRelBatchInsertOp(clientContext, partitionerSharedState,
-            batchInsertSharedState, *copyFrom.getInfo(), copyFrom.getSchema(), direction, columnIDs,
-            LogicalType::copy(columnTypes), getOperatorID());
+    for (auto direction : directions) {
+        auto copyRel =
+            createRelBatchInsertOp(clientContext, partitionerSharedState, batchInsertSharedState,
+                *copyFrom.getInfo(), copyFrom.getSchema(), direction, {}, {}, getOperatorID());
         result.push_back(std::move(copyRel));
     }
     result.push_back(std::move(partitioner));

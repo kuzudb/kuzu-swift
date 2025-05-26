@@ -1,8 +1,10 @@
 #include "processor/operator/partitioner.h"
 
 #include "binder/expression/expression_util.h"
+#include "catalog/catalog_entry/rel_table_catalog_entry.h"
 #include "processor/execution_context.h"
 #include "processor/operator/persistent/rel_batch_insert.h"
+#include "storage/storage_manager.h"
 #include "storage/store/node_table.h"
 #include "storage/store/rel_table.h"
 
@@ -81,17 +83,30 @@ void PartitioningBuffer::merge(const PartitioningBuffer& localPartitioningState)
     }
 }
 
-Partitioner::Partitioner(std::unique_ptr<ResultSetDescriptor> resultSetDescriptor,
-    PartitionerInfo info, PartitionerDataInfo dataInfo,
+Partitioner::Partitioner(PartitionerInfo info, PartitionerDataInfo dataInfo,
     std::shared_ptr<PartitionerSharedState> sharedState, std::unique_ptr<PhysicalOperator> child,
     uint32_t id, std::unique_ptr<OPPrintInfo> printInfo)
-    : Sink{std::move(resultSetDescriptor), type_, std::move(child), id, std::move(printInfo)},
-      dataInfo{std::move(dataInfo)}, info{std::move(info)}, sharedState{std::move(sharedState)} {
+    : Sink{type_, std::move(child), id, std::move(printInfo)}, dataInfo{std::move(dataInfo)},
+      info{std::move(info)}, sharedState{std::move(sharedState)} {
     partitionIdxes = std::make_unique<ValueVector>(LogicalTypeID::INT64);
 }
 
 void Partitioner::initGlobalStateInternal(ExecutionContext* context) {
-    sharedState->initialize(dataInfo.columnTypes, info.infos.size(), context->clientContext);
+    const auto clientContext = context->clientContext;
+    // If initialization is required
+    if (!sharedState->srcNodeTable) {
+        const auto storageManager = clientContext->getStorageManager();
+        const auto tableEntry = clientContext->getCatalog()->getTableCatalogEntry(
+            clientContext->getTransaction(), dataInfo.tableName);
+        const auto& relTableEntry = tableEntry->constCast<catalog::RelTableCatalogEntry>();
+        sharedState->srcNodeTable =
+            storageManager->getTable(relTableEntry.getSrcTableID())->ptrCast<NodeTable>();
+        sharedState->dstNodeTable =
+            storageManager->getTable(relTableEntry.getDstTableID())->ptrCast<NodeTable>();
+        sharedState->relTable =
+            storageManager->getTable(relTableEntry.getTableID())->ptrCast<RelTable>();
+    }
+    sharedState->initialize(dataInfo.columnTypes, info.infos.size(), clientContext);
 }
 
 void Partitioner::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {
@@ -184,11 +199,6 @@ void Partitioner::copyDataToPartitions(MemoryManager& memoryManager,
             localState->getPartitioningBuffer(partitioningIdx)->partitions[partitionIdx];
         partition->append(memoryManager, vectorsToAppend, i, 1);
     }
-}
-
-std::unique_ptr<PhysicalOperator> Partitioner::copy() {
-    return std::make_unique<Partitioner>(resultSetDescriptor->copy(), info.copy(), dataInfo.copy(),
-        sharedState, children[0]->copy(), id, printInfo->copy());
 }
 
 } // namespace processor
