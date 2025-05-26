@@ -7,9 +7,13 @@
 
 @_implementationOnly import cxx_kuzu
 
+/// Represents a connection to a Kuzu database.
 public final class Connection {
     internal var cConnection: kuzu_connection
 
+    /// Opens a connection to the specified database.
+    /// - Parameter database: The database to connect to
+    /// - Throws: KuzuError if connection initialization fails
     public init(_ database: Database) throws {
         cConnection = kuzu_connection()
         let state = kuzu_connection_init(&database.cDatabase, &self.cConnection)
@@ -24,6 +28,10 @@ public final class Connection {
         kuzu_connection_destroy(&cConnection)
     }
 
+    /// Executes a query string and returns the result.
+    /// - Parameter cypher: The Cypher query string to execute
+    /// - Returns: A QueryResult containing the results of the query
+    /// - Throws: KuzuError if query execution fails
     public func query(_ cypher: String) throws -> QueryResult {
         var cQueryResult = kuzu_query_result()
         kuzu_connection_query(&cConnection, cypher, &cQueryResult)
@@ -47,6 +55,11 @@ public final class Connection {
         return queryResult
     }
 
+    /// Returns a prepared statement for the specified query string.
+    /// The prepared statement can be used to execute the query with parameters.
+    /// - Parameter cypher: The Cypher query string to prepare
+    /// - Returns: A PreparedStatement that can be used to execute the query with parameters
+    /// - Throws: KuzuError if statement preparation fails
     public func prepare(_ cypher: String) throws -> PreparedStatement {
         var cPreparedStatement = kuzu_prepared_statement()
         kuzu_connection_prepare(&cConnection, cypher, &cPreparedStatement)
@@ -70,6 +83,12 @@ public final class Connection {
         return preparedStatement
     }
 
+    /// Executes the specified prepared statement with the given parameters and returns the result.
+    /// - Parameters:
+    ///   - preparedStatement: The prepared statement to execute
+    ///   - parameters: A dictionary mapping parameter names to their values
+    /// - Returns: A QueryResult containing the results of the query
+    /// - Throws: KuzuError if query execution fails
     public func execute<T>(
         _ preparedStatement: PreparedStatement,
         _ parameters: [String: T?]
@@ -116,20 +135,29 @@ public final class Connection {
         return queryResult
     }
 
+    /// Sets the maximum number of threads that can be used for executing a query in parallel.
+    /// - Parameter numThreads: The maximum number of threads to use
     public func setMaxNumThreadForExec(_ numThreads: UInt64) {
         kuzu_connection_set_max_num_thread_for_exec(&cConnection, numThreads)
     }
 
+    /// Returns the maximum number of threads that can be used for executing a query in parallel.
+    /// - Returns: The maximum number of threads
     public func getMaxNumThreadForExec() -> UInt64 {
         var numThreads = UInt64()
         kuzu_connection_get_max_num_thread_for_exec(&cConnection, &numThreads)
         return numThreads
     }
 
+    /// Sets the timeout for the queries executed on the connection.
+    /// The timeout is specified in milliseconds. A value of 0 means no timeout.
+    /// If a query takes longer than the specified timeout, it will be interrupted.
+    /// - Parameter milliseconds: The timeout duration in milliseconds
     public func setQueryTimeout(_ milliseconds: UInt64) {
         kuzu_connection_set_query_timeout(&cConnection, milliseconds)
     }
 
+    /// Interrupts the execution of the current query on the connection.
     public func interrupt() {
         kuzu_connection_interrupt(&cConnection)
     }

@@ -8,9 +8,15 @@
 import Foundation
 @_implementationOnly import cxx_kuzu
 
+/// A class representing a Kuzu database instance.
 public final class Database {
     internal var cDatabase: kuzu_database
 
+    /// Initializes a new Kuzu database instance.
+    /// - Parameters:
+    ///   - databasePath: The path to the database. Defaults to ":memory:" for in-memory database.
+    ///   - systemConfig: Optional configuration for the database system. If nil, default configuration will be used.
+    /// - Throws: `KuzuError.databaseInitializationFailed` if the database initialization fails.
     public init(
         _ databasePath: String = ":memory:",
         _ systemConfig: SystemConfig? = nil
