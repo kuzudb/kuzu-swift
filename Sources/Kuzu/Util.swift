@@ -8,20 +8,44 @@
 import Foundation
 @_implementationOnly import cxx_kuzu
 
+private let MILLISECONDS_IN_A_SECOND: Double = 1_000
+private let MICROSECONDS_IN_A_MILLISECOND: Double = 1_000
+private let MICROSECONDS_IN_A_SECOND: Double =
+    MILLISECONDS_IN_A_SECOND * MICROSECONDS_IN_A_MILLISECOND
+private let NANOSECONDS_IN_A_MICROSECOND: Double = 1_000
+private let NANOSECONDS_IN_A_SECOND: Double =
+    MICROSECONDS_IN_A_SECOND * NANOSECONDS_IN_A_MICROSECOND
+private let SECONDS_IN_A_MINUTE: Double = 60
+private let MINUTES_IN_AN_HOUR: Double = 60
+private let HOURS_IN_A_DAY: Double = 24
+private let DAYS_IN_A_MONTH: Double = 30
+private let SECONDS_IN_A_DAY =
+    HOURS_IN_A_DAY * MINUTES_IN_AN_HOUR * SECONDS_IN_A_MINUTE
+private let SECONDS_IN_A_MONTH = DAYS_IN_A_MONTH * SECONDS_IN_A_DAY
+
 private func swiftDateToKuzuTimestamp(_ date: Date) -> kuzu_timestamp_t {
     let timeInterval = date.timeIntervalSince1970
-    let microseconds = timeInterval * 1_000_000
+    let microseconds = timeInterval * MICROSECONDS_IN_A_SECOND
     return kuzu_timestamp_t(value: Int64(microseconds))
 }
 
 private func swiftTimeIntervalToKuzuInterval(_ timeInterval: TimeInterval)
     -> kuzu_interval_t
 {
-    let microseconds = timeInterval * 1_000_000
+    let microseconds = timeInterval * MICROSECONDS_IN_A_SECOND
     return kuzu_interval_t(months: 0, days: 0, micros: Int64(microseconds))
 }
 
-private func swiftArrayOfMapItemsToKuzuMap(_ array: [(String, Any)]) throws
+private func kuzuIntervalToSwiftTimeInterval(_ interval: kuzu_interval_t)
+    -> TimeInterval
+{
+    var seconds = Double(interval.micros) / MICROSECONDS_IN_A_SECOND
+    seconds += Double(interval.days) * SECONDS_IN_A_DAY
+    seconds += Double(interval.months) * SECONDS_IN_A_MONTH
+    return seconds
+}
+
+private func swiftArrayOfMapItemsToKuzuMap(_ array: [(Any?, Any?)]) throws
     -> UnsafeMutablePointer<kuzu_value>
 {
     let numItems = array.count
@@ -62,6 +86,43 @@ private func swiftArrayOfMapItemsToKuzuMap(_ array: [(String, Any)]) throws
     return valuePtr!
 }
 
+private func kuzuMapToSwiftArrayOfMapItems(_ cValue: inout kuzu_value) throws
+    -> [(Any?, Any?)]
+{
+    var mapSize: UInt64 = 0
+    let state = kuzu_value_get_map_size(&cValue, &mapSize)
+    if state != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get map size with status: \(state)"
+        )
+    }
+    var result: [(Any?, Any?)] = []
+    var currentKey = kuzu_value()
+    var currentValue = kuzu_value()
+    for i in UInt64(0)..<mapSize {
+        let keyState = kuzu_value_get_map_key(&cValue, i, &currentKey)
+        if keyState != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get map key with status: \(keyState)"
+            )
+        }
+        defer { kuzu_value_destroy(&currentKey) }
+        let valueState = kuzu_value_get_map_value(&cValue, i, &currentValue)
+        if valueState != KuzuSuccess {
+            kuzu_value_destroy(&currentKey)
+            throw KuzuError.valueConversionFailed(
+                "Failed to get map value with status: \(valueState)"
+            )
+        }
+        defer { kuzu_value_destroy(&currentValue) }
+        let key = try kuzuValueToSwift(&currentKey)
+        let value = try kuzuValueToSwift(&currentValue)
+        result.append((key, value))
+    }
+
+    return result
+}
+
 private func swiftArrayToKuzuList(_ array: NSArray)
     throws -> UnsafeMutablePointer<kuzu_value>
 {
@@ -98,6 +159,47 @@ private func swiftArrayToKuzuList(_ array: NSArray)
         )
     }
     return cKuzuListValue!
+}
+
+private func kuzuListToSwiftArray(_ cValue: inout kuzu_value) throws -> [Any?] {
+    var numElements: UInt64 = 0
+    var logicalType = kuzu_logical_type()
+    kuzu_value_get_data_type(&cValue, &logicalType)
+
+    defer { kuzu_data_type_destroy(&logicalType) }
+    let logicalTypeId = kuzu_data_type_get_id(&logicalType)
+    if logicalTypeId == KUZU_ARRAY {
+        let state = kuzu_data_type_get_num_elements_in_array(
+            &logicalType,
+            &numElements
+        )
+        if state != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get number of elements in array with status: \(state)"
+            )
+        }
+    } else {
+        let state = kuzu_value_get_list_size(&cValue, &numElements)
+        if state != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get number of elements in list with status: \(state)"
+            )
+        }
+    }
+    var result: [Any?] = []
+    var currentValue = kuzu_value()
+    for i in UInt64(0)..<numElements {
+        let state = kuzu_value_get_list_element(&cValue, i, &currentValue)
+        if state != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get list element with status: \(state)"
+            )
+        }
+        defer { kuzu_value_destroy(&currentValue) }
+        let swiftValue = try kuzuValueToSwift(&currentValue)
+        result.append(swiftValue)
+    }
+    return result
 }
 
 private func swiftDictionaryToKuzuStruct(_ dictionary: NSDictionary)
@@ -160,6 +262,40 @@ private func swiftDictionaryToKuzuStruct(_ dictionary: NSDictionary)
     return cStructValue!
 }
 
+private func kuzuStructValueToSwiftDictionary(_ cValue: inout kuzu_value) throws
+    -> [String: Any?]
+{
+    var dict: [String: Any?] = [:]
+    var propertySize: UInt64 = 0
+    kuzu_value_get_struct_num_fields(&cValue, &propertySize)
+    var currentKey: UnsafeMutablePointer<CChar>?
+    var currentValue = kuzu_value()
+    for i in UInt64(0)..<propertySize {
+        var state = kuzu_value_get_struct_field_name(&cValue, i, &currentKey)
+        if state != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get struct field name with status: \(state)"
+            )
+        }
+        defer {
+            kuzu_destroy_string(currentKey)
+        }
+        let key = String(cString: currentKey!)
+        state = kuzu_value_get_struct_field_value(&cValue, i, &currentValue)
+        if state != KuzuSuccess {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get struct field with status: \(state)"
+            )
+        }
+        defer {
+            kuzu_value_destroy(&currentValue)
+        }
+        let swiftValue = try kuzuValueToSwift(&currentValue)
+        dict[key] = swiftValue
+    }
+    return dict
+}
+
 internal func swiftValueToKuzuValue(_ value: Any?)
     throws -> UnsafeMutablePointer<kuzu_value>
 {
@@ -218,7 +354,7 @@ internal func swiftValueToKuzuValue(_ value: Any?)
         case let timeInterval as TimeInterval:
             let interval = swiftTimeIntervalToKuzuInterval(timeInterval)
             valuePtr = kuzu_value_create_interval(interval)
-        case let arrayOfMapItems as [(String, Any)]:
+        case let arrayOfMapItems as [(Any?, Any?)]:
             valuePtr = try swiftArrayOfMapItemsToKuzuMap(arrayOfMapItems)
         case let array as NSArray:
             valuePtr = try swiftArrayToKuzuList(array)
@@ -288,8 +424,217 @@ internal func kuzuValueToSwift(_ cValue: inout kuzu_value) throws -> Any? {
             )
         }
         return value
+    case KUZU_INT128:
+        var int128Value = kuzu_int128_t()
+        let getValueState = kuzu_value_get_int128(&cValue, &int128Value)
+        if getValueState != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get int128 value with status \(getValueState)"
+            )
+        }
+        var valueString: UnsafeMutablePointer<CChar>?
+        let valueConversionState = kuzu_int128_t_to_string(
+            int128Value,
+            &valueString
+        )
+        if valueConversionState != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to convert int128 to string with status \(valueConversionState)"
+            )
+        }
+        defer {
+            kuzu_destroy_string(valueString)
+        }
+        let decimalString = String(cString: valueString!)
+        let decimal = Decimal(string: decimalString)
+        return decimal
+    case KUZU_UUID:
+        var valueString: UnsafeMutablePointer<CChar>?
+        let state = kuzu_value_get_uuid(&cValue, &valueString)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get uuid value with status \(state)"
+            )
+        }
+        defer {
+            kuzu_destroy_string(valueString)
+        }
+        let uuidString = String(cString: valueString!)
+        return UUID(uuidString: uuidString)!
+    case KUZU_UINT64:
+        var value: UInt64 = UInt64()
+        let state = kuzu_value_get_uint64(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get uint64 value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_UINT32:
+        var value: UInt32 = UInt32()
+        let state = kuzu_value_get_uint32(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get uint32 value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_UINT16:
+        var value: UInt16 = UInt16()
+        let state = kuzu_value_get_uint16(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get uint16 value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_UINT8:
+        var value: UInt8 = UInt8()
+        let state = kuzu_value_get_uint8(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get uint8 value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_FLOAT:
+        var value: Float = Float()
+        let state = kuzu_value_get_float(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get float value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_DOUBLE:
+        var value: Double = Double()
+        let state = kuzu_value_get_double(&cValue, &value)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get double value with status \(state)"
+            )
+        }
+        return value
+    case KUZU_STRING:
+        var strValue: UnsafeMutablePointer<CChar>?
+        let state = kuzu_value_get_string(&cValue, &strValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get string value with status \(state)"
+            )
+        }
+        defer {
+            kuzu_destroy_string(strValue)
+        }
+        return String(cString: strValue!)
+    case KUZU_TIMESTAMP:
+        var cTimestampValue = kuzu_timestamp_t()
+        let state = kuzu_value_get_timestamp(&cValue, &cTimestampValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get timestamp value with status \(state)"
+            )
+        }
+        let microseconds = cTimestampValue.value
+        let seconds: Double = Double(microseconds) / MICROSECONDS_IN_A_SECOND
+        return Date(timeIntervalSince1970: seconds)
+    case KUZU_TIMESTAMP_NS:
+        var cTimestampValue = kuzu_timestamp_ns_t()
+        let state = kuzu_value_get_timestamp_ns(&cValue, &cTimestampValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get timestamp value with status \(state)"
+            )
+        }
+        let nanoseconds = cTimestampValue.value
+        let seconds: Double = Double(nanoseconds) / NANOSECONDS_IN_A_SECOND
+        return Date(timeIntervalSince1970: seconds)
+    case KUZU_TIMESTAMP_MS:
+        var cTimestampValue = kuzu_timestamp_ms_t()
+        let state = kuzu_value_get_timestamp_ms(&cValue, &cTimestampValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get timestamp value with status \(state)"
+            )
+        }
+        let milliseconds = cTimestampValue.value
+        let seconds: Double = Double(milliseconds) / MILLISECONDS_IN_A_SECOND
+        return Date(timeIntervalSince1970: seconds)
+    case KUZU_TIMESTAMP_SEC:
+        var cTimestampValue = kuzu_timestamp_sec_t()
+        let state = kuzu_value_get_timestamp_sec(&cValue, &cTimestampValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get timestamp value with status \(state)"
+            )
+        }
+        let seconds = cTimestampValue.value
+        return Date(timeIntervalSince1970: Double(seconds))
+    case KUZU_TIMESTAMP_TZ:
+        var cTimestampValue = kuzu_timestamp_tz_t()
+        let state = kuzu_value_get_timestamp_tz(&cValue, &cTimestampValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get timestamp value with status \(state)"
+            )
+        }
+        let microseconds = cTimestampValue.value
+        let seconds: Double = Double(microseconds) / MICROSECONDS_IN_A_SECOND
+        return Date(timeIntervalSince1970: seconds)
+    case KUZU_DATE:
+        var cDateValue = kuzu_date_t()
+        let state = kuzu_value_get_date(&cValue, &cDateValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get date value with status \(state)"
+            )
+        }
+        let days = cDateValue.days
+        let seconds: Double = Double(days) * SECONDS_IN_A_DAY
+        return Date(timeIntervalSince1970: seconds)
+    case KUZU_INTERVAL:
+        var cIntervalValue = kuzu_interval_t()
+        let state = kuzu_value_get_interval(&cValue, &cIntervalValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get interval value with status \(state)"
+            )
+        }
+        return kuzuIntervalToSwiftTimeInterval(cIntervalValue)
+    case KUZU_INTERNAL_ID:
+        var cInternalIdValue = kuzu_internal_id_t()
+        let state = kuzu_value_get_internal_id(&cValue, &cInternalIdValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get internal id value with status \(state)"
+            )
+        }
+        return KuzuInternalId(
+            tableId: cInternalIdValue.table_id,
+            offset: cInternalIdValue.offset
+        )
+    case KUZU_BLOB:
+        var cBlobValue: UnsafeMutablePointer<UInt8>?
+        let state = kuzu_value_get_blob(&cValue, &cBlobValue)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get blob value with status \(state)"
+            )
+        }
+        defer {
+            kuzu_destroy_blob(cBlobValue)
+        }
+        let blobSize = strlen(cBlobValue!)
+        let blobData = Data(bytes: cBlobValue!, count: blobSize)
+        return blobData
+    case KUZU_LIST, KUZU_ARRAY:
+        return try kuzuListToSwiftArray(&cValue)
+    case KUZU_STRUCT, KUZU_UNION:
+        return try kuzuStructValueToSwiftDictionary(&cValue)
+    case KUZU_MAP:
+        return try kuzuMapToSwiftArrayOfMapItems(&cValue)
     default:
-        var valueString = kuzu_value_to_string(&cValue)
+        let valueString = kuzu_value_to_string(&cValue)
         defer { kuzu_destroy_string(valueString) }
         throw KuzuError.valueConversionFailed(
             "Unsupported C type \(String(cString: valueString!))"

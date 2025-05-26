@@ -15,3 +15,10 @@ enum KuzuError: Error {
     case getNextQueryResultFailed(String)
     case getValueFailed(String)
 }
+
+struct KuzuInternalId {
+    let tableId : UInt64
+    let offset : UInt64
+}
+
+
