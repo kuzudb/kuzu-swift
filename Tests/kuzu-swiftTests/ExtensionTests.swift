@@ -1,52 +1,13 @@
+//
+//  kuzu-swift
+//  https://github.com/kuzudb/kuzu-swift
+//
+//  Copyright © 2023 - 2025 Kùzu Inc.
+//  This code is licensed under MIT license (see LICENSE for details)
 import Foundation
 import Testing
 
 @testable import Kuzu
-
-@Test func example() async throws {
-    let systemConfig = Kuzu.SystemConfig()
-    let db = try Kuzu.Database("")
-    let conn = try Kuzu.Connection(db)
-    var result = try conn.query(
-        "CREATE NODE TABLE User(name STRING, age INT64, PRIMARY KEY (name))"
-    )
-    print(result)
-    result = try conn.query(
-        "CREATE NODE TABLE City(name STRING, population INT64, PRIMARY KEY (name))"
-    )
-    print(result)
-    result = try conn.query(
-        "CREATE REL TABLE Follows(FROM User TO User, since INT64)"
-    )
-    print(result)
-    result = try conn.query("CREATE REL TABLE LivesIn(FROM User TO City)")
-    print(result)
-    result = try conn.query(
-        "COPY User From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/user.csv'"
-    )
-    print(result)
-    result = try conn.query(
-        "COPY City From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/city.csv'"
-    )
-    print(result)
-    result = try conn.query(
-        "COPY Follows From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/follows.csv'"
-    )
-    print(result)
-    result = try conn.query(
-        "COPY LivesIn From '/Users/lc/Developer/kuzu/dataset/demo-db/csv/lives-in.csv'"
-    )
-    print(result)
-    result = try conn.query(
-        "MATCH (u:User)-[l:LivesIn]->(c:City) RETURN u.name, c.name"
-    )
-    while result.hasNext() {
-        let tuple = try result.getNext()
-        print(tuple)
-    }
-
-    // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-}
 
 @Test func testGds() async throws {
     let db = try Kuzu.Database()

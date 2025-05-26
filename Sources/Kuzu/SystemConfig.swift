@@ -36,7 +36,7 @@ public final class SystemConfig {
     ///   - readOnly: A boolean flag to open the database in read-only mode. Default is false.
     ///   - maxDbSize: The maximum size of the database in bytes. If 0, size is unlimited.
     ///   - autoCheckpoint: Whether to automatically create checkpoints. Default is true.
-    ///   - checkpointThreshold: The threshold for creating checkpoints. If 0, uses default value.
+    ///   - checkpointThreshold: The threshold for creating checkpoints. If set to UInt64.max, uses default value.
     public convenience init(
         bufferPoolSize: UInt64 = 0,
         maxNumThreads: UInt64 = 0,
@@ -44,7 +44,7 @@ public final class SystemConfig {
         readOnly: Bool = false,
         maxDbSize: UInt64 = 0,
         autoCheckpoint: Bool = true,
-        checkpointThreshold: UInt64 = 0
+        checkpointThreshold: UInt64 = UInt64.max
     ) {
         self.init()
         if bufferPoolSize > 0 {

@@ -1118,7 +1118,10 @@ let package = Package(
         ),
         .testTarget(
             name: "KuzuTests",
-            dependencies: ["Kuzu"]
+            dependencies: ["Kuzu"],
+            resources: [
+                .copy("../Dataset")
+            ],
         ),
     ],
     cLanguageStandard: .c11,
