@@ -111,3 +111,67 @@ struct KuzuUInt16Wrapper: Codable {
 struct KuzuUInt8Wrapper: Codable {
     let value: UInt8
 }
+
+/// A wrapper for UInt64 values to be passed as parameters to Kuzu.
+/// Using this wrapper is optional on macOS/iOS, because CoreFoundation
+/// framework can automatically detect the type of the underlying NSNumber.
+/// However, it is required on Linux, because CoreFoundation is not available.
+struct KuzuUInt64Wrapper: Codable {
+    let value: UInt64
+}
+
+/// A wrapper for Int64 values to be passed as parameters to Kuzu.
+/// Using this wrapper is optional on macOS/iOS, because CoreFoundation
+/// framework can automatically detect the type of the underlying NSNumber.
+/// However, it is required on Linux, because CoreFoundation is not available.
+struct KuzuInt64Wrapper: Codable {
+    let value: Int64
+}
+
+/// A wrapper for Int32 values to be passed as parameters to Kuzu.
+/// Using this wrapper is optional on macOS/iOS, because CoreFoundation
+/// framework can automatically detect the type of the underlying NSNumber.
+/// However, it is required on Linux, because CoreFoundation is not available.
+struct KuzuInt32Wrapper: Codable {
+    let value: Int32
+}
+
+/// A wrapper for Int16 values to be passed as parameters to Kuzu.
+/// Using this wrapper is optional on macOS/iOS, because CoreFoundation
+/// framework can automatically detect the type of the underlying NSNumber.
+/// However, it is required on Linux, because CoreFoundation is not available.
+struct KuzuInt16Wrapper: Codable {
+    let value: Int16
+}
+
+/// A wrapper for Int8 values to be passed as parameters to Kuzu.
+/// Using this wrapper is optional on macOS/iOS, because CoreFoundation
+/// framework can automatically detect the type of the underlying NSNumber.
+/// However, it is required on Linux, because CoreFoundation is not available.
+struct KuzuInt8Wrapper: Codable {
+    let value: Int8
+}
+
+/// A wrapper for Float values to be passed as parameters to Kuzu.
+/// Using this wrapper is optional on macOS/iOS, because CoreFoundation
+/// framework can automatically detect the type of the underlying NSNumber.
+/// However, it is required on Linux, because CoreFoundation is not available.
+struct KuzuFloatWrapper: Codable {
+    let value: Float
+}
+
+/// A wrapper for Double values to be passed as parameters to Kuzu.
+/// Using this wrapper is optional on macOS/iOS, because CoreFoundation
+/// framework can automatically detect the type of the underlying NSNumber.
+/// However, it is required on Linux, because CoreFoundation is not available.
+struct KuzuDoubleWrapper: Codable {
+    let value: Double
+}
+
+/// A wrapper for Bool values to be passed as parameters to Kuzu.
+/// Using this wrapper is optional on macOS/iOS, because CoreFoundation
+/// framework can automatically detect the type of the underlying NSNumber.
+/// However, it is required on Linux, because CoreFoundation is not available.
+struct KuzuBoolWrapper: Codable {
+    let value: Bool
+}
