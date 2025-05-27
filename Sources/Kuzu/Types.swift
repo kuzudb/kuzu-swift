@@ -26,11 +26,21 @@ enum KuzuError: Error {
 }
 
 /// Represents the internal ID of a node or relationship in Kuzu.
-struct KuzuInternalId {
+/// It conforms to the Equatable protocol for easy comparison.
+struct KuzuInternalId : Equatable{
     /// The table ID of the node or relationship.
     let tableId: UInt64
     /// The offset within the table.
     let offset: UInt64
+
+    /// Compares two KuzuInternalId instances for equality.
+    /// - Parameters:
+    ///   - lhs: The first KuzuInternalId to compare.
+    ///   - rhs: The second KuzuInternalId to compare.
+    /// - Returns: True if the two KuzuInternalId instances are equal, false otherwise.
+    static func == (lhs: KuzuInternalId, rhs: KuzuInternalId) -> Bool {
+        return lhs.tableId == rhs.tableId && lhs.offset == rhs.offset
+    }
 }
 
 /// Represents a node retrieved from Kuzu.
