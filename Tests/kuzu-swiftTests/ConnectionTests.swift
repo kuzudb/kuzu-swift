@@ -40,7 +40,7 @@ final class ConnectionTests: XCTestCase {
     }
 
     // TODO: fix this test on Linux.
-    #if !os(linux)
+    #if !os(Linux)
     func testInterrupt() async throws {
         let conn = try Connection(db)
         let largeQuery = "UNWIND RANGE(1,100000) AS x UNWIND RANGE(1, 100000) AS y RETURN COUNT(x + y);"
