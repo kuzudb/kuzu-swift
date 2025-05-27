@@ -31,6 +31,6 @@ jobs:
           title: "Update Kuzu from branch ${{env.KUZU_BRANCH}}"
           body: "This PR updates Kuzu from branch ${{env.KUZU_BRANCH}}."
           base: main
-          labels: update-kuzu
+          labels: autoupdate
           draft: false
           token: ${{ secrets.GITHUB_TOKEN }}
