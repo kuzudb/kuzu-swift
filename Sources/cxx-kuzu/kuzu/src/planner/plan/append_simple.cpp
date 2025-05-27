@@ -12,16 +12,13 @@
 #include "binder/ddl/bound_create_table.h"
 #include "binder/ddl/bound_create_type.h"
 #include "binder/ddl/bound_drop.h"
-#include "binder/expression/literal_expression.h"
 #include "planner/operator/ddl/logical_alter.h"
 #include "planner/operator/ddl/logical_create_sequence.h"
 #include "planner/operator/ddl/logical_create_table.h"
 #include "planner/operator/ddl/logical_create_type.h"
 #include "planner/operator/ddl/logical_drop.h"
 #include "planner/operator/logical_create_macro.h"
-#include "planner/operator/logical_dummy_sink.h"
 #include "planner/operator/logical_explain.h"
-#include "planner/operator/logical_noop.h"
 #include "planner/operator/logical_standalone_call.h"
 #include "planner/operator/logical_table_function_call.h"
 #include "planner/operator/logical_transaction.h"
@@ -37,128 +34,109 @@ using namespace kuzu::common;
 namespace kuzu {
 namespace planner {
 
-static LogicalPlan getSimplePlan(std::shared_ptr<LogicalOperator> op) {
-    LogicalPlan plan;
-    op->computeFactorizedSchema();
-    plan.setLastOperator(std::move(op));
-    return plan;
-}
-
-LogicalPlan Planner::planCreateTable(const BoundStatement& statement) {
+void Planner::appendCreateTable(const BoundStatement& statement, LogicalPlan& plan) {
     auto& createTable = statement.constCast<BoundCreateTable>();
-    auto& info = createTable.getInfo();
-
-    // If it is a CREATE NODE TABLE AS, then copy as well
-    if (createTable.hasCopyInfo()) {
-        // TODO(Xiyang): we should get rid of this dummyStr if CREATE TABLE AS has actual output.
-        // Currently, we need dummyStr as placeholder for the createTable & copy pipeline output
-        // messages. even though we do NOT actually output them
-        auto dummyStr = std::make_shared<LiteralExpression>(Value("dummy"), "dummy");
-        std::vector<std::shared_ptr<LogicalOperator>> children;
-        auto copyPlan = planCopyNodeFrom(&createTable.getCopyInfo(), {dummyStr});
-        children.push_back(copyPlan.getLastOperator());
-        auto create = std::make_shared<LogicalCreateTable>(info.copy(), dummyStr);
-        auto dummySink = std::make_shared<LogicalDummySink>(std::move(create));
-        children.push_back(std::move(dummySink));
-        auto noop = std::make_shared<LogicalNoop>(children);
-        return getSimplePlan(std::move(noop));
-    }
-    auto op = std::make_shared<LogicalCreateTable>(info.copy(), statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+    auto info = createTable.getInfo();
+    auto op = make_shared<LogicalCreateTable>(info->copy(),
+        statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planCreateType(const BoundStatement& statement) {
+void Planner::appendCreateType(const BoundStatement& statement, LogicalPlan& plan) {
     auto& createType = statement.constCast<BoundCreateType>();
-    auto op = std::make_shared<LogicalCreateType>(createType.getName(), createType.getType().copy(),
-        statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+    auto op = make_shared<LogicalCreateType>(createType.getName(), createType.getType().copy(),
+        statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planCreateSequence(const BoundStatement& statement) {
+void Planner::appendCreateSequence(const BoundStatement& statement, LogicalPlan& plan) {
     auto& createSequence = statement.constCast<BoundCreateSequence>();
-    auto& info = createSequence.getInfo();
-    auto op = std::make_shared<LogicalCreateSequence>(info.copy(), statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+    auto info = createSequence.getInfo();
+    auto op = make_shared<LogicalCreateSequence>(info->copy(),
+        statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planDrop(const BoundStatement& statement) {
+void Planner::appendDrop(const BoundStatement& statement, LogicalPlan& plan) {
     auto& dropTable = statement.constCast<BoundDrop>();
-    auto op =
-        std::make_shared<LogicalDrop>(dropTable.getDropInfo(), statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+    auto op = make_shared<LogicalDrop>(dropTable.getDropInfo(),
+        statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planAlter(const BoundStatement& statement) {
+void Planner::appendAlter(const BoundStatement& statement, LogicalPlan& plan) {
     auto& alter = statement.constCast<BoundAlter>();
-    auto op =
-        std::make_shared<LogicalAlter>(alter.getInfo().copy(), statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+    auto info = alter.getInfo();
+    auto op = std::make_shared<LogicalAlter>(info->copy(),
+        statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planStandaloneCall(const BoundStatement& statement) {
+void Planner::appendStandaloneCall(const BoundStatement& statement, LogicalPlan& plan) {
     auto& standaloneCallClause = statement.constCast<BoundStandaloneCall>();
-    auto op = std::make_shared<LogicalStandaloneCall>(standaloneCallClause.getOption(),
+    auto op = make_shared<LogicalStandaloneCall>(standaloneCallClause.getOption(),
         standaloneCallClause.getOptionValue());
-    return getSimplePlan(std::move(op));
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planStandaloneCallFunction(const BoundStatement& statement) {
+void Planner::appendStandaloneCallFunction(const BoundStatement& statement, LogicalPlan& plan) {
     auto& standaloneCallFunctionClause = statement.constCast<BoundStandaloneCallFunction>();
-    auto op =
+    std::shared_ptr<LogicalOperator> op =
         std::make_shared<LogicalTableFunctionCall>(standaloneCallFunctionClause.getTableFunction(),
             standaloneCallFunctionClause.getBindData()->copy());
-    return getSimplePlan(std::move(op));
+    op->computeFactorizedSchema();
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planExplain(const BoundStatement& statement) {
+void Planner::appendExplain(const BoundStatement& statement, LogicalPlan& plan) {
     auto& explain = statement.constCast<BoundExplain>();
     auto statementToExplain = explain.getStatementToExplain();
-    auto planToExplain = planStatement(*statementToExplain);
-    auto op = std::make_shared<LogicalExplain>(planToExplain.getLastOperator(),
-        statement.getSingleColumnExpr(), explain.getExplainType(),
-        statementToExplain->getStatementResult()->getColumns());
-    return getSimplePlan(std::move(op));
+    auto planToExplain = getBestPlan(*statementToExplain);
+    auto op = make_shared<LogicalExplain>(planToExplain->getLastOperator(),
+        statement.getStatementResult()->getSingleColumnExpr(), explain.getExplainType(),
+        explain.getStatementToExplain()->getStatementResult()->getColumns());
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planCreateMacro(const BoundStatement& statement) {
+void Planner::appendCreateMacro(const BoundStatement& statement, LogicalPlan& plan) {
     auto& createMacro = statement.constCast<BoundCreateMacro>();
-    auto op = std::make_shared<LogicalCreateMacro>(statement.getSingleColumnExpr(),
+    auto op = make_shared<LogicalCreateMacro>(statement.getStatementResult()->getSingleColumnExpr(),
         createMacro.getMacroName(), createMacro.getMacro());
-    return getSimplePlan(std::move(op));
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planTransaction(const BoundStatement& statement) {
+void Planner::appendTransaction(const BoundStatement& statement, LogicalPlan& plan) {
     auto& transactionStatement = statement.constCast<BoundTransactionStatement>();
     auto op = std::make_shared<LogicalTransaction>(transactionStatement.getTransactionAction());
-    return getSimplePlan(std::move(op));
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planExtension(const BoundStatement& statement) {
+void Planner::appendExtension(const BoundStatement& statement, LogicalPlan& plan) {
     auto& extensionStatement = statement.constCast<BoundExtensionStatement>();
     auto op = std::make_shared<LogicalExtension>(extensionStatement.getAuxInfo(),
-        statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+        statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(op));
 }
 
-LogicalPlan Planner::planAttachDatabase(const BoundStatement& statement) {
+void Planner::appendAttachDatabase(const BoundStatement& statement, LogicalPlan& plan) {
     auto& boundAttachDatabase = statement.constCast<BoundAttachDatabase>();
-    auto op = std::make_shared<LogicalAttachDatabase>(boundAttachDatabase.getAttachInfo(),
-        statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+    auto attachDatabase = std::make_shared<LogicalAttachDatabase>(
+        boundAttachDatabase.getAttachInfo(), statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(attachDatabase));
 }
 
-LogicalPlan Planner::planDetachDatabase(const BoundStatement& statement) {
+void Planner::appendDetachDatabase(const BoundStatement& statement, LogicalPlan& plan) {
     auto& boundDetachDatabase = statement.constCast<BoundDetachDatabase>();
-    auto op = std::make_shared<LogicalDetachDatabase>(boundDetachDatabase.getDBName(),
-        statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+    auto detachDatabase = std::make_shared<LogicalDetachDatabase>(boundDetachDatabase.getDBName(),
+        statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(detachDatabase));
 }
 
-LogicalPlan Planner::planUseDatabase(const BoundStatement& statement) {
+void Planner::appendUseDatabase(const BoundStatement& statement, LogicalPlan& plan) {
     auto& boundUseDatabase = statement.constCast<BoundUseDatabase>();
-    auto op = std::make_shared<LogicalUseDatabase>(boundUseDatabase.getDBName(),
-        statement.getSingleColumnExpr());
-    return getSimplePlan(std::move(op));
+    auto useDatabase = std::make_shared<LogicalUseDatabase>(boundUseDatabase.getDBName(),
+        statement.getStatementResult()->getSingleColumnExpr());
+    plan.setLastOperator(std::move(useDatabase));
 }
 
 } // namespace planner

@@ -11,10 +11,9 @@ namespace kuzu {
 namespace graph {
 
 std::string GraphEntryTableInfo::toString() const {
-    std::string result = "{";
-    result += stringFormat("'table': '{}'", tableName);
+    auto result = common::stringFormat("{'table': '{}'", tableName);
     if (predicate != "") {
-        result += stringFormat(",'predicate': '{}'", predicate);
+        result += common::stringFormat(",'predicate': '{}'", predicate);
     }
     result += "}";
     return result;

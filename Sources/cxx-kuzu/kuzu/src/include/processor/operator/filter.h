@@ -60,7 +60,7 @@ struct NodeLabelFilterInfo {
     NodeLabelFilterInfo(const NodeLabelFilterInfo& other)
         : nodeVectorPos{other.nodeVectorPos}, nodeLabelSet{other.nodeLabelSet} {}
 
-    std::unique_ptr<NodeLabelFilterInfo> copy() const {
+    inline std::unique_ptr<NodeLabelFilterInfo> copy() const {
         return std::make_unique<NodeLabelFilterInfo>(*this);
     }
 };

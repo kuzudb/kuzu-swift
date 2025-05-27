@@ -9,7 +9,6 @@ namespace extension {
 enum class ExtensionAction : uint8_t {
     INSTALL = 0,
     LOAD = 1,
-    UNINSTALL = 2,
 };
 
 struct ExtensionAuxInfo {
@@ -33,11 +32,10 @@ struct ExtensionAuxInfo {
 
 struct InstallExtensionAuxInfo : public ExtensionAuxInfo {
     std::string extensionRepo;
-    bool forceInstall;
 
-    explicit InstallExtensionAuxInfo(std::string extensionRepo, std::string path, bool forceInstall)
+    explicit InstallExtensionAuxInfo(std::string extensionRepo, std::string path)
         : ExtensionAuxInfo{ExtensionAction::INSTALL, std::move(path)},
-          extensionRepo{std::move(extensionRepo)}, forceInstall{forceInstall} {}
+          extensionRepo{std::move(extensionRepo)} {}
 
     std::unique_ptr<ExtensionAuxInfo> copy() override {
         return std::make_unique<InstallExtensionAuxInfo>(*this);

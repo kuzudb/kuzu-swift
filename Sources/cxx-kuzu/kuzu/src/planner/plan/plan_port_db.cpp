@@ -18,13 +18,13 @@ using namespace kuzu::transaction;
 namespace kuzu {
 namespace planner {
 
-LogicalPlan Planner::planExportDatabase(const BoundStatement& statement) {
+std::unique_ptr<LogicalPlan> Planner::planExportDatabase(const BoundStatement& statement) {
     auto& boundExportDatabase = statement.constCast<BoundExportDatabase>();
     auto filePath = boundExportDatabase.getFilePath();
     auto fileType = boundExportDatabase.getFileType();
     auto exportData = boundExportDatabase.getExportData();
     auto logicalOperators = std::vector<std::shared_ptr<LogicalOperator>>();
-    auto plan = LogicalPlan();
+    auto plan = std::make_unique<LogicalPlan>();
     auto fileTypeStr = FileTypeUtils::toString(fileType);
     StringUtils::toLower(fileTypeStr);
     auto copyToSuffix = "." + fileTypeStr;
@@ -38,27 +38,27 @@ LogicalPlan Planner::planExportDatabase(const BoundStatement& statement) {
     for (auto& exportTableData : *exportData) {
         auto regularQuery = exportTableData.getRegularQuery();
         KU_ASSERT(regularQuery->getStatementType() == StatementType::QUERY);
-        auto tablePlan = planStatement(*regularQuery);
+        auto tablePlan = getBestPlan(*regularQuery);
         auto path = filePath + "/" + exportTableData.tableName + copyToSuffix;
         function::ExportFuncBindInput bindInput{exportTableData.columnNames, std::move(path),
             boundExportDatabase.getExportOptions()};
         auto copyTo = std::make_shared<LogicalCopyTo>(exportFunc.bind(bindInput), exportFunc,
-            tablePlan.getLastOperator());
+            tablePlan->getLastOperator());
         logicalOperators.push_back(std::move(copyTo));
     }
     auto exportDatabase =
-        std::make_shared<LogicalExportDatabase>(boundExportDatabase.getBoundFileInfo()->copy(),
-            statement.getSingleColumnExpr(), std::move(logicalOperators));
-    plan.setLastOperator(std::move(exportDatabase));
+        make_shared<LogicalExportDatabase>(boundExportDatabase.getBoundFileInfo()->copy(),
+            statement.getStatementResult()->getSingleColumnExpr(), std::move(logicalOperators));
+    plan->setLastOperator(std::move(exportDatabase));
     return plan;
 }
 
-LogicalPlan Planner::planImportDatabase(const BoundStatement& statement) {
+std::unique_ptr<LogicalPlan> Planner::planImportDatabase(const BoundStatement& statement) {
     auto& boundImportDatabase = statement.constCast<BoundImportDatabase>();
-    auto plan = LogicalPlan();
-    auto importDatabase = std::make_shared<LogicalImportDatabase>(boundImportDatabase.getQuery(),
-        boundImportDatabase.getIndexQuery(), statement.getSingleColumnExpr());
-    plan.setLastOperator(std::move(importDatabase));
+    auto plan = std::make_unique<LogicalPlan>();
+    auto importDatabase = make_shared<LogicalImportDatabase>(boundImportDatabase.getQuery(),
+        boundImportDatabase.getIndexQuery(), statement.getStatementResult()->getSingleColumnExpr());
+    plan->setLastOperator(std::move(importDatabase));
     return plan;
 }
 

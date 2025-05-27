@@ -78,8 +78,7 @@ public:
         common::RelDataDirection direction, std::vector<common::column_id_t> columnIDs,
         std::vector<common::LogicalType> columnTypes, uint32_t operatorID);
 
-    KUZU_API std::unique_ptr<PhysicalOperator> mapOperator(
-        const planner::LogicalOperator* logicalOperator);
+    std::unique_ptr<PhysicalOperator> mapOperator(const planner::LogicalOperator* logicalOperator);
     std::unique_ptr<PhysicalOperator> mapAccumulate(
         const planner::LogicalOperator* logicalOperator);
     std::unique_ptr<PhysicalOperator> mapAggregate(const planner::LogicalOperator* logicalOperator);
@@ -135,7 +134,6 @@ public:
         const planner::LogicalOperator* logicalOperator);
     std::unique_ptr<PhysicalOperator> mapNodeLabelFilter(
         const planner::LogicalOperator* logicalOperator);
-    std::unique_ptr<PhysicalOperator> mapNoop(const planner::LogicalOperator* logicalOperator);
     std::unique_ptr<PhysicalOperator> mapOrderBy(const planner::LogicalOperator* logicalOperator);
     std::unique_ptr<PhysicalOperator> mapPartitioner(
         const planner::LogicalOperator* logicalOperator);
@@ -168,6 +166,9 @@ public:
 
     std::unique_ptr<ResultCollector> createResultCollector(common::AccumulateType accumulateType,
         const binder::expression_vector& expressions, planner::Schema* schema,
+        std::unique_ptr<PhysicalOperator> prevOperator);
+
+    std::unique_ptr<PhysicalOperator> createDummySink(planner::Schema* schema,
         std::unique_ptr<PhysicalOperator> prevOperator);
 
     // Scan fTable
@@ -231,27 +232,19 @@ public:
 
     static std::vector<DataPos> getDataPos(const binder::expression_vector& expressions,
         const planner::Schema& schema);
+    static planner::LogicalSemiMasker* findSemiMaskerInPlan(
+        planner::LogicalOperator* logicalOperator);
     static FactorizedTableSchema createFlatFTableSchema(
         const binder::expression_vector& expressions, const planner::Schema& schema);
     std::unique_ptr<common::SemiMask> createSemiMask(common::table_id_t tableID) const;
 
-    void addOperatorMapping(const planner::LogicalOperator* logicalOp,
-        PhysicalOperator* physicalOp) {
-        KU_ASSERT(!logicalOpToPhysicalOpMap.contains(logicalOp));
-        logicalOpToPhysicalOpMap.insert({logicalOp, physicalOp});
-    }
-    void eraseOperatorMapping(const planner::LogicalOperator* logicalOp) {
-        KU_ASSERT(logicalOpToPhysicalOpMap.contains(logicalOp));
-        logicalOpToPhysicalOpMap.erase(logicalOp);
-    }
-
 public:
     ExecutionContext* executionContext;
     main::ClientContext* clientContext;
+    std::unordered_map<const planner::LogicalOperator*, PhysicalOperator*> logicalOpToPhysicalOpMap;
 
 private:
-    std::unordered_map<const planner::LogicalOperator*, PhysicalOperator*> logicalOpToPhysicalOpMap;
-    physical_op_id physicalOperatorID;
+    uint32_t physicalOperatorID;
 };
 
 } // namespace processor

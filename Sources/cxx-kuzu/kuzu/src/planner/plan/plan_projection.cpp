@@ -7,6 +7,13 @@ using namespace kuzu::binder;
 namespace kuzu {
 namespace planner {
 
+void Planner::planProjectionBody(const BoundProjectionBody* projectionBody,
+    const std::vector<std::unique_ptr<LogicalPlan>>& plans) {
+    for (auto& plan : plans) {
+        planProjectionBody(projectionBody, *plan);
+    }
+}
+
 void Planner::planProjectionBody(const BoundProjectionBody* projectionBody, LogicalPlan& plan) {
     auto expressionsToProject = projectionBody->getProjectionExpressions();
     if (expressionsToProject.empty()) {

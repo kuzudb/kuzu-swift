@@ -32,11 +32,12 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapCopyTo(const LogicalOperator* l
         CopyToInfo{exportFunc, std::move(bindData), std::move(vectorsToCopyPos), std::move(isFlat)};
     auto printInfo =
         std::make_unique<CopyToPrintInfo>(info.bindData->columnNames, info.bindData->fileName);
-    auto copyTo = std::make_unique<CopyTo>(std::move(info), std::move(sharedState),
-        std::move(prevOperator), getOperatorID(), std::move(printInfo));
-    copyTo->setDescriptor(std::make_unique<ResultSetDescriptor>(childSchema));
-    return createEmptyFTableScan(FactorizedTable::EmptyTable(clientContext->getMemoryManager()), 0,
-        std::move(copyTo));
+    auto copyTo = std::make_unique<CopyTo>(std::make_unique<ResultSetDescriptor>(childSchema),
+        std::move(info), std::move(sharedState), std::move(prevOperator), getOperatorID(),
+        std::move(printInfo));
+    auto fTable = std::make_shared<FactorizedTable>(clientContext->getMemoryManager(),
+        FactorizedTableSchema());
+    return createEmptyFTableScan(fTable, 0, std::move(copyTo));
 }
 
 } // namespace processor

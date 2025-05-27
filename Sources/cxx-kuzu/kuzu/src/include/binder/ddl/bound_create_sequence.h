@@ -6,14 +6,13 @@ namespace kuzu {
 namespace binder {
 
 class BoundCreateSequence final : public BoundStatement {
-    static constexpr common::StatementType type_ = common::StatementType::CREATE_SEQUENCE;
-
 public:
     explicit BoundCreateSequence(BoundCreateSequenceInfo info)
-        : BoundStatement{type_, BoundStatementResult::createSingleStringColumnResult()},
+        : BoundStatement{common::StatementType::CREATE_SEQUENCE,
+              BoundStatementResult::createSingleStringColumnResult()},
           info{std::move(info)} {}
 
-    const BoundCreateSequenceInfo& getInfo() const { return info; }
+    const BoundCreateSequenceInfo* getInfo() const { return &info; }
 
 private:
     BoundCreateSequenceInfo info;

@@ -48,7 +48,6 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapScanNodeTable(
         sharedStates.push_back(std::make_shared<ScanNodeTableSharedState>(std::move(semiMask)));
     }
     auto alias = scan.getNodeID()->cast<PropertyExpression>().getRawVariableName();
-    std::unique_ptr<PhysicalOperator> result;
     switch (scan.getScanType()) {
     case LogicalScanNodeTableType::SCAN: {
         auto printInfo =

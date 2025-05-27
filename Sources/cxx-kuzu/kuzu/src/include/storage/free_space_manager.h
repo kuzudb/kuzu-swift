@@ -41,8 +41,7 @@ public:
 
 private:
     PageRange splitPageRange(PageRange chunk, common::page_idx_t numRequiredPages);
-    void mergePageRanges(free_list_t newInitialEntries, FileHandle* fileHandle);
-    void handleLastPageRange(PageRange pageRange, FileHandle* fileHandle);
+    void mergePageRanges(free_list_t newInitialEntries);
     void resetFreeLists();
     static common::idx_t getLevel(common::page_idx_t numPages);
 

@@ -25,7 +25,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapOrderBy(const LogicalOperator* 
     auto payloadExpressions = inSchema->getExpressionsInScope();
     std::vector<DataPos> payloadsPos;
     std::vector<LogicalType> payloadTypes;
-    expression_map<ft_col_idx_t> payloadToColIdx;
+    binder::expression_map<ft_col_idx_t> payloadToColIdx;
     auto payloadSchema = FactorizedTableSchema();
     auto mayContainUnFlatKey = inSchema->getNumGroups() == 1;
     for (auto i = 0u; i < payloadExpressions.size(); ++i) {
@@ -58,9 +58,9 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapOrderBy(const LogicalOperator* 
     for (auto& expression : payloadExpressions) {
         outPos.emplace_back(outSchema->getExpressionPos(*expression));
     }
-    auto orderByDataInfo = OrderByDataInfo(keysPos, payloadsPos, LogicalType::copy(keyTypes),
-        LogicalType::copy(payloadTypes), logicalOrderBy.getIsAscOrders(), std::move(payloadSchema),
-        std::move(keyInPayloadPos));
+    auto orderByDataInfo = std::make_unique<OrderByDataInfo>(keysPos, payloadsPos,
+        LogicalType::copy(keyTypes), LogicalType::copy(payloadTypes),
+        logicalOrderBy.getIsAscOrders(), std::move(payloadSchema), std::move(keyInPayloadPos));
     if (logicalOrderBy.hasLimitNum()) {
         auto limitExpr = logicalOrderBy.getLimitNum();
         if (!ExpressionUtil::canEvaluateAsLiteral(*limitExpr)) {
@@ -80,27 +80,22 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapOrderBy(const LogicalOperator* 
         auto topKSharedState = std::make_shared<TopKSharedState>();
         auto printInfo =
             std::make_unique<TopKPrintInfo>(keyExpressions, payloadExpressions, skipNum, limitNum);
-        auto topK = make_unique<TopK>(std::move(orderByDataInfo), topKSharedState, skipNum,
-            limitNum, std::move(prevOperator), getOperatorID(), printInfo->copy());
-        topK->setDescriptor(std::make_unique<ResultSetDescriptor>(inSchema));
-        auto scan =
-            std::make_unique<TopKScan>(outPos, topKSharedState, getOperatorID(), printInfo->copy());
-        scan->addChild(std::move(topK));
-        return scan;
+        auto topK = make_unique<TopK>(std::make_unique<ResultSetDescriptor>(inSchema),
+            std::move(orderByDataInfo), topKSharedState, skipNum, limitNum, std::move(prevOperator),
+            getOperatorID(), printInfo->copy());
+        return make_unique<TopKScan>(outPos, topKSharedState, std::move(topK), getOperatorID(),
+            printInfo->copy());
     }
     auto orderBySharedState = std::make_shared<SortSharedState>();
     auto printInfo = std::make_unique<OrderByPrintInfo>(keyExpressions, payloadExpressions);
-    auto orderBy = make_unique<OrderBy>(std::move(orderByDataInfo), orderBySharedState,
-        std::move(prevOperator), getOperatorID(), printInfo->copy());
-    orderBy->setDescriptor(std::make_unique<ResultSetDescriptor>(inSchema));
+    auto orderBy = make_unique<OrderBy>(std::make_unique<ResultSetDescriptor>(inSchema),
+        std::move(orderByDataInfo), orderBySharedState, std::move(prevOperator), getOperatorID(),
+        printInfo->copy());
     auto dispatcher = std::make_shared<KeyBlockMergeTaskDispatcher>();
     auto orderByMerge = make_unique<OrderByMerge>(orderBySharedState, std::move(dispatcher),
+        std::move(orderBy), getOperatorID(), printInfo->copy());
+    return make_unique<OrderByScan>(outPos, orderBySharedState, std::move(orderByMerge),
         getOperatorID(), printInfo->copy());
-    orderByMerge->addChild(std::move(orderBy));
-    auto scan = std::make_unique<OrderByScan>(outPos, orderBySharedState, getOperatorID(),
-        printInfo->copy());
-    scan->addChild(std::move(orderByMerge));
-    return scan;
 }
 
 } // namespace processor

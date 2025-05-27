@@ -88,10 +88,10 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapHashJoin(const LogicalOperator*
         LogicalType::copy(buildKeyTypes), buildInfo->getTableSchema()->copy());
     auto sharedState = std::make_shared<HashJoinSharedState>(std::move(globalHashTable));
     auto buildPrintInfo = std::make_unique<HashJoinBuildPrintInfo>(buildKeys, payloads);
-    auto hashJoinBuild = std::make_unique<HashJoinBuild>(PhysicalOperatorType::HASH_JOIN_BUILD,
-        sharedState, std::move(buildInfo), std::move(buildSidePrevOperator), getOperatorID(),
-        buildPrintInfo->copy());
-    hashJoinBuild->setDescriptor(std::make_unique<ResultSetDescriptor>(buildSchema));
+    auto hashJoinBuild =
+        make_unique<HashJoinBuild>(std::make_unique<ResultSetDescriptor>(buildSchema),
+            PhysicalOperatorType::HASH_JOIN_BUILD, sharedState, std::move(buildInfo),
+            std::move(buildSidePrevOperator), getOperatorID(), buildPrintInfo->copy());
     // Create probe
     std::vector<DataPos> probeKeysDataPos;
     for (auto& probeKey : probeKeys) {
@@ -112,8 +112,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapHashJoin(const LogicalOperator*
     auto probePrintInfo = std::make_unique<HashJoinProbePrintInfo>(probeKeys);
     auto hashJoinProbe = make_unique<HashJoinProbe>(sharedState, hashJoin->getJoinType(),
         hashJoin->requireFlatProbeKeys(), probeDataInfo, std::move(probeSidePrevOperator),
-        getOperatorID(), probePrintInfo->copy());
-    hashJoinProbe->addChild(std::move(hashJoinBuild));
+        std::move(hashJoinBuild), getOperatorID(), probePrintInfo->copy());
     if (hashJoin->getSIPInfo().direction == SIPDirection::PROBE_TO_BUILD) {
         mapSIPJoin(hashJoinProbe.get());
     }

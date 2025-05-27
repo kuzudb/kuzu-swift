@@ -13,7 +13,6 @@
 #include "processor/operator/simple/import_db.h"
 #include "processor/operator/simple/install_extension.h"
 #include "processor/operator/simple/load_extension.h"
-#include "processor/operator/simple/uninstall_extension.h"
 #include "processor/operator/simple/use_database.h"
 #include "processor/plan_mapper.h"
 
@@ -98,16 +97,10 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapExtension(const LogicalOperator
     auto path = auxInfo.path;
     switch (auxInfo.action) {
     case ExtensionAction::INSTALL: {
-        auto installExtensionAuxInfo = auxInfo.contCast<InstallExtensionAuxInfo>();
-        extension::InstallExtensionInfo info{path, installExtensionAuxInfo.extensionRepo,
-            installExtensionAuxInfo.forceInstall};
+        extension::InstallExtensionInfo info{path,
+            auxInfo.contCast<InstallExtensionAuxInfo>().extensionRepo};
         printInfo = std::make_unique<InstallExtensionPrintInfo>(path);
         return std::make_unique<InstallExtension>(std::move(info), outputPos, getOperatorID(),
-            std::move(printInfo));
-    }
-    case ExtensionAction::UNINSTALL: {
-        printInfo = std::make_unique<UninstallExtensionPrintInfo>(path);
-        return std::make_unique<UninstallExtension>(path, outputPos, getOperatorID(),
             std::move(printInfo));
     }
     case ExtensionAction::LOAD: {

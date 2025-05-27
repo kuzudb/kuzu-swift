@@ -11,8 +11,15 @@ using namespace kuzu::binder;
 namespace kuzu {
 namespace planner {
 
-void Planner::planUpdatingClause(const BoundUpdatingClause& updatingClause, LogicalPlan& plan) {
-    switch (updatingClause.getClauseType()) {
+void Planner::planUpdatingClause(const BoundUpdatingClause* updatingClause,
+    std::vector<std::unique_ptr<LogicalPlan>>& plans) {
+    for (auto& plan : plans) {
+        planUpdatingClause(updatingClause, *plan);
+    }
+}
+
+void Planner::planUpdatingClause(const BoundUpdatingClause* updatingClause, LogicalPlan& plan) {
+    switch (updatingClause->getClauseType()) {
     case ClauseType::INSERT: {
         planInsertClause(updatingClause, plan);
         return;
@@ -34,8 +41,8 @@ void Planner::planUpdatingClause(const BoundUpdatingClause& updatingClause, Logi
     }
 }
 
-void Planner::planInsertClause(const BoundUpdatingClause& updatingClause, LogicalPlan& plan) {
-    auto& insertClause = updatingClause.constCast<BoundInsertClause>();
+void Planner::planInsertClause(const BoundUpdatingClause* updatingClause, LogicalPlan& plan) {
+    auto& insertClause = updatingClause->constCast<BoundInsertClause>();
     if (plan.isEmpty()) { // E.g. CREATE (a:Person {age:20})
         appendDummyScan(plan);
     } else {
@@ -49,8 +56,8 @@ void Planner::planInsertClause(const BoundUpdatingClause& updatingClause, Logica
     }
 }
 
-void Planner::planMergeClause(const BoundUpdatingClause& updatingClause, LogicalPlan& plan) {
-    auto& mergeClause = updatingClause.constCast<BoundMergeClause>();
+void Planner::planMergeClause(const BoundUpdatingClause* updatingClause, LogicalPlan& plan) {
+    auto& mergeClause = updatingClause->constCast<BoundMergeClause>();
     expression_vector predicates;
     if (mergeClause.hasPredicate()) {
         predicates = mergeClause.getPredicate()->splitOnAND();
@@ -111,9 +118,9 @@ void Planner::planMergeClause(const BoundUpdatingClause& updatingClause, Logical
     plan.setLastOperator(merge);
 }
 
-void Planner::planSetClause(const BoundUpdatingClause& updatingClause, LogicalPlan& plan) {
+void Planner::planSetClause(const BoundUpdatingClause* updatingClause, LogicalPlan& plan) {
     appendAccumulate(plan);
-    auto& setClause = updatingClause.constCast<BoundSetClause>();
+    auto& setClause = updatingClause->constCast<BoundSetClause>();
     if (setClause.hasNodeInfo()) {
         appendSetProperty(setClause.getNodeInfos(), plan);
     }
@@ -122,9 +129,9 @@ void Planner::planSetClause(const BoundUpdatingClause& updatingClause, LogicalPl
     }
 }
 
-void Planner::planDeleteClause(const BoundUpdatingClause& updatingClause, LogicalPlan& plan) {
+void Planner::planDeleteClause(const BoundUpdatingClause* updatingClause, LogicalPlan& plan) {
     appendAccumulate(plan);
-    auto& deleteClause = updatingClause.constCast<BoundDeleteClause>();
+    auto& deleteClause = updatingClause->constCast<BoundDeleteClause>();
     if (deleteClause.hasRelInfo()) {
         appendDelete(deleteClause.getRelInfos(), plan);
     }

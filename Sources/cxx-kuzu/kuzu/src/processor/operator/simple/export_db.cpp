@@ -78,16 +78,8 @@ static void writeCopyStatement(stringstream& ss, const TableCatalogEntry* entry,
     }
 }
 
-static void exportLoadedExtensions(stringstream& ss, ClientContext* clientContext) {
-    auto extensionCypher = clientContext->getExtensionManager()->toCypher();
-    if (!extensionCypher.empty()) {
-        ss << extensionCypher << std::endl;
-    }
-}
-
 std::string getSchemaCypher(ClientContext* clientContext) {
     stringstream ss;
-    exportLoadedExtensions(ss, clientContext);
     const auto catalog = clientContext->getCatalog();
     auto transaction = clientContext->getTransaction();
     ToCypherInfo toCypherInfo;
@@ -112,6 +104,10 @@ std::string getSchemaCypher(ClientContext* clientContext) {
     for (auto macroName : catalog->getMacroNames(transaction)) {
         ss << catalog->getScalarMacroFunction(transaction, macroName)->toCypher(macroName)
            << std::endl;
+    }
+    auto extensionCypher = clientContext->getExtensionManager()->toCypher();
+    if (!extensionCypher.empty()) {
+        ss << extensionCypher << std::endl;
     }
     return ss.str();
 }

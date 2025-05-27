@@ -18,9 +18,6 @@ public:
     common::StatementType getStatementType() const { return statementType; }
 
     const BoundStatementResult* getStatementResult() const { return &statementResult; }
-    std::shared_ptr<Expression> getSingleColumnExpr() const {
-        return statementResult.getSingleColumnExpr();
-    }
 
     BoundStatementResult* getStatementResultUnsafe() { return &statementResult; }
 

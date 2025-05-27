@@ -30,11 +30,12 @@ class OrderBy final : public Sink {
     static constexpr PhysicalOperatorType type_ = PhysicalOperatorType::ORDER_BY;
 
 public:
-    OrderBy(OrderByDataInfo info, std::shared_ptr<SortSharedState> sharedState,
+    OrderBy(std::unique_ptr<ResultSetDescriptor> resultSetDescriptor,
+        std::unique_ptr<OrderByDataInfo> info, std::shared_ptr<SortSharedState> sharedState,
         std::unique_ptr<PhysicalOperator> child, uint32_t id,
         std::unique_ptr<OPPrintInfo> printInfo)
-        : Sink{type_, std::move(child), id, std::move(printInfo)}, info{std::move(info)},
-          sharedState{std::move(sharedState)} {}
+        : Sink{std::move(resultSetDescriptor), type_, std::move(child), id, std::move(printInfo)},
+          info{std::move(info)}, sharedState{std::move(sharedState)} {}
 
     void initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) final;
 
@@ -49,16 +50,16 @@ public:
     }
 
     std::unique_ptr<PhysicalOperator> copy() override {
-        return std::make_unique<OrderBy>(info.copy(), sharedState, children[0]->copy(), id,
-            printInfo->copy());
+        return std::make_unique<OrderBy>(resultSetDescriptor->copy(), info->copy(), sharedState,
+            children[0]->copy(), id, printInfo->copy());
     }
 
 private:
-    void initGlobalStateInternal(ExecutionContext* context) override;
+    void initGlobalStateInternal(ExecutionContext* context) final;
 
 private:
-    OrderByDataInfo info;
-    SortLocalState localState;
+    std::unique_ptr<OrderByDataInfo> info;
+    std::unique_ptr<SortLocalState> localState;
     std::shared_ptr<SortSharedState> sharedState;
     std::vector<common::ValueVector*> orderByVectors;
     std::vector<common::ValueVector*> payloadVectors;
