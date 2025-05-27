@@ -1121,8 +1121,8 @@ let package = Package(
             dependencies: ["Kuzu"],
             resources: [
                 .copy("../Dataset")
-            ],
-        ),
+            ]
+        )
     ],
     cLanguageStandard: .c11,
     cxxLanguageStandard: .cxx20
