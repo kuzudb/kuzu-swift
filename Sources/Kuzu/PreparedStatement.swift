@@ -10,7 +10,7 @@
 /// A class representing a prepared statement in Kuzu.
 /// PreparedStatement can be used to execute a query with parameters.
 /// It is returned by the `prepare` method of Connection.
-public final class PreparedStatement {
+public final class PreparedStatement : @unchecked Sendable{
     internal var cPreparedStatement: kuzu_prepared_statement
     internal var connection: Connection
     

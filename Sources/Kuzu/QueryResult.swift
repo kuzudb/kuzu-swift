@@ -11,7 +11,7 @@ import Foundation
 /// A class representing the result of a query, which can be used to iterate over the result set.
 /// QueryResult is returned by the `query` and `execute` methods of Connection.
 /// It conforms to `CustomStringConvertible` and `Sequence` protocols for easy string representation and iteration.
-public final class QueryResult: CustomStringConvertible, Sequence {
+public final class QueryResult: CustomStringConvertible, Sequence, @unchecked Sendable {
     internal var cQueryResult: kuzu_query_result
     internal var connection: Connection
     internal var columnNames: [String]?

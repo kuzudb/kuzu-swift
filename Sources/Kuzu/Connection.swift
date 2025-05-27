@@ -8,7 +8,7 @@
 @_implementationOnly import cxx_kuzu
 
 /// Represents a connection to a Kuzu database.
-public final class Connection {
+public final class Connection : @unchecked Sendable{
     internal var cConnection: kuzu_connection
 
     /// Opens a connection to the specified database.
