@@ -1,24 +1,29 @@
 name: Swift Build & Test
-
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
-
+    branches: ["main"]
 jobs:
   build-and-test:
-    name: Build and Test Swift Package
-
-    runs-on: macos-14
-
+    strategy:
+      matrix:
+        runner: [macos-14, ubuntu-24.04]
+      fail-fast: false
+    name: Build and Test on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Consolidate test dataset
-      run: |
-        rm -rf Tests/Dataset
-        cp -r Dataset Tests/Dataset
-    - name: Build
-      run: swift build
-    - name: Run tests
-      run: swift test
+      - name: Set up Swift
+        if: matrix.runner == 'ubuntu-24.04'
+        run: |
+          curl -L https://swiftlygo.xyz/install.sh | sudo bash
+          sudo swiftlygo install -y 5.10.1
+      - uses: actions/checkout@v4
+      - name: Consolidate test dataset
+        run: |
+          rm -rf Tests/Dataset
+          cp -r Dataset Tests/Dataset
+      - name: Build
+        run: swift build
+      - name: Run tests
+        run: swift test
