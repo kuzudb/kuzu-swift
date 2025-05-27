@@ -1121,6 +1121,9 @@ let package = Package(
             dependencies: ["Kuzu"],
             resources: [
                 .copy("Dataset")
+            ],
+            linkerSettings: [
+                .linkedLibrary("atomic", .when(platforms: [.linux]))
             ]
         )
     ],
