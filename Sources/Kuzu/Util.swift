@@ -330,6 +330,26 @@ private func kuzuStructValueToSwiftDictionary(_ cValue: inout kuzu_value) throws
     return dict
 }
 
+/// Converts a Kuzu union value to a Swift value.
+/// - Parameter cValue: The Kuzu union value to convert.
+/// - Returns: A Swift value.
+/// - Throws: `KuzuError.valueConversionFailed` if the conversion fails.
+private func kuzuUnionValueToSwiftValue(_ cValue: inout kuzu_value) throws
+    -> Any?
+{
+    var unionValue = kuzu_value()
+    // Only one member in the union can be active at a time and that member is always stored
+    // at index 0.
+    let state = kuzu_value_get_struct_field_value(&cValue, 0, &unionValue)
+    if state != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get union value with status: \(state)"
+        )
+    }
+    defer { kuzu_value_destroy(&unionValue) }
+    return try kuzuValueToSwift(&unionValue)
+}
+
 /// Converts a Kuzu node value to a Swift KuzuNode.
 /// - Parameter cValue: The Kuzu node value to convert.
 /// - Returns: A Swift KuzuNode.
@@ -891,10 +911,30 @@ internal func kuzuValueToSwift(_ cValue: inout kuzu_value) throws -> Any? {
         let blobSize = strlen(cBlobValue!)
         let blobData = Data(bytes: cBlobValue!, count: blobSize)
         return blobData
+    case KUZU_DECIMAL:
+        var outString: UnsafeMutablePointer<CChar>?
+        let state = kuzu_value_get_decimal_as_string(&cValue, &outString)
+        if state != KuzuSuccess {
+            throw KuzuError.getValueFailed(
+                "Failed to get string value of decimal type with status: \(state)"
+            )
+        }
+        defer {
+            kuzu_destroy_string(outString)
+        }
+        let decimalString = String(cString: outString!)
+        guard let decimal = Decimal(string: decimalString) else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to convert decimal value from string: \(decimalString)"
+            )
+        }
+        return decimal
     case KUZU_LIST, KUZU_ARRAY:
         return try kuzuListToSwiftArray(&cValue)
-    case KUZU_STRUCT, KUZU_UNION:
+    case KUZU_STRUCT:
         return try kuzuStructValueToSwiftDictionary(&cValue)
+    case KUZU_UNION:
+        return try kuzuUnionValueToSwiftValue(&cValue)
     case KUZU_MAP:
         return try kuzuMapToSwiftArrayOfMapItems(&cValue)
     case KUZU_NODE:
@@ -907,7 +947,7 @@ internal func kuzuValueToSwift(_ cValue: inout kuzu_value) throws -> Any? {
         let valueString = kuzu_value_to_string(&cValue)
         defer { kuzu_destroy_string(valueString) }
         throw KuzuError.valueConversionFailed(
-            "Unsupported C type \(String(cString: valueString!))"
+            "Unsupported C value with value \(String(cString: valueString!)) and typeId \(logicalTypeId)"
         )
     }
 }
