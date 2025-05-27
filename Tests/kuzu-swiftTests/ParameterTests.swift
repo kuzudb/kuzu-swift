@@ -33,7 +33,7 @@ struct ParameterTests: ~Copyable {
         let value = try tuple.getValue(0)
         
         if param == nil && value == nil{
-            return;
+            return
         }
         
         // Handle different types explicitly
