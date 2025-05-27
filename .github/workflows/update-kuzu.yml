@@ -24,7 +24,7 @@ jobs:
           git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
       - name: Update Kuzu
         working-directory: Scripts/update-kuzu
-        run: python3 update_kuzu.py
+        run: python3 update-kuzu.py
       - name: Commit changes
         run: |
           echo "CHANGES=true" >> $GITHUB_ENV
