@@ -26,13 +26,20 @@ final class QueryResultTests: XCTestCase {
     }
 
     func testQueryResultToString() throws {
-        let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
+        let result = try conn.query(
+            "MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;"
+        )
         let queryResultString = result.description
-        XCTAssertEqual(queryResultString, "a.fName|a.age|a.isStudent|a.isWorker\nAlice|35|True|False\n")
+        XCTAssertEqual(
+            queryResultString,
+            "a.fName|a.age|a.isStudent|a.isWorker\nAlice|35|True|False\n"
+        )
     }
 
     func testQueryResultResetIterator() throws {
-        let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.ID;")
+        let result = try conn.query(
+            "MATCH (a:person) WHERE a.ID = 0 RETURN a.ID;"
+        )
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let value = try tuple.getValue(0)
@@ -45,7 +52,9 @@ final class QueryResultTests: XCTestCase {
     }
 
     func testQueryResultGetColumnNames() throws {
-        let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
+        let result = try conn.query(
+            "MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;"
+        )
         let columnNames = result.getColumnNames()
         XCTAssertEqual(columnNames.count, 4)
         XCTAssertEqual(columnNames[0], "a.fName")
@@ -55,7 +64,9 @@ final class QueryResultTests: XCTestCase {
     }
 
     func testQueryResultGetNumberOfColumns() throws {
-        let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
+        let result = try conn.query(
+            "MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;"
+        )
         let numColumns = result.getColumnCount()
         XCTAssertEqual(numColumns, 4)
     }
@@ -74,7 +85,9 @@ final class QueryResultTests: XCTestCase {
     }
 
     func testQueryResultNext() throws {
-        let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
+        let result = try conn.query(
+            "MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;"
+        )
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let values = try tuple.getAsArray()
@@ -93,7 +106,7 @@ final class QueryResultTests: XCTestCase {
         XCTAssertEqual(value as! Int64, 1)
         XCTAssertFalse(result.hasNext())
         XCTAssertTrue(result.hasNextQueryResult())
-        
+
         let result2 = try result.getNextQueryResult()!
         XCTAssertTrue(result2.hasNext())
         let tuple2 = try result2.getNext()!
@@ -101,7 +114,7 @@ final class QueryResultTests: XCTestCase {
         XCTAssertEqual(value2 as! Int64, 2)
         XCTAssertFalse(result2.hasNext())
         XCTAssertTrue(result2.hasNextQueryResult())
-        
+
         let result3 = try result2.getNextQueryResult()!
         XCTAssertTrue(result3.hasNext())
         let tuple3 = try result3.getNext()!
@@ -112,12 +125,16 @@ final class QueryResultTests: XCTestCase {
     }
 
     func testQueryResultGetCompilingTime() throws {
-        let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
+        let result = try conn.query(
+            "MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;"
+        )
         XCTAssertGreaterThan(result.getCompilingTime(), 0)
     }
 
     func testQueryResultGetExecutionTime() throws {
-        let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
+        let result = try conn.query(
+            "MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;"
+        )
         XCTAssertGreaterThan(result.getExecutionTime(), 0)
     }
 }

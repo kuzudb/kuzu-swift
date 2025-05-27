@@ -32,11 +32,11 @@ final class ParameterTests: XCTestCase {
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let value = try tuple.getValue(0)
-        
+
         if param == nil && value == nil {
             return
         }
-        
+
         // Handle different types explicitly
         switch (param, value) {
         case (let p as String, let v as String):
@@ -101,7 +101,9 @@ final class ParameterTests: XCTestCase {
                 try basicParamTestHelper(p[i])
             }
         default:
-            XCTFail("Type mismatch: expected \(type(of: param!)), got \(type(of: value!))")
+            XCTFail(
+                "Type mismatch: expected \(type(of: param!)), got \(type(of: value!))"
+            )
         }
     }
 
@@ -112,9 +114,12 @@ final class ParameterTests: XCTestCase {
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let value = try tuple.getValue(0)
-        if let floatValue = value as? Double, let paramValue = param as? Double {
+        if let floatValue = value as? Double, let paramValue = param as? Double
+        {
             XCTAssertLessThan(abs(floatValue - paramValue), 0.000001)
-        } else if let floatValue = value as? Float, let paramValue = param as? Float {
+        } else if let floatValue = value as? Float,
+            let paramValue = param as? Float
+        {
             XCTAssertLessThan(abs(floatValue - paramValue), 0.000001)
         } else {
             XCTFail("Type mismatch in floatParamTestHelper")
@@ -135,40 +140,40 @@ final class ParameterTests: XCTestCase {
         try basicParamTestHelper("Hello World")
     }
 
-#if !os(Linux)
-    func testBoolParam() throws {
-        try basicParamTestHelper(true)
-        try basicParamTestHelper(false)
-    }
+    #if !os(Linux)
+        func testBoolParam() throws {
+            try basicParamTestHelper(true)
+            try basicParamTestHelper(false)
+        }
 
-    func testInt64Param() throws {
-        try basicParamTestHelper(Int64(1000000000000))
-    }
+        func testInt64Param() throws {
+            try basicParamTestHelper(Int64(1_000_000_000_000))
+        }
 
-    func testInt32Param() throws {
-        try basicParamTestHelper(Int32(200))
-    }
+        func testInt32Param() throws {
+            try basicParamTestHelper(Int32(200))
+        }
 
-    func testInt16Param() throws {
-        try basicParamTestHelper(Int16(300))
-    }
+        func testInt16Param() throws {
+            try basicParamTestHelper(Int16(300))
+        }
 
-    func testInt8Param() throws {
-        try basicParamTestHelper(Int8(4))
-    }
+        func testInt8Param() throws {
+            try basicParamTestHelper(Int8(4))
+        }
 
-    func testUint64Param() throws {
-        try basicParamTestHelper(UInt64.max)
-    }
+        func testUint64Param() throws {
+            try basicParamTestHelper(UInt64.max)
+        }
 
-    func testDoubleParam() throws {
-        try floatParamTestHelper(Double(3.14159235))
-    }
+        func testDoubleParam() throws {
+            try floatParamTestHelper(Double(3.14159235))
+        }
 
-    func testFloatParam() throws {
-        try floatParamTestHelper(Float(2.71828))
-    }
-#endif
+        func testFloatParam() throws {
+            try floatParamTestHelper(Float(2.71828))
+        }
+    #endif
 
     func testUint32Param() throws {
         try basicParamTestHelper(KuzuUInt32Wrapper(value: 600))
@@ -215,7 +220,9 @@ final class ParameterTests: XCTestCase {
     }
 
     func testTimeParam() throws {
-        let date = Calendar.current.date(from: DateComponents(year: 2020, month: 1, day: 1))!
+        let date = Calendar.current.date(
+            from: DateComponents(year: 2020, month: 1, day: 1)
+        )!
         try timeParamTestHelper(date)
     }
 
@@ -231,9 +238,9 @@ final class ParameterTests: XCTestCase {
 
     func testDurationParam() throws {
         #if os(Linux)
-        try basicParamTestHelper(KuzuInt64Wrapper(value: 1000000000))
+            try basicParamTestHelper(KuzuInt64Wrapper(value: 1_000_000_000))
         #else
-        try basicParamTestHelper(TimeInterval(1000000000))
+            try basicParamTestHelper(TimeInterval(1_000_000_000))
         #endif
     }
 
@@ -244,17 +251,17 @@ final class ParameterTests: XCTestCase {
     func testStructParam() throws {
         let structParam: [String: Any]
         #if os(Linux)
-        structParam = [
-            "name": "Alice",
-            "age": KuzuInt64Wrapper(value: 30),
-            "isStudent": KuzuBoolWrapper(value: false)
-        ]
+            structParam = [
+                "name": "Alice",
+                "age": KuzuInt64Wrapper(value: 30),
+                "isStudent": KuzuBoolWrapper(value: false),
+            ]
         #else
-        structParam = [
-            "name": "Alice",
-            "age": Int64(30),
-            "isStudent": false
-        ]
+            structParam = [
+                "name": "Alice",
+                "age": Int64(30),
+                "isStudent": false,
+            ]
         #endif
         try basicParamTestHelper(structParam)
     }
@@ -264,8 +271,8 @@ final class ParameterTests: XCTestCase {
             "name": "Alice",
             "address": [
                 "city": "New York",
-                "country": "USA"
-            ] as [String: Any]
+                "country": "USA",
+            ] as [String: Any],
         ]
         try basicParamTestHelper(structParam)
     }
@@ -273,7 +280,7 @@ final class ParameterTests: XCTestCase {
     func testStructWithUnsupportedTypeParam() throws {
         let structParam: [String: Any] = [
             "name": "Alice",
-            "age": try! NSRegularExpression(pattern: ".*", options: [])
+            "age": try! NSRegularExpression(pattern: ".*", options: []),
         ]
         let preparedStatement = try conn.prepare("RETURN $1")
         do {
@@ -297,17 +304,17 @@ final class ParameterTests: XCTestCase {
 
     func testMapParam() throws {
         #if os(Linux)
-        let mapParam: [(String, KuzuInt64Wrapper)] = [
-            ("1", KuzuInt64Wrapper(value: 1)),
-            ("2", KuzuInt64Wrapper(value: 2)),
-            ("3", KuzuInt64Wrapper(value: 3))
-        ]
+            let mapParam: [(String, KuzuInt64Wrapper)] = [
+                ("1", KuzuInt64Wrapper(value: 1)),
+                ("2", KuzuInt64Wrapper(value: 2)),
+                ("3", KuzuInt64Wrapper(value: 3)),
+            ]
         #else
-        let mapParam: [(String, Int64)] = [
-            ("1", 1),
-            ("2", 2),
-            ("3", 3)
-        ]
+            let mapParam: [(String, Int64)] = [
+                ("1", 1),
+                ("2", 2),
+                ("3", 3),
+            ]
         #endif
         try basicParamTestHelper(mapParam)
     }
@@ -316,7 +323,7 @@ final class ParameterTests: XCTestCase {
         let mapParam: [(String, [(String, String)])] = [
             ("1", [("a", "A")]),
             ("2", [("b", "B")]),
-            ("3", [("c", "C")])
+            ("3", [("c", "C")]),
         ]
         try basicParamTestHelper(mapParam)
     }
@@ -336,19 +343,19 @@ final class ParameterTests: XCTestCase {
 
     func testMapWithMixedTypesParam() throws {
         #if os(Linux)
-        let mapParam: [(String, Any)] = [
-            ("1", "One"),
-            ("2", "Two"),
-            ("3", "Three"),
-            ("4", KuzuInt64Wrapper(value: 4))
-        ]
+            let mapParam: [(String, Any)] = [
+                ("1", "One"),
+                ("2", "Two"),
+                ("3", "Three"),
+                ("4", KuzuInt64Wrapper(value: 4)),
+            ]
         #else
-        let mapParam: [(String, Any)] = [
-            ("1", "One"),
-            ("2", "Two"),
-            ("3", "Three"),
-            ("4", 4)
-        ]
+            let mapParam: [(String, Any)] = [
+                ("1", "One"),
+                ("2", "Two"),
+                ("3", "Three"),
+                ("4", 4),
+            ]
         #endif
         let preparedStatement = try conn.prepare("RETURN $1")
         do {
@@ -377,7 +384,7 @@ final class ParameterTests: XCTestCase {
         let arrayParam: [[Any]] = [
             ["a", "A"],
             ["b", "B"],
-            ["c", "C"]
+            ["c", "C"],
         ]
         let preparedStatement = try conn.prepare("RETURN $1")
         let result = try conn.execute(preparedStatement, ["1": arrayParam])
@@ -388,44 +395,43 @@ final class ParameterTests: XCTestCase {
         for i in 0..<arrayParam.count {
             XCTAssertEqual(value[i].count, arrayParam[i].count)
             for j in 0..<arrayParam[i].count {
-                XCTAssertEqual(value[i][j] as! String, arrayParam[i][j] as! String)
+                XCTAssertEqual(
+                    value[i][j] as! String,
+                    arrayParam[i][j] as! String
+                )
             }
         }
         XCTAssertFalse(result.hasNext())
     }
 
     func testArrayParamNestedStruct() throws {
-        #if os(Linux)
         let arrayParam: [[String: Any]] = [
             ["name": "Alice", "age": KuzuInt64Wrapper(value: 30)],
             ["name": "Bob", "age": KuzuInt64Wrapper(value: 40)],
-            ["name": "Charlie", "age": KuzuInt64Wrapper(value: 50)]
+            ["name": "Charlie", "age": KuzuInt64Wrapper(value: 50)],
         ]
-        #else
-        let arrayParam: [[String: Any]] = [
+        let expectedValue: [[String: Any]] = [
             ["name": "Alice", "age": Int64(30)],
             ["name": "Bob", "age": Int64(40)],
-            ["name": "Charlie", "age": Int64(50)]
+            ["name": "Charlie", "age": Int64(50)],
         ]
-        #endif
         let preparedStatement = try conn.prepare("RETURN $1")
         let result = try conn.execute(preparedStatement, ["1": arrayParam])
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let value = try tuple.getValue(0) as! [[String: Any]]
-        XCTAssertEqual(value.count, arrayParam.count)
-        for i in 0..<arrayParam.count {
-            XCTAssertEqual(value[i].count, arrayParam[i].count)
-            for (key, paramValue) in arrayParam[i] {
+        XCTAssertEqual(value.count, expectedValue.count)
+        for i in 0..<expectedValue.count {
+            XCTAssertEqual(value[i].count, expectedValue[i].count)
+            for (key, paramValue) in expectedValue[i] {
                 let resultValue = value[i][key]!
-                #if os(Linux)
-                if let paramInt = paramValue as? KuzuInt64Wrapper, let resultInt = resultValue as? Int64 {
-                    XCTAssertEqual(paramInt.value, resultInt)
-                #else
-                if let paramInt = paramValue as? Int64, let resultInt = resultValue as? Int64 {
+                if let paramInt = paramValue as? Int64,
+                    let resultInt = resultValue as? Int64
+                {
                     XCTAssertEqual(paramInt, resultInt)
-                #endif
-                } else if let paramString = paramValue as? String, let resultString = resultValue as? String {
+                } else if let paramString = paramValue as? String,
+                    let resultString = resultValue as? String
+                {
                     XCTAssertEqual(paramString, resultString)
                 } else {
                     XCTFail("Unexpected type in nested struct")
@@ -436,7 +442,9 @@ final class ParameterTests: XCTestCase {
     }
 
     func testArrayParamWithUnsupportedType() throws {
-        let arrayParam: [Any] = ["One", try! NSRegularExpression(pattern: ".*", options: [])]
+        let arrayParam: [Any] = [
+            "One", try! NSRegularExpression(pattern: ".*", options: []),
+        ]
         let preparedStatement = try conn.prepare("RETURN $1")
         do {
             _ = try conn.execute(preparedStatement, ["1": arrayParam])
@@ -459,13 +467,13 @@ final class ParameterTests: XCTestCase {
 
     func testInt64ArrayParam() throws {
         #if os(Linux)
-        let arrayParam: [KuzuInt64Wrapper] = [
-            KuzuInt64Wrapper(value: 1),
-            KuzuInt64Wrapper(value: 2),
-            KuzuInt64Wrapper(value: 3)
-        ]
+            let arrayParam: [KuzuInt64Wrapper] = [
+                KuzuInt64Wrapper(value: 1),
+                KuzuInt64Wrapper(value: 2),
+                KuzuInt64Wrapper(value: 3),
+            ]
         #else
-        let arrayParam: [Int64] = [1, 2, 3]
+            let arrayParam: [Int64] = [1, 2, 3]
         #endif
         let preparedStatement = try conn.prepare("RETURN $1")
         let result = try conn.execute(preparedStatement, ["1": arrayParam])
@@ -475,9 +483,9 @@ final class ParameterTests: XCTestCase {
         XCTAssertEqual(value.count, arrayParam.count)
         for i in 0..<arrayParam.count {
             #if os(Linux)
-            XCTAssertEqual(value[i] as! Int64, arrayParam[i].value)
+                XCTAssertEqual(value[i] as! Int64, arrayParam[i].value)
             #else
-            XCTAssertEqual(value[i] as! Int64, arrayParam[i])
+                XCTAssertEqual(value[i] as! Int64, arrayParam[i])
             #endif
         }
         XCTAssertFalse(result.hasNext())
@@ -499,15 +507,21 @@ final class ParameterTests: XCTestCase {
 
     func testNestedInt64ArrayParam() throws {
         #if os(Linux)
-        let arrayParam: [[KuzuInt64Wrapper]] = [
-            [KuzuInt64Wrapper(value: 0), KuzuInt64Wrapper(value: 1), KuzuInt64Wrapper(value: 2), KuzuInt64Wrapper(value: 3)],
-            [KuzuInt64Wrapper(value: 4), KuzuInt64Wrapper(value: 5), KuzuInt64Wrapper(value: 6), KuzuInt64Wrapper(value: 7)]
-        ]
+            let arrayParam: [[KuzuInt64Wrapper]] = [
+                [
+                    KuzuInt64Wrapper(value: 0), KuzuInt64Wrapper(value: 1),
+                    KuzuInt64Wrapper(value: 2), KuzuInt64Wrapper(value: 3),
+                ],
+                [
+                    KuzuInt64Wrapper(value: 4), KuzuInt64Wrapper(value: 5),
+                    KuzuInt64Wrapper(value: 6), KuzuInt64Wrapper(value: 7),
+                ],
+            ]
         #else
-        let arrayParam: [[Int64]] = [
-            [0, 1, 2, 3],
-            [4, 5, 6, 7]
-        ]
+            let arrayParam: [[Int64]] = [
+                [0, 1, 2, 3],
+                [4, 5, 6, 7],
+            ]
         #endif
         let preparedStatement = try conn.prepare("RETURN $1")
         let result = try conn.execute(preparedStatement, ["1": arrayParam])
@@ -519,9 +533,12 @@ final class ParameterTests: XCTestCase {
             XCTAssertEqual(value[i].count, arrayParam[i].count)
             for j in 0..<arrayParam[i].count {
                 #if os(Linux)
-                XCTAssertEqual(value[i][j] as! Int64, arrayParam[i][j].value)
+                    XCTAssertEqual(
+                        value[i][j] as! Int64,
+                        arrayParam[i][j].value
+                    )
                 #else
-                XCTAssertEqual(value[i][j] as! Int64, arrayParam[i][j])
+                    XCTAssertEqual(value[i][j] as! Int64, arrayParam[i][j])
                 #endif
             }
         }
@@ -530,17 +547,17 @@ final class ParameterTests: XCTestCase {
 
     func testDictionaryParam() throws {
         #if os(Linux)
-        let dictParam: [(String, KuzuInt64Wrapper)] = [
-            ("1", KuzuInt64Wrapper(value: 1)),
-            ("2", KuzuInt64Wrapper(value: 2)),
-            ("3", KuzuInt64Wrapper(value: 3))
-        ]
+            let dictParam: [(String, KuzuInt64Wrapper)] = [
+                ("1", KuzuInt64Wrapper(value: 1)),
+                ("2", KuzuInt64Wrapper(value: 2)),
+                ("3", KuzuInt64Wrapper(value: 3)),
+            ]
         #else
-        let dictParam: [(String, Int64)] = [
-            ("1", 1),
-            ("2", 2),
-            ("3", 3)
-        ]
+            let dictParam: [(String, Int64)] = [
+                ("1", 1),
+                ("2", 2),
+                ("3", 3),
+            ]
         #endif
         try basicParamTestHelper(dictParam)
     }
@@ -549,7 +566,7 @@ final class ParameterTests: XCTestCase {
         let dictParam: [(String, [(String, String)])] = [
             ("1", [("a", "A")]),
             ("2", [("b", "B")]),
-            ("3", [("c", "C")])
+            ("3", [("c", "C")]),
         ]
         try basicParamTestHelper(dictParam)
     }
@@ -569,19 +586,19 @@ final class ParameterTests: XCTestCase {
 
     func testDictionaryWithMixedTypesParam() throws {
         #if os(Linux)
-        let dictParam: [(String, Any)] = [
-            ("1", "One"),
-            ("2", "Two"),
-            ("3", "Three"),
-            ("4", KuzuInt64Wrapper(value: 4))
-        ]
+            let dictParam: [(String, Any)] = [
+                ("1", "One"),
+                ("2", "Two"),
+                ("3", "Three"),
+                ("4", KuzuInt64Wrapper(value: 4)),
+            ]
         #else
-        let dictParam: [(String, Any)] = [
-            ("1", "One"),
-            ("2", "Two"),
-            ("3", "Three"),
-            ("4", 4)
-        ]
+            let dictParam: [(String, Any)] = [
+                ("1", "One"),
+                ("2", "Two"),
+                ("3", "Three"),
+                ("4", 4),
+            ]
         #endif
         let preparedStatement = try conn.prepare("RETURN $1")
         do {
