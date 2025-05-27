@@ -19,6 +19,6 @@ jobs:
         rm -rf Tests/Dataset
         cp -r Dataset Tests/Dataset
     - name: Build
-      run: swift build -v
+      run: swift build
     - name: Run tests
-      run: swift test -v
+      run: swift test
