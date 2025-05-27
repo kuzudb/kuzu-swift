@@ -2,8 +2,6 @@
 
 #include <cstdint>
 
-#include "common/cast.h"
-
 namespace kuzu {
 namespace common {
 
@@ -13,11 +11,6 @@ public:
     virtual ~Reader() = default;
 
     virtual bool finished() = 0;
-
-    template<typename TARGET>
-    TARGET* cast() {
-        return common::ku_dynamic_cast<TARGET*>(this);
-    }
 };
 
 } // namespace common

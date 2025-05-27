@@ -227,8 +227,7 @@ void Binder::bindInsertRel(std::shared_ptr<RelExpression> rel,
         // LCOV_EXCL_START
         if (entry == nullptr) {
             throw BinderException(
-                stringFormat("Cannot find a valid label in {} to create. This should not happen.",
-                    rel->toString()));
+                stringFormat("Cannot find a valid label in {} to create. This should not happen."));
         }
         // LCOV_EXCL_STOP
     }

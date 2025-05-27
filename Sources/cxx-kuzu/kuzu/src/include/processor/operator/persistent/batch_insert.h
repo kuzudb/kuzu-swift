@@ -1,8 +1,10 @@
 #pragma once
 
+#include <numeric>
+
 #include "processor/operator/sink.h"
 #include "processor/result/factorized_table.h"
-#include "storage/table/table.h"
+#include "storage/store/table.h"
 
 namespace kuzu {
 namespace storage {
@@ -15,31 +17,22 @@ struct BatchInsertInfo {
     catalog::TableCatalogEntry* tableEntry;
     bool compressionEnabled;
 
-    std::vector<common::LogicalType> columnTypes;
-    // TODO(Guodong): Try to merge the following 3 fields into 2
     std::vector<common::column_id_t> insertColumnIDs;
     std::vector<common::column_id_t> outputDataColumns;
     std::vector<common::column_id_t> warningDataColumns;
 
     BatchInsertInfo(catalog::TableCatalogEntry* tableEntry, bool compressionEnabled,
-        std::vector<common::column_id_t> insertColumnIDs,
-        std::vector<common::LogicalType> columnTypes, common::idx_t numWarningDataColumns)
+        std::vector<common::column_id_t> insertColumnIDs, common::column_id_t numOutputDataColumns,
+        common::column_id_t numWarningDataColumns)
         : tableEntry{tableEntry}, compressionEnabled{compressionEnabled},
-          columnTypes{std::move(columnTypes)}, insertColumnIDs{std::move(insertColumnIDs)} {
-        auto i = 0u;
-        for (; i < this->columnTypes.size() - numWarningDataColumns; ++i) {
-            outputDataColumns.push_back(i);
-        }
-        for (; i < this->columnTypes.size(); ++i) {
-            warningDataColumns.push_back(i);
-        }
-    }
-    BatchInsertInfo(const BatchInsertInfo& other)
-        : tableEntry{other.tableEntry}, compressionEnabled{other.compressionEnabled},
-          columnTypes{copyVector(other.columnTypes)}, insertColumnIDs{other.insertColumnIDs},
-          outputDataColumns{other.outputDataColumns}, warningDataColumns{other.warningDataColumns} {
+          insertColumnIDs{std::move(insertColumnIDs)}, outputDataColumns(numOutputDataColumns),
+          warningDataColumns(numWarningDataColumns) {
+        std::iota(outputDataColumns.begin(), outputDataColumns.end(), 0);
+        std::iota(warningDataColumns.begin(), warningDataColumns.end(), outputDataColumns.size());
     }
     virtual ~BatchInsertInfo() = default;
+
+    BatchInsertInfo(const BatchInsertInfo& other) = delete;
 
     virtual std::unique_ptr<BatchInsertInfo> copy() const = 0;
 
@@ -85,11 +78,6 @@ struct KUZU_API BatchInsertSharedState {
         common::UniqLock lockGuard{erroredRowMutex};
         return *numErroredRows;
     }
-
-    template<class TARGET>
-    TARGET* ptrCast() {
-        return common::ku_dynamic_cast<TARGET*>(this);
-    }
 };
 
 struct BatchInsertLocalState {
@@ -107,10 +95,11 @@ class BatchInsert : public Sink {
     static constexpr PhysicalOperatorType type_ = PhysicalOperatorType::BATCH_INSERT;
 
 public:
-    BatchInsert(std::string tableName, std::unique_ptr<BatchInsertInfo> info,
-        std::shared_ptr<BatchInsertSharedState> sharedState, uint32_t id,
+    BatchInsert(std::unique_ptr<BatchInsertInfo> info,
+        std::shared_ptr<BatchInsertSharedState> sharedState,
+        std::unique_ptr<ResultSetDescriptor> resultSetDescriptor, uint32_t id,
         std::unique_ptr<OPPrintInfo> printInfo)
-        : Sink{type_, id, std::move(printInfo)}, tableName{std::move(tableName)},
+        : Sink{std::move(resultSetDescriptor), type_, id, std::move(printInfo)},
           info{std::move(info)}, sharedState{std::move(sharedState)} {}
 
     ~BatchInsert() override = default;
@@ -120,7 +109,6 @@ public:
     std::shared_ptr<BatchInsertSharedState> getSharedState() const { return sharedState; }
 
 protected:
-    std::string tableName;
     std::unique_ptr<BatchInsertInfo> info;
     std::shared_ptr<BatchInsertSharedState> sharedState;
     std::unique_ptr<BatchInsertLocalState> localState;

@@ -491,10 +491,11 @@ std::unique_ptr<PreparedStatement> ClientContext::prepareNoLock(
                     boundStatement->getStatementResult()->copy());
                 // planning
                 auto planner = Planner(this);
-                auto bestPlan = planner.planStatement(*boundStatement);
+                auto bestPlan = planner.getBestPlan(*boundStatement);
                 // optimizing
-                optimizer::Optimizer::optimize(&bestPlan, this, planner.getCardinalityEstimator());
-                preparedStatement->logicalPlan = bestPlan.shallowCopy();
+                optimizer::Optimizer::optimize(bestPlan.get(), this,
+                    planner.getCardinalityEstimator());
+                preparedStatement->logicalPlan = std::move(bestPlan);
             },
             preparedStatement->isReadOnly(), preparedStatement->isTransactionStatement(),
             TransactionHelper::getAction(shouldCommitNewTransaction,

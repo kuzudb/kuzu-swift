@@ -17,12 +17,17 @@ using namespace kuzu::common;
 namespace kuzu {
 namespace planner {
 
-LogicalPlan Planner::planQueryGraphCollectionInNewContext(
+std::unique_ptr<LogicalPlan> Planner::planQueryGraphCollection(
+    const QueryGraphCollection& queryGraphCollection, const QueryGraphPlanningInfo& info) {
+    return getBestPlan(enumerateQueryGraphCollection(queryGraphCollection, info));
+}
+
+std::unique_ptr<LogicalPlan> Planner::planQueryGraphCollectionInNewContext(
     const QueryGraphCollection& queryGraphCollection, const QueryGraphPlanningInfo& info) {
     auto prevContext = enterNewContext();
-    auto plan = planQueryGraphCollection(queryGraphCollection, info);
+    auto plans = enumerateQueryGraphCollection(queryGraphCollection, info);
     exitContext(std::move(prevContext));
-    return plan;
+    return getBestPlan(std::move(plans));
 }
 
 static int32_t getConnectedQueryGraphIdx(const QueryGraphCollection& queryGraphCollection,
@@ -38,8 +43,8 @@ static int32_t getConnectedQueryGraphIdx(const QueryGraphCollection& queryGraphC
     return -1;
 }
 
-LogicalPlan Planner::planQueryGraphCollection(const QueryGraphCollection& queryGraphCollection,
-    const QueryGraphPlanningInfo& info) {
+std::vector<std::unique_ptr<LogicalPlan>> Planner::enumerateQueryGraphCollection(
+    const QueryGraphCollection& queryGraphCollection, const QueryGraphPlanningInfo& info) {
     KU_ASSERT(queryGraphCollection.getNumQueryGraphs() > 0);
     auto& corrExprs = info.corrExprs;
     int32_t queryGraphIdxToPlanExpressionsScan = -1;
@@ -49,7 +54,7 @@ LogicalPlan Planner::planQueryGraphCollection(const QueryGraphCollection& queryG
         queryGraphIdxToPlanExpressionsScan = getConnectedQueryGraphIdx(queryGraphCollection, info);
     }
     std::unordered_set<uint32_t> evaluatedPredicatesIndices;
-    std::vector<LogicalPlan> planPerQueryGraph;
+    std::vector<std::vector<std::unique_ptr<LogicalPlan>>> plansPerQueryGraph;
     for (auto i = 0u; i < queryGraphCollection.getNumQueryGraphs(); ++i) {
         auto queryGraph = queryGraphCollection.getQueryGraph(i);
         // Extract predicates for current query graph
@@ -71,42 +76,44 @@ LogicalPlan Planner::planQueryGraphCollection(const QueryGraphCollection& queryG
         for (auto idx : predicateToEvaluateIndices) {
             predicatesToEvaluate.push_back(info.predicates[idx]);
         }
-        LogicalPlan plan;
+        std::vector<std::unique_ptr<LogicalPlan>> plans;
         auto newInfo = info;
         newInfo.predicates = predicatesToEvaluate;
         switch (info.subqueryType) {
         case SubqueryPlanningType::NONE:
         case SubqueryPlanningType::UNNEST_CORRELATED: {
-            plan = planQueryGraph(*queryGraph, newInfo);
+            plans = enumerateQueryGraph(*queryGraph, newInfo);
         } break;
         case SubqueryPlanningType::CORRELATED: {
             if (i == (uint32_t)queryGraphIdxToPlanExpressionsScan) {
                 // Plan ExpressionsScan with current query graph.
-                plan = planQueryGraph(*queryGraph, newInfo);
+                plans = enumerateQueryGraph(*queryGraph, newInfo);
             } else {
                 // Plan current query graph as an isolated query graph.
                 newInfo.subqueryType = SubqueryPlanningType::NONE;
-                plan = planQueryGraph(*queryGraph, newInfo);
+                plans = enumerateQueryGraph(*queryGraph, newInfo);
             }
         } break;
         default:
             KU_UNREACHABLE;
         }
-        planPerQueryGraph.push_back(std::move(plan));
+        plansPerQueryGraph.push_back(std::move(plans));
     }
     // Fail to plan ExpressionsScan with any query graph. Plan it independently and fall back to
     // cross product.
     if (info.subqueryType == SubqueryPlanningType::CORRELATED &&
         queryGraphIdxToPlanExpressionsScan == -1) {
-        auto plan = LogicalPlan();
-        appendExpressionsScan(corrExprs, plan);
-        appendDistinct(corrExprs, plan);
-        planPerQueryGraph.push_back(std::move(plan));
+        auto plan = std::make_unique<LogicalPlan>();
+        appendExpressionsScan(corrExprs, *plan);
+        appendDistinct(corrExprs, *plan);
+        std::vector<std::unique_ptr<LogicalPlan>> plans;
+        plans.push_back(std::move(plan));
+        plansPerQueryGraph.push_back(std::move(plans));
     }
     // Take cross products
-    auto plan = planPerQueryGraph[0].copy();
-    for (auto i = 1u; i < planPerQueryGraph.size(); ++i) {
-        appendCrossProduct(plan, planPerQueryGraph[i], plan);
+    auto result = std::move(plansPerQueryGraph[0]);
+    for (auto i = 1u; i < plansPerQueryGraph.size(); ++i) {
+        result = planCrossProduct(std::move(result), std::move(plansPerQueryGraph[i]));
     }
     // Apply remaining predicates
     expression_vector remainingPredicates;
@@ -115,13 +122,15 @@ LogicalPlan Planner::planQueryGraphCollection(const QueryGraphCollection& queryG
             remainingPredicates.push_back(info.predicates[i]);
         }
     }
-    for (auto& predicate : remainingPredicates) {
-        appendFilter(predicate, plan);
+    for (auto& plan : result) {
+        for (auto& predicate : remainingPredicates) {
+            appendFilter(predicate, *plan);
+        }
     }
-    return plan;
+    return result;
 }
 
-LogicalPlan Planner::planQueryGraph(const QueryGraph& queryGraph,
+std::vector<std::unique_ptr<LogicalPlan>> Planner::enumerateQueryGraph(const QueryGraph& queryGraph,
     const QueryGraphPlanningInfo& info) {
     context.init(&queryGraph, info.predicates);
     cardinalityEstimator.initNodeIDDom(clientContext->getTransaction(), queryGraph);
@@ -130,28 +139,24 @@ LogicalPlan Planner::planQueryGraph(const QueryGraph& queryGraph,
             JoinTreeConstructor(queryGraph, propertyExprCollection, info.predicates, info);
         auto joinTree = constructor.construct(info.hint);
         auto plan = JoinPlanSolver(this).solve(joinTree);
+        std::vector<std::unique_ptr<LogicalPlan>> result;
+        result.push_back(plan.shallowCopy());
         cardinalityEstimator.clearPerQueryGraphStats();
-        return plan.copy();
+        return result;
     }
     planBaseTableScans(info);
     context.currentLevel++;
     while (context.currentLevel < context.maxLevel) {
         planLevel(context.currentLevel++);
     }
-
-    auto& plans = context.getPlans(context.getFullyMatchedSubqueryGraph());
-    auto bestIdx = 0;
-    for (auto i = 1u; i < plans.size(); ++i) {
-        if (plans[i]->getCost() < plans[bestIdx]->getCost()) {
-            bestIdx = i;
+    auto plans = std::move(context.getPlans(context.getFullyMatchedSubqueryGraph()));
+    if (queryGraph.isEmpty()) {
+        for (auto& plan : plans) {
+            appendEmptyResult(*plan);
         }
     }
-    auto bestPlan = plans[bestIdx]->copy();
-    if (queryGraph.isEmpty()) {
-        appendEmptyResult(bestPlan);
-    }
     cardinalityEstimator.clearPerQueryGraphStats();
-    return bestPlan;
+    return plans;
 }
 
 void Planner::planLevel(uint32_t level) {
@@ -594,6 +599,21 @@ void Planner::planInnerHashJoin(const SubqueryGraph& subgraph, const SubqueryGra
             }
         }
     }
+}
+
+std::vector<std::unique_ptr<LogicalPlan>> Planner::planCrossProduct(
+    std::vector<std::unique_ptr<LogicalPlan>> leftPlans,
+    std::vector<std::unique_ptr<LogicalPlan>> rightPlans) {
+    std::vector<std::unique_ptr<LogicalPlan>> result;
+    for (auto& leftPlan : leftPlans) {
+        for (auto& rightPlan : rightPlans) {
+            auto leftPlanCopy = leftPlan->shallowCopy();
+            auto rightPlanCopy = rightPlan->shallowCopy();
+            appendCrossProduct(*leftPlanCopy, *rightPlanCopy, *leftPlanCopy);
+            result.push_back(std::move(leftPlanCopy));
+        }
+    }
+    return result;
 }
 
 static bool isExpressionNewlyMatched(const std::vector<SubqueryGraph>& prevs,

@@ -1,8 +1,9 @@
 #include "processor/plan_mapper.h"
 
+#include "planner/operator/sip/logical_semi_masker.h"
 #include "processor/operator/profile.h"
 #include "storage/storage_manager.h"
-#include "storage/table/node_table.h"
+#include "storage/store/node_table.h"
 
 using namespace kuzu::binder;
 using namespace kuzu::common;
@@ -134,9 +135,6 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapOperator(const LogicalOperator*
     case LogicalOperatorType::NODE_LABEL_FILTER: {
         physicalOperator = mapNodeLabelFilter(logicalOperator);
     } break;
-    case LogicalOperatorType::NOOP: {
-        physicalOperator = mapNoop(logicalOperator);
-    } break;
     case LogicalOperatorType::ORDER_BY: {
         physicalOperator = mapOrderBy(logicalOperator);
     } break;
@@ -212,6 +210,19 @@ FactorizedTableSchema PlanMapper::createFlatFTableSchema(const expression_vector
 std::unique_ptr<SemiMask> PlanMapper::createSemiMask(table_id_t tableID) const {
     auto table = clientContext->getStorageManager()->getTable(tableID)->ptrCast<NodeTable>();
     return SemiMaskUtil::createMask(table->getNumTotalRows(clientContext->getTransaction()));
+}
+
+LogicalSemiMasker* PlanMapper::findSemiMaskerInPlan(LogicalOperator* logicalOperator) {
+    if (logicalOperator->getOperatorType() == LogicalOperatorType::SEMI_MASKER) {
+        return logicalOperator->ptrCast<LogicalSemiMasker>();
+    }
+    for (auto& child : logicalOperator->getChildren()) {
+        const auto semiMasker = findSemiMaskerInPlan(child.get());
+        if (semiMasker) {
+            return semiMasker;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace processor

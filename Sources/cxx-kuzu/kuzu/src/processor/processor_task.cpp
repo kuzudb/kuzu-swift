@@ -21,15 +21,27 @@ void ProcessorTask::run() {
         sink->initGlobalState(executionContext);
         sharedStateInitialized = true;
     }
-    auto taskRoot = sink->copy();
+    auto clonedPipelineRoot = sink->copy();
     lck.unlock();
-    auto resultSet = sink->getResultSet(executionContext->clientContext->getMemoryManager());
-    taskRoot->ptrCast<Sink>()->execute(resultSet.get(), executionContext);
+    auto currentSink = (Sink*)clonedPipelineRoot.get();
+    auto resultSet =
+        populateResultSet(currentSink, executionContext->clientContext->getMemoryManager());
+    currentSink->execute(resultSet.get(), executionContext);
 }
 
 void ProcessorTask::finalizeIfNecessary() {
     executionContext->clientContext->getProgressBar()->finishPipeline(executionContext->queryID);
     sink->finalize(executionContext);
+}
+
+std::unique_ptr<ResultSet> ProcessorTask::populateResultSet(Sink* op,
+    storage::MemoryManager* memoryManager) {
+    auto resultSetDescriptor = op->getResultSetDescriptor();
+    if (resultSetDescriptor == nullptr) {
+        // Some pipeline does not need a resultSet, e.g. OrderByMerge
+        return nullptr;
+    }
+    return std::make_unique<ResultSet>(resultSetDescriptor, memoryManager);
 }
 
 } // namespace processor

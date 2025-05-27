@@ -64,10 +64,10 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapPathPropertyProbe(
         auto nodeHashTable = std::make_unique<JoinHashTable>(*clientContext->getMemoryManager(),
             std::move(nodeKeyTypes), nodeBuildInfo->getTableSchema()->copy());
         nodeBuildSharedState = std::make_shared<HashJoinSharedState>(std::move(nodeHashTable));
-        nodeBuild = make_unique<HashJoinBuild>(PhysicalOperatorType::HASH_JOIN_BUILD,
-            nodeBuildSharedState, std::move(nodeBuildInfo), std::move(nodeBuildPrevOperator),
-            getOperatorID(), std::make_unique<OPPrintInfo>());
-        nodeBuild->setDescriptor(std::make_unique<ResultSetDescriptor>(nodeBuildSchema));
+        nodeBuild = make_unique<HashJoinBuild>(
+            std::make_unique<ResultSetDescriptor>(nodeBuildSchema),
+            PhysicalOperatorType::HASH_JOIN_BUILD, nodeBuildSharedState, std::move(nodeBuildInfo),
+            std::move(nodeBuildPrevOperator), getOperatorID(), std::make_unique<OPPrintInfo>());
         auto [fieldIndices, columnIndices] = getColIdxToScan(nodePayloads, nodeKeys.size(),
             ListType::getChildType(
                 StructType::getField(rel->getDataType(), InternalKeyword::NODES).getType()));
@@ -90,10 +90,10 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapPathPropertyProbe(
         auto relHashTable = std::make_unique<JoinHashTable>(*clientContext->getMemoryManager(),
             std::move(relKeyTypes), relBuildInfo->getTableSchema()->copy());
         relBuildSharedState = std::make_shared<HashJoinSharedState>(std::move(relHashTable));
-        relBuild = std::make_unique<HashJoinBuild>(PhysicalOperatorType::HASH_JOIN_BUILD,
-            relBuildSharedState, std::move(relBuildInfo), std::move(relBuildPrvOperator),
-            getOperatorID(), std::make_unique<OPPrintInfo>());
-        relBuild->setDescriptor(std::make_unique<ResultSetDescriptor>(relBuildSchema));
+        relBuild =
+            std::make_unique<HashJoinBuild>(std::make_unique<ResultSetDescriptor>(relBuildSchema),
+                PhysicalOperatorType::HASH_JOIN_BUILD, relBuildSharedState, std::move(relBuildInfo),
+                std::move(relBuildPrvOperator), getOperatorID(), std::make_unique<OPPrintInfo>());
         auto [fieldIndices, columnIndices] = getColIdxToScan(relPayloads, relKeys.size(),
             ListType::getChildType(
                 StructType::getField(rel->getDataType(), InternalKeyword::RELS).getType()));
@@ -106,13 +106,14 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapPathPropertyProbe(
     if (logicalChild->getOperatorType() == LogicalOperatorType::SEMI_MASKER) {
         // Create a pipeline to populate semi mask. Pipeline source is the scan of recursive extend
         // result, and pipeline sink is a dummy operator that does not materialize anything.
-        auto dummySink = std::make_unique<DummySink>(std::move(prevOperator), getOperatorID());
-        dummySink->setDescriptor(std::make_unique<ResultSetDescriptor>(logicalChild->getSchema()));
+        prevOperator = std::make_unique<DummySink>(
+            std::make_unique<ResultSetDescriptor>(logicalChild->getSchema()),
+            std::move(prevOperator), getOperatorID(), std::make_unique<OPPrintInfo>());
         auto extend = logicalChild->getChild(0)->ptrCast<LogicalRecursiveExtend>();
         auto columns = extend->getResultColumns();
         auto physicalCall = logicalOpToPhysicalOpMap.at(extend)->ptrCast<RecursiveExtend>();
         physical_op_vector_t children;
-        children.push_back(std::move(dummySink));
+        children.push_back(std::move(prevOperator));
         prevOperator = createFTableScanAligned(columns, extend->getSchema(),
             physicalCall->getSharedState()->factorizedTablePool.getGlobalTable(),
             DEFAULT_VECTOR_CAPACITY, std::move(children));
@@ -150,15 +151,17 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapPathPropertyProbe(
     pathProbeInfo.extendFromLeft = logicalProbe.extendFromLeft;
     auto pathProbeSharedState =
         std::make_shared<PathPropertyProbeSharedState>(nodeBuildSharedState, relBuildSharedState);
-    auto printInfo = std::make_unique<OPPrintInfo>();
-    auto pathPropertyProbe = std::make_unique<PathPropertyProbe>(std::move(pathProbeInfo),
-        pathProbeSharedState, std::move(prevOperator), getOperatorID(), std::move(printInfo));
+    std::vector<std::unique_ptr<PhysicalOperator>> children;
+    children.push_back(std::move(prevOperator));
     if (nodeBuild != nullptr) {
-        pathPropertyProbe->addChild(std::move(nodeBuild));
+        children.push_back(std::move(nodeBuild));
     }
     if (relBuild != nullptr) {
-        pathPropertyProbe->addChild(std::move(relBuild));
+        children.push_back(std::move(relBuild));
     }
+    auto printInfo = std::make_unique<OPPrintInfo>();
+    auto pathPropertyProbe = std::make_unique<PathPropertyProbe>(std::move(pathProbeInfo),
+        pathProbeSharedState, std::move(children), getOperatorID(), std::move(printInfo));
     if (logicalProbe.getSIPInfo().direction == SIPDirection::PROBE_TO_BUILD) {
         mapSIPJoin(pathPropertyProbe.get());
     }

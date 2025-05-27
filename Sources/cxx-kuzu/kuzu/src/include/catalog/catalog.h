@@ -49,7 +49,9 @@ class KUZU_API Catalog {
     friend class main::AttachedKuzuDatabase;
 
 public:
+    // This is extended by DuckCatalog and PostgresCatalog.
     Catalog();
+    Catalog(const std::string& directory, common::VirtualFileSystem* vfs);
     virtual ~Catalog() = default;
 
     // ----------------------------- Tables ----------------------------
@@ -202,14 +204,20 @@ public:
 
     void incrementVersion() { version++; }
     uint64_t getVersion() const { return version; }
-
-    void serialize(common::Serializer& ser) const;
-    void deserialize(common::Deserializer& deSer);
+    void checkpoint(const std::string& databasePath, common::VirtualFileSystem* fs) const;
 
     template<class TARGET>
     TARGET* ptrCast() {
         return common::ku_dynamic_cast<TARGET*>(this);
     }
+
+private:
+    // The clientContext needs to be used when reading from a remote filesystem which
+    // requires some user-specific configs (e.g. s3 username, password).
+    void readFromFile(const std::string& directory, common::VirtualFileSystem* fs,
+        common::FileVersionType versionType, main::ClientContext* context = nullptr);
+    void saveToFile(const std::string& directory, common::VirtualFileSystem* fs,
+        common::FileVersionType versionType) const;
 
 private:
     void initCatalogSets();

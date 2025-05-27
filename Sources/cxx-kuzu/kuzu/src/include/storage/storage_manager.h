@@ -3,8 +3,8 @@
 #include <mutex>
 
 #include "catalog/catalog.h"
-#include "shadow_file.h"
 #include "storage/index/hash_index.h"
+#include "storage/wal/shadow_file.h"
 #include "storage/wal/wal.h"
 
 namespace kuzu {
@@ -17,22 +17,23 @@ class CatalogEntry;
 }
 
 namespace storage {
-class DiskArrayCollection;
 class Table;
+class DiskArrayCollection;
 
 class KUZU_API StorageManager {
 public:
-    StorageManager(const std::string& databasePath, bool readOnly, MemoryManager& memoryManager,
-        bool enableCompression, common::VirtualFileSystem* vfs, main::ClientContext* context);
+    StorageManager(const std::string& databasePath, bool readOnly, const catalog::Catalog& catalog,
+        MemoryManager& memoryManager, bool enableCompression, common::VirtualFileSystem* vfs,
+        main::ClientContext* context);
     ~StorageManager();
 
     static void recover(main::ClientContext& clientContext);
 
-    void createTable(catalog::CatalogEntry* entry, const main::ClientContext* context);
+    void createTable(catalog::CatalogEntry* entry, main::ClientContext* context);
 
-    void checkpoint(const catalog::Catalog& catalog);
-    void finalizeCheckpoint();
-    void rollbackCheckpoint(const catalog::Catalog& catalog);
+    void checkpoint(main::ClientContext& clientContext);
+    void finalizeCheckpoint(main::ClientContext& clientContext);
+    void rollbackCheckpoint(main::ClientContext& clientContext);
 
     Table* getTable(common::table_id_t tableID) {
         std::lock_guard lck{mtx};
@@ -46,32 +47,30 @@ public:
     std::string getDatabasePath() const { return databasePath; }
     bool isReadOnly() const { return readOnly; }
     bool compressionEnabled() const { return enableCompression; }
-    bool isInMemory() const { return inMemory; }
-
-    void serialize(const catalog::Catalog& catalog, common::Serializer& ser);
-    void deserialize(const catalog::Catalog& catalog, common::Deserializer& deSer);
 
 private:
-    void initDataFileHandle(common::VirtualFileSystem* vfs, main::ClientContext* context);
+    FileHandle* initFileHandle(const std::string& fileName, common::VirtualFileSystem* vfs,
+        main::ClientContext* context) const;
 
-    void createNodeTable(catalog::NodeTableCatalogEntry* entry);
+    void loadTables(const catalog::Catalog& catalog, common::VirtualFileSystem* vfs,
+        main::ClientContext* context);
+    void createNodeTable(catalog::NodeTableCatalogEntry* entry, main::ClientContext* context);
     void createRelTable(catalog::RelTableCatalogEntry* entry);
-    void createRelTableGroup(const catalog::RelGroupCatalogEntry* entry,
-        const main::ClientContext* context);
+    void createRelTableGroup(catalog::RelGroupCatalogEntry* entry, main::ClientContext* context);
 
-    void reclaimDroppedTables(const catalog::Catalog& catalog);
+    void reclaimDroppedTables(const main::ClientContext& clientContext);
 
 private:
     std::mutex mtx;
     std::string databasePath;
     bool readOnly;
     FileHandle* dataFH;
+    FileHandle* metadataFH;
     std::unordered_map<common::table_id_t, std::unique_ptr<Table>> tables;
     MemoryManager& memoryManager;
     std::unique_ptr<WAL> wal;
     std::unique_ptr<ShadowFile> shadowFile;
     bool enableCompression;
-    bool inMemory;
 };
 
 } // namespace storage

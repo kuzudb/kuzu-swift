@@ -26,15 +26,8 @@ std::unique_ptr<BoundReadingClause> Binder::bindUnwindClause(const ReadingClause
         boundExpression = expressionBinder.implicitCast(boundExpression, targetType);
     }
     if (!skipDataTypeValidation(*boundExpression)) {
-        if (ExpressionUtil::isNullLiteral(*boundExpression)) {
-            // For the `unwind NULL` clause, we assign the STRING[] type to the NULL literal.
-            alias = createVariable(aliasName, LogicalType::STRING());
-            boundExpression = expressionBinder.implicitCast(boundExpression,
-                LogicalType::LIST(LogicalType::STRING()));
-        } else {
-            ExpressionUtil::validateDataType(*boundExpression, LogicalTypeID::LIST);
-            alias = createVariable(aliasName, ListType::getChildType(boundExpression->dataType));
-        }
+        ExpressionUtil::validateDataType(*boundExpression, LogicalTypeID::LIST);
+        alias = createVariable(aliasName, ListType::getChildType(boundExpression->dataType));
     } else {
         alias = createVariable(aliasName, LogicalType::ANY());
     }

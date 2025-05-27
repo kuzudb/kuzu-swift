@@ -67,7 +67,7 @@ public:
 template<typename T>
 class HashIndex final : public OnDiskHashIndex {
 public:
-    HashIndex(MemoryManager& memoryManager, FileHandle* fileHandle,
+    HashIndex(MemoryManager& memoryManager, DBFileIDAndName dbFileIDAndName, FileHandle* fileHandle,
         OverflowFileHandle* overflowFileHandle, DiskArrayCollection& diskArrays, uint64_t indexPos,
         ShadowFile* shadowFile, const HashIndexHeader& indexHeaderForReadTrx,
         HashIndexHeader& indexHeaderForWriteTrx);
@@ -278,6 +278,7 @@ private:
         const transaction::Transaction* transaction, slot_id_t pSlotId);
 
 private:
+    DBFileIDAndName dbFileIDAndName;
     ShadowFile* shadowFile;
     uint64_t headerPageIdx;
     FileHandle* fileHandle;
@@ -306,13 +307,9 @@ inline bool HashIndex<common::ku_string_t>::equals(const transaction::Transactio
 
 class PrimaryKeyIndex {
 public:
-    // Construct a new index
-    PrimaryKeyIndex(FileHandle* dataFH, bool inMemMode, common::PhysicalTypeID keyDataType,
-        MemoryManager& memoryManager, ShadowFile* shadowFile);
-    // Construct an existing index
-    PrimaryKeyIndex(FileHandle* dataFH, bool inMemMode, common::PhysicalTypeID keyDataType,
-        MemoryManager& memoryManager, ShadowFile* shadowFile, common::page_idx_t firstHeaderPage,
-        common::page_idx_t overflowHeaderPage);
+    PrimaryKeyIndex(const DBFileIDAndName& dbFileIDAndName, bool readOnly, bool inMemMode,
+        common::PhysicalTypeID keyDataType, MemoryManager& memoryManager, ShadowFile* shadowFile,
+        common::VirtualFileSystem* vfs, main::ClientContext* context);
 
     ~PrimaryKeyIndex();
 
@@ -326,7 +323,7 @@ public:
         return common::ku_dynamic_cast<HashIndex<HashIndexType<T>>*>(hashIndices[indexPos].get());
     }
 
-    bool lookup(const transaction::Transaction* trx, common::ku_string_t key,
+    inline bool lookup(const transaction::Transaction* trx, common::ku_string_t key,
         common::offset_t& result, visible_func isVisible) {
         return lookup(trx, key.getAsStringView(), result, isVisible);
     }
@@ -340,7 +337,7 @@ public:
     bool lookup(const transaction::Transaction* trx, common::ValueVector* keyVector,
         uint64_t vectorPos, common::offset_t& result, visible_func isVisible);
 
-    bool insert(const transaction::Transaction* transaction, common::ku_string_t key,
+    inline bool insert(const transaction::Transaction* transaction, common::ku_string_t key,
         common::offset_t value, visible_func isVisible) {
         return insert(transaction, key.getAsStringView(), value, isVisible);
     }
@@ -375,7 +372,7 @@ public:
         }
     }
 
-    void delete_(common::ku_string_t key) { return delete_(key.getAsStringView()); }
+    inline void delete_(common::ku_string_t key) { return delete_(key.getAsStringView()); }
     template<common::IndexHashable T>
     inline void delete_(T key) {
         KU_ASSERT(keyDataTypeID == common::TypeUtils::getPhysicalTypeIDForType<T>());
@@ -395,11 +392,6 @@ public:
 
     void writeHeaders();
 
-    void serialize(common::Serializer& serializer) const;
-
-private:
-    void initOverflowAndSubIndices(bool inMemMode, MemoryManager& mm);
-
 private:
     common::PhysicalTypeID keyDataTypeID;
     FileHandle* fileHandle;
@@ -407,11 +399,10 @@ private:
     std::vector<std::unique_ptr<OnDiskHashIndex>> hashIndices;
     std::vector<HashIndexHeader> hashIndexHeadersForReadTrx;
     std::vector<HashIndexHeader> hashIndexHeadersForWriteTrx;
+    DBFileIDAndName dbFileIDAndName;
     ShadowFile& shadowFile;
     // Stores both primary and overflow slots
     std::unique_ptr<DiskArrayCollection> hashIndexDiskArrays;
-    common::page_idx_t firstHeaderPage;
-    common::page_idx_t overflowHeaderPage;
 };
 
 } // namespace storage

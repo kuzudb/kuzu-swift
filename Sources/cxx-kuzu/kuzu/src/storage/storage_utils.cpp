@@ -1,6 +1,7 @@
 #include "storage/storage_utils.h"
 
 #include "common/assert.h"
+#include "common/file_system/virtual_file_system.h"
 #include "common/null_buffer.h"
 #include "common/string_format.h"
 #include "common/types/ku_list.h"
@@ -45,6 +46,13 @@ std::string StorageUtils::getColumnName(const std::string& propertyName, ColumnT
     }
 }
 
+std::string StorageUtils::getNodeIndexFName(const VirtualFileSystem* vfs,
+    const std::string& directory, const table_id_t& tableID, FileVersionType fileVersionType) {
+    const auto fName = stringFormat("n-{}", tableID);
+    return appendWALFileSuffixIfNecessary(
+        vfs->joinPath(directory, fName + StorageConstants::INDEX_FILE_SUFFIX), fileVersionType);
+}
+
 uint32_t StorageUtils::getDataTypeSize(PhysicalTypeID type) {
     switch (type) {
     case PhysicalTypeID::STRING: {
@@ -86,6 +94,15 @@ uint32_t StorageUtils::getDataTypeSize(const LogicalType& type) {
         return PhysicalTypeUtils::getFixedTypeSize(type.getPhysicalType());
     }
     }
+}
+
+std::string StorageUtils::appendSuffixOrInsertBeforeWALSuffix(const std::string& fileName,
+    const std::string& suffix) {
+    const auto pos = fileName.find(StorageConstants::WAL_FILE_SUFFIX);
+    if (pos == std::string::npos) {
+        return fileName + suffix;
+    }
+    return fileName.substr(0, pos) + suffix + StorageConstants::WAL_FILE_SUFFIX;
 }
 
 } // namespace storage

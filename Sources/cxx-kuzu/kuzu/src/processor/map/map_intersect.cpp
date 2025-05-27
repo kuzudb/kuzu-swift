@@ -16,10 +16,11 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapIntersect(const LogicalOperator
     auto logicalIntersect = logicalOperator->constPtrCast<LogicalIntersect>();
     auto intersectNodeID = logicalIntersect->getIntersectNodeID();
     auto outSchema = logicalIntersect->getSchema();
+    std::vector<std::unique_ptr<PhysicalOperator>> children;
+    children.resize(logicalOperator->getNumChildren());
     std::vector<std::shared_ptr<HashJoinSharedState>> sharedStates;
     std::vector<IntersectDataInfo> intersectDataInfos;
     // Map build side children.
-    std::vector<std::unique_ptr<PhysicalOperator>> buildChildren;
     for (auto i = 1u; i < logicalIntersect->getNumChildren(); i++) {
         auto keyNodeID = logicalIntersect->getKeyNodeID(i - 1);
         auto keys = expression_vector{keyNodeID};
@@ -33,10 +34,9 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapIntersect(const LogicalOperator
         auto sharedState = std::make_shared<HashJoinSharedState>(std::move(globalHashTable));
         sharedStates.push_back(sharedState);
         auto printInfo = std::make_unique<IntersectBuildPrintInfo>(keys, payloadExpressions);
-        auto build = std::make_unique<IntersectBuild>(sharedState, std::move(buildInfo),
+        children[i] = make_unique<IntersectBuild>(
+            std::make_unique<ResultSetDescriptor>(buildSchema), sharedState, std::move(buildInfo),
             std::move(buildPrevOperator), getOperatorID(), std::move(printInfo));
-        build->setDescriptor(std::make_unique<ResultSetDescriptor>(buildSchema));
-        buildChildren.push_back(std::move(build));
         // Collect intersect info
         std::vector<DataPos> vectorsToScanPos;
         auto expressionsToScan = ExpressionUtil::excludeExpressions(
@@ -48,16 +48,13 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapIntersect(const LogicalOperator
         intersectDataInfos.push_back(info);
     }
     // Map probe side child.
-    auto probeChild = mapOperator(logicalIntersect->getChild(0).get());
+    children[0] = mapOperator(logicalIntersect->getChild(0).get());
     // Map intersect.
     auto outputDataPos =
         DataPos(outSchema->getExpressionPos(*logicalIntersect->getIntersectNodeID()));
     auto printInfo = std::make_unique<IntersectPrintInfo>(intersectNodeID);
     auto intersect = make_unique<Intersect>(outputDataPos, intersectDataInfos, sharedStates,
-        std::move(probeChild), getOperatorID(), std::move(printInfo));
-    for (auto& child : buildChildren) {
-        intersect->addChild(std::move(child));
-    }
+        std::move(children), getOperatorID(), std::move(printInfo));
     if (logicalIntersect->getSIPInfo().direction == SIPDirection::PROBE_TO_BUILD) {
         mapSIPJoin(intersect.get());
     }

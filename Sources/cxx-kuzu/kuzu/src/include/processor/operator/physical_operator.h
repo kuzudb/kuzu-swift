@@ -70,7 +70,6 @@ enum class PhysicalOperatorType : uint8_t {
     UNION_ALL_SCAN,
     UNWIND,
     USE_DATABASE,
-    UNINSTALL_EXTENSION,
 };
 
 class PhysicalOperator;
@@ -165,7 +164,7 @@ protected:
     double getExecutionTime(common::Profiler& profiler) const;
     uint64_t getNumOutputTuples(common::Profiler& profiler) const;
 
-    virtual void finalizeInternal(ExecutionContext* /*context*/) {}
+    virtual void finalizeInternal(ExecutionContext* /*context*/) {};
 
 protected:
     physical_op_id id;

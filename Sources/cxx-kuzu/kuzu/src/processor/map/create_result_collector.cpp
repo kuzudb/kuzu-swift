@@ -28,10 +28,9 @@ std::unique_ptr<ResultCollector> PlanMapper::createResultCollector(AccumulateTyp
     auto sharedState = std::make_shared<ResultCollectorSharedState>(std::move(table));
     auto opInfo = ResultCollectorInfo(accumulateType, std::move(tableSchema), payloadsPos);
     auto printInfo = std::make_unique<ResultCollectorPrintInfo>(expressions, accumulateType);
-    auto op = std::make_unique<ResultCollector>(std::move(opInfo), std::move(sharedState),
-        std::move(prevOperator), getOperatorID(), std::move(printInfo));
-    op->setDescriptor(std::make_unique<ResultSetDescriptor>(schema));
-    return op;
+    return make_unique<ResultCollector>(std::make_unique<ResultSetDescriptor>(schema),
+        std::move(opInfo), std::move(sharedState), std::move(prevOperator), getOperatorID(),
+        std::move(printInfo));
 }
 
 } // namespace processor
