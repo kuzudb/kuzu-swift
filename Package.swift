@@ -1120,7 +1120,7 @@ let package = Package(
             name: "KuzuTests",
             dependencies: ["Kuzu"],
             resources: [
-                .copy("../Dataset")
+                .copy("Dataset")
             ]
         )
     ],

@@ -35,7 +35,7 @@ $CXX_SETTINGS
             name: "KuzuTests",
             dependencies: ["Kuzu"],
             resources: [
-                .copy("../Dataset")
+                .copy("Dataset")
             ]
         )
     ],
