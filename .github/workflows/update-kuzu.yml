@@ -30,19 +30,18 @@ jobs:
           echo "CHANGES=true" >> $GITHUB_ENV
           git checkout -b "update-kuzu-${KUZU_BRANCH}"
           git add -A
-          git commit -m "Update Kuzu to latest version from branch ${KUZU_BRANCH}" || echo "CHANGES=false" >> $GITHUB_ENV
+          git commit -m "Update Kuzu from branch ${KUZU_BRANCH}" || echo "CHANGES=false" >> $GITHUB_ENV
       - name: Push changes
         if: env.CHANGES == 'true'
         run: |
           git push origin "update-kuzu-${KUZU_BRANCH}" || echo "No changes to push"
       - name: Create Pull Request
         if: env.CHANGES == 'true'
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v7
         with:
-          title: "Update Kuzu to latest version from branch ${KUZU_BRANCH}"
-          body: "This PR updates Kuzu to the latest version from branch ${KUZU_BRANCH}."
+          title: "Update Kuzu from branch ${KUZU_BRANCH}"
+          body: "This PR updates Kuzu from branch ${KUZU_BRANCH}."
           base: main
-          head: update-kuzu-${KUZU_BRANCH}
           labels: update-kuzu
           draft: false
           token: ${{ secrets.GITHUB_TOKEN }}
