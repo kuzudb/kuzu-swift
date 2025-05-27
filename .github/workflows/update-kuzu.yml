@@ -1,0 +1,48 @@
+name: Update Kuzu
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch name for kuzu, if not provided, it will use the master branch'
+        type: string
+        default: 'master'
+permissions:
+  pull-requests: write
+  contents: write
+jobs:
+  create-new-version:
+    name: Create New Version Branch
+    runs-on: ubuntu-24.04
+    env:
+      KUZU_BRANCH: ${{ github.event.inputs.branch }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Configure Git
+        run: |
+          git config --global user.name "${GITHUB_ACTOR}"
+          git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+      - name: Update Kuzu
+        working-directory: Scripts/update-kuzu
+        run: python3 update_kuzu.py
+      - name: Commit changes
+        run: |
+          echo "CHANGES=true" >> $GITHUB_ENV
+          git checkout -b "update-kuzu-${KUZU_BRANCH}"
+          git add -A
+          git commit -m "Update Kuzu to latest version from branch ${KUZU_BRANCH}" || echo "CHANGES=false" >> $GITHUB_ENV
+      - name: Push changes
+        if: env.CHANGES == 'true'
+        run: |
+          git push origin "update-kuzu-${KUZU_BRANCH}" || echo "No changes to push"
+      - name: Create Pull Request
+        if: env.CHANGES == 'true'
+        uses: peter-evans/create-pull-request@v4
+        with:
+          title: "Update Kuzu to latest version from branch ${KUZU_BRANCH}"
+          body: "This PR updates Kuzu to the latest version from branch ${KUZU_BRANCH}."
+          base: main
+          head: update-kuzu-${KUZU_BRANCH}
+          labels: update-kuzu
+          draft: false
+          token: ${{ secrets.GITHUB_TOKEN }}

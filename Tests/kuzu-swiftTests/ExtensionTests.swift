@@ -5,13 +5,12 @@
 //  Copyright © 2023 - 2025 Kùzu Inc.
 //  This code is licensed under MIT license (see LICENSE for details)
 import Foundation
-import Testing
+import XCTest
 
 @testable import Kuzu
 
-@Suite(.serialized)
-struct ExtensionTests{
-    @Test func testGds() async throws {
+final class ExtensionTests: XCTestCase {
+    func testGds() async throws {
         func normalize(_ rows: [[String]]) -> [[String]] {
             return rows
                 .map { $0.sorted() }
@@ -60,6 +59,6 @@ struct ExtensionTests{
             rows.append(rowValue)
         }
         let groundTruth: [[String]] = [["I"], ["D"], ["B", "C", "A"], ["G", "F", "H", "E"]]
-        #expect(normalize(groundTruth) == normalize(rows))
+        XCTAssertEqual(normalize(groundTruth), normalize(rows))
     }
 }

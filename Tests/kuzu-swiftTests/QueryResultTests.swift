@@ -6,127 +6,118 @@
 //  This code is licensed under MIT license (see LICENSE for details)
 
 import Foundation
-import Testing
+import XCTest
 
 @testable import Kuzu
 
-@Suite(.serialized)
-struct QueryResultTests: ~Copyable {
-    var db: Database!
-    var conn: Connection!
-    var path: String
+final class QueryResultTests: XCTestCase {
+    private var db: Database!
+    private var conn: Connection!
+    private var path: String!
 
-    init() {
+    override func setUp() {
+        super.setUp()
         (db, conn, path) = try! getTestDatabase()
     }
 
-    deinit {
+    override func tearDown() {
         deleteTestDatabaseDirectory(path)
+        super.tearDown()
     }
 
-    @Test
     func testQueryResultToString() throws {
         let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
         let queryResultString = result.description
-        #expect(queryResultString == "a.fName|a.age|a.isStudent|a.isWorker\nAlice|35|True|False\n")
+        XCTAssertEqual(queryResultString, "a.fName|a.age|a.isStudent|a.isWorker\nAlice|35|True|False\n")
     }
 
-    @Test
     func testQueryResultResetIterator() throws {
         let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.ID;")
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let value = try tuple.getValue(0)
-        #expect(value as! Int64 == 0)
+        XCTAssertEqual(value as! Int64, 0)
         result.resetIterator()
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple2 = try result.getNext()!
         let value2 = try tuple2.getValue(0)
-        #expect(value2 as! Int64 == 0)
+        XCTAssertEqual(value2 as! Int64, 0)
     }
 
-    @Test
     func testQueryResultGetColumnNames() throws {
         let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
         let columnNames = result.getColumnNames()
-        #expect(columnNames.count == 4)
-        #expect(columnNames[0] == "a.fName")
-        #expect(columnNames[1] == "a.age")
-        #expect(columnNames[2] == "a.isStudent")
-        #expect(columnNames[3] == "a.isWorker")
+        XCTAssertEqual(columnNames.count, 4)
+        XCTAssertEqual(columnNames[0], "a.fName")
+        XCTAssertEqual(columnNames[1], "a.age")
+        XCTAssertEqual(columnNames[2], "a.isStudent")
+        XCTAssertEqual(columnNames[3], "a.isWorker")
     }
 
-    @Test
     func testQueryResultGetNumberOfColumns() throws {
         let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
         let numColumns = result.getColumnCount()
-        #expect(numColumns == 4)
+        XCTAssertEqual(numColumns, 4)
     }
 
-    @Test
     func testQueryResultGetNumberOfRows() throws {
         let result = try conn.query("MATCH (a:person) RETURN a;")
         let numRows = result.getRowCount()
-        #expect(numRows == 8)
+        XCTAssertEqual(numRows, 8)
     }
 
-    @Test
     func testQueryResultHasNext() throws {
         let result = try conn.query("MATCH (a:person) RETURN a LIMIT 1;")
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         _ = try result.getNext()!
-        #expect(!result.hasNext())
+        XCTAssertFalse(result.hasNext())
     }
 
-    @Test
     func testQueryResultNext() throws {
         let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let values = try tuple.getAsArray()
-        #expect(values.count == 4)
-        #expect(values[0] as! String == "Alice")
-        #expect(values[1] as! Int64 == 35)
-        #expect(values[2] as! Bool == true)
-        #expect(values[3] as! Bool == false)
+        XCTAssertEqual(values.count, 4)
+        XCTAssertEqual(values[0] as! String, "Alice")
+        XCTAssertEqual(values[1] as! Int64, 35)
+        XCTAssertTrue(values[2] as! Bool)
+        XCTAssertFalse(values[3] as! Bool)
     }
 
-    @Test
     func testMultipleQueryResults() throws {
         let result = try conn.query("RETURN 1; RETURN 2; RETURN 3;")
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let value = try tuple.getValue(0)
-        #expect(value as! Int64 == 1)
-        #expect(!result.hasNext())
-        #expect(result.hasNextQueryResult())
+        XCTAssertEqual(value as! Int64, 1)
+        XCTAssertFalse(result.hasNext())
+        XCTAssertTrue(result.hasNextQueryResult())
         
         let result2 = try result.getNextQueryResult()!
-        #expect(result2.hasNext())
+        XCTAssertTrue(result2.hasNext())
         let tuple2 = try result2.getNext()!
         let value2 = try tuple2.getValue(0)
-        #expect(value2 as! Int64 == 2)
-        #expect(!result2.hasNext())
-        #expect(result2.hasNextQueryResult())
+        XCTAssertEqual(value2 as! Int64, 2)
+        XCTAssertFalse(result2.hasNext())
+        XCTAssertTrue(result2.hasNextQueryResult())
         
         let result3 = try result2.getNextQueryResult()!
-        #expect(result3.hasNext())
+        XCTAssertTrue(result3.hasNext())
         let tuple3 = try result3.getNext()!
         let value3 = try tuple3.getValue(0)
-        #expect(value3 as! Int64 == 3)
-        #expect(!result3.hasNext())
-        #expect(!result3.hasNextQueryResult())
+        XCTAssertEqual(value3 as! Int64, 3)
+        XCTAssertFalse(result3.hasNext())
+        XCTAssertFalse(result3.hasNextQueryResult())
     }
 
-    @Test
     func testQueryResultGetCompilingTime() throws {
         let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
-        #expect(result.getCompilingTime() > 0)
+        XCTAssertGreaterThan(result.getCompilingTime(), 0)
     }
 
-    @Test
     func testQueryResultGetExecutionTime() throws {
         let result = try conn.query("MATCH (a:person) WHERE a.ID = 0 RETURN a.fName, a.age, a.isStudent, a.isWorker;")
-        #expect(result.getExecutionTime() > 0)
+        XCTAssertGreaterThan(result.getExecutionTime(), 0)
     }
 }

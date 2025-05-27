@@ -6,74 +6,71 @@
 //  This code is licensed under MIT license (see LICENSE for details)
 
 import Foundation
-import Testing
+import XCTest
 
 @testable import Kuzu
 
-@Suite(.serialized)
-struct FlatTupleTests: ~Copyable {
-    var db: Database!
-    var conn: Connection!
-    var path: String
+final class FlatTupleTests: XCTestCase {
+    private var db: Database!
+    private var conn: Connection!
+    private var path: String!
 
-    init() {
+    override func setUp() {
+        super.setUp()
         (db, conn, path) = try! getTestDatabase()
     }
 
-    deinit {
+    override func tearDown() {
         deleteTestDatabaseDirectory(path)
+        super.tearDown()
     }
 
-    @Test
     func testTupleGetAsString() throws {
         let query = "MATCH (a:person) RETURN a.fName, a.age ORDER BY a.fName LIMIT 1;"
         let result = try conn.query(query)
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let str = tuple.description
-        #expect(str.contains("Alice|35"))
+        XCTAssertTrue(str.contains("Alice|35"))
     }
 
-    @Test
     func testTupleGetAsArray() throws {
         let query = "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
         let result = try conn.query(query)
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let values = try tuple.getAsArray()
-        #expect(values.count == 3)
-        #expect(values[0] as! String == "Alice")
-        #expect(values[1] as! Int64 == 1)
-        #expect(values[2] as! Int64 == 35)
+        XCTAssertEqual(values.count, 3)
+        XCTAssertEqual(values[0] as! String, "Alice")
+        XCTAssertEqual(values[1] as! Int64, 1)
+        XCTAssertEqual(values[2] as! Int64, 35)
     }
 
-    @Test
     func testTupleGetAsDictionary() throws {
         let query = "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
         let result = try conn.query(query)
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let m = try tuple.getAsDictionary()
-        #expect(m.count == 3)
-        #expect(m["a.fName"] != nil)
-        #expect(m["a.gender"] != nil)
-        #expect(m["a.age"] != nil)
-        #expect(m["a.fName"] as! String == "Alice")
-        #expect(m["a.gender"] as! Int64 == 1)
-        #expect(m["a.age"] as! Int64 == 35)
+        XCTAssertEqual(m.count, 3)
+        XCTAssertNotNil(m["a.fName"])
+        XCTAssertNotNil(m["a.gender"])
+        XCTAssertNotNil(m["a.age"])
+        XCTAssertEqual(m["a.fName"] as! String, "Alice")
+        XCTAssertEqual(m["a.gender"] as! Int64, 1)
+        XCTAssertEqual(m["a.age"] as! Int64, 35)
     }
 
-    @Test
     func testGetValue() throws {
         let query = "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
         let result = try conn.query(query)
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
         let value1 = try tuple.getValue(0)
-        #expect(value1 as! String == "Alice")
+        XCTAssertEqual(value1 as! String, "Alice")
         let value2 = try tuple.getValue(1)
-        #expect(value2 as! Int64 == 1)
+        XCTAssertEqual(value2 as! Int64, 1)
         let value3 = try tuple.getValue(2)
-        #expect(value3 as! Int64 == 35)
+        XCTAssertEqual(value3 as! Int64, 35)
     }
 }
