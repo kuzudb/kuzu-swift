@@ -20,7 +20,14 @@ COLLECT_KUZU_SRC_SCRIPT_DIR = os.path.abspath(
     os.path.join(ROOT_DIR, "Scripts", "collect-kuzu-src")
 )
 COLLECT_KUZU_SRC_SCRIPT_NAME = "collect-kuzu-src.py"
-KUZU_BRANCH = os.getenv("KUZU_BRANCH", "master")
+KUZU_BRANCH = os.getenv("KUZU_BRANCH", "")
+KUZU_BRANCH = KUZU_BRANCH.strip()
+if not KUZU_BRANCH:
+    logger.info("KUZU_BRANCH is not set or invalid, using default branch")
+    KUZU_BRANCH = "master"
+else:
+    logger.info(f"KUZU_BRANCH is set to {KUZU_BRANCH}")
+
 PYTHON_EXECUTABLE = sys.executable
 
 if os.path.exists(KUZU_ROOT_DIR):
