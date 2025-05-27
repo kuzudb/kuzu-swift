@@ -53,11 +53,27 @@ final class ParameterTests: XCTestCase {
             XCTAssertEqual(p, v)
         case (let p as UInt64, let v as UInt64):
             XCTAssertEqual(p, v)
+        case (let p as KuzuUInt64Wrapper, let v as UInt64):
+            XCTAssertEqual(p.value, v)
         case (let p as KuzuUInt32Wrapper, let v as UInt32):
             XCTAssertEqual(p.value, v)
         case (let p as KuzuUInt16Wrapper, let v as UInt16):
             XCTAssertEqual(p.value, v)
         case (let p as KuzuUInt8Wrapper, let v as UInt8):
+            XCTAssertEqual(p.value, v)
+        case (let p as KuzuInt64Wrapper, let v as Int64):
+            XCTAssertEqual(p.value, v)
+        case (let p as KuzuInt32Wrapper, let v as Int32):
+            XCTAssertEqual(p.value, v)
+        case (let p as KuzuInt16Wrapper, let v as Int16):
+            XCTAssertEqual(p.value, v)
+        case (let p as KuzuInt8Wrapper, let v as Int8):
+            XCTAssertEqual(p.value, v)
+        case (let p as KuzuFloatWrapper, let v as Float):
+            XCTAssertEqual(p.value, v)
+        case (let p as KuzuDoubleWrapper, let v as Double):
+            XCTAssertEqual(p.value, v)
+        case (let p as KuzuBoolWrapper, let v as Bool):
             XCTAssertEqual(p.value, v)
         case (let p as TimeInterval, let v as TimeInterval):
             XCTAssertEqual(p, v)
@@ -119,6 +135,7 @@ final class ParameterTests: XCTestCase {
         try basicParamTestHelper("Hello World")
     }
 
+#if !os(Linux)
     func testBoolParam() throws {
         try basicParamTestHelper(true)
         try basicParamTestHelper(false)
@@ -144,6 +161,15 @@ final class ParameterTests: XCTestCase {
         try basicParamTestHelper(UInt64.max)
     }
 
+    func testDoubleParam() throws {
+        try floatParamTestHelper(Double(3.14159235))
+    }
+
+    func testFloatParam() throws {
+        try floatParamTestHelper(Float(2.71828))
+    }
+#endif
+
     func testUint32Param() throws {
         try basicParamTestHelper(KuzuUInt32Wrapper(value: 600))
     }
@@ -156,12 +182,36 @@ final class ParameterTests: XCTestCase {
         try basicParamTestHelper(KuzuUInt8Wrapper(value: 8))
     }
 
-    func testDoubleParam() throws {
-        try floatParamTestHelper(Double(3.14159235))
+    func testBoolWrapperParam() throws {
+        try basicParamTestHelper(KuzuBoolWrapper(value: true))
     }
 
-    func testFloatParam() throws {
-        try floatParamTestHelper(Float(2.71828))
+    func testInt64WrapperParam() throws {
+        try basicParamTestHelper(KuzuInt64Wrapper(value: 900))
+    }
+
+    func testInt32WrapperParam() throws {
+        try basicParamTestHelper(KuzuInt32Wrapper(value: 1000))
+    }
+
+    func testInt16WrapperParam() throws {
+        try basicParamTestHelper(KuzuInt16Wrapper(value: 1100))
+    }
+
+    func testInt8WrapperParam() throws {
+        try basicParamTestHelper(KuzuInt8Wrapper(value: 12))
+    }
+
+    func testUInt64WrapperParam() throws {
+        try basicParamTestHelper(KuzuUInt64Wrapper(value: UInt64.max - 3))
+    }
+
+    func testDoubleWrapperParam() throws {
+        try basicParamTestHelper(KuzuDoubleWrapper(value: 14.12435))
+    }
+
+    func testFloatWrapperParam() throws {
+        try basicParamTestHelper(KuzuFloatWrapper(value: 13.0))
     }
 
     func testTimeParam() throws {

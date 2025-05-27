@@ -636,6 +636,8 @@ internal func swiftValueToKuzuValue(_ value: Any?)
         #endif
     } else {
         switch value! {
+        case let kuzuUint64 as KuzuUInt64Wrapper:
+            valuePtr = kuzu_value_create_uint64(UInt64(kuzuUint64.value))
         case let kuzuUint32 as KuzuUInt32Wrapper:
             valuePtr = kuzu_value_create_uint32(UInt32(kuzuUint32.value))
         case let kuzuUint16 as KuzuUInt16Wrapper:
