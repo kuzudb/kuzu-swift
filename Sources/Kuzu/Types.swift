@@ -23,6 +23,21 @@ enum KuzuError: Error {
     case getNextQueryResultFailed(String)
     /// Failed to get a value with the given error message.
     case getValueFailed(String)
+    /// The error message.
+    /// - Returns: The error message.
+    var message: String {
+        switch self {
+        case .databaseInitializationFailed(let msg),
+             .connectionInitializationFailed(let msg),
+             .queryExecutionFailed(let msg),
+             .prepareStatmentFailed(let msg),
+             .valueConversionFailed(let msg),
+             .getFlatTupleFailed(let msg),
+             .getNextQueryResultFailed(let msg),
+             .getValueFailed(let msg):
+            return msg
+        }
+    }
 }
 
 /// Represents the internal ID of a node or relationship in Kuzu.
@@ -74,4 +89,25 @@ struct KuzuRecursiveRelationship {
     let nodes: [KuzuNode]
     /// The list of relationships in the recursive relationship.
     let relationships: [KuzuRelationship]
+}
+
+/// A wrapper for UInt32 values to be passed as parameters to Kuzu.
+/// The native Swift type UInt32 cannot be distinguished from Int64 because
+/// the underlying NSNumber type is the same for both types (type 'q').
+struct KuzuUInt32Wrapper: Codable {
+    let value: UInt32
+}
+
+/// A wrapper for UInt16 values to be passed as parameters to Kuzu.
+/// The native Swift type UInt16 cannot be distinguished from Int32 because
+/// the underlying NSNumber type is the same for both types (type 'i').
+struct KuzuUInt16Wrapper: Codable {
+    let value: UInt16
+}
+
+/// A wrapper for UInt8 values to be passed as parameters to Kuzu.
+/// The native Swift type UInt8 cannot be distinguished from Int16 because
+/// the underlying NSNumber type is the same for both types (type 's').
+struct KuzuUInt8Wrapper: Codable {
+    let value: UInt8
 }
