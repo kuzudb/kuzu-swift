@@ -5,20 +5,17 @@
 //  Copyright © 2023 - 2025 Kùzu Inc.
 //  This code is licensed under MIT license (see LICENSE for details)
 import Foundation
-import Testing
+import XCTest
 
 @testable import Kuzu
 
-@Suite(.serialized)
-struct DatabaseTests {
-    @Test
+final class DatabaseTests: XCTestCase {
     func testOpenDatabaseWithDefaultConfig() throws {
         let dbPath = NSTemporaryDirectory() + "kuzu_swift_test_db_" + UUID().uuidString
         _ = try Database(dbPath)
         try? FileManager.default.removeItem(atPath: dbPath)
     }
 
-    @Test
     func testOpenDatabaseWithCustomConfig() throws {
         let dbPath = NSTemporaryDirectory() + "kuzu_swift_test_db_" + UUID().uuidString
         let systemConfig = SystemConfig(
@@ -28,7 +25,6 @@ struct DatabaseTests {
         try? FileManager.default.removeItem(atPath: dbPath)
     }
 
-    @Test
     func testOpenDatabaseInMemory() throws {
         let db = try Database()
         
@@ -39,21 +35,21 @@ struct DatabaseTests {
         _ = try conn.query("CREATE (:person {name: 'Bob', age: 40});")
         
         let result = try conn.query("MATCH (a:person) RETURN a.name, a.age;")
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         
         let tuple = try result.getNext()!
         let values = try tuple.getAsArray()
-        #expect(values.count == 2)
-        #expect(values[0] as! String == "Alice")
-        #expect(values[1] as! Int64 == 30)
+        XCTAssertEqual(values.count, 2)
+        XCTAssertEqual(values[0] as! String, "Alice")
+        XCTAssertEqual(values[1] as! Int64, 30)
         
-        #expect(result.hasNext())
+        XCTAssertTrue(result.hasNext())
         let tuple2 = try result.getNext()!
         let values2 = try tuple2.getAsArray()
-        #expect(values2.count == 2)
-        #expect(values2[0] as! String == "Bob")
-        #expect(values2[1] as! Int64 == 40)
+        XCTAssertEqual(values2.count, 2)
+        XCTAssertEqual(values2[0] as! String, "Bob")
+        XCTAssertEqual(values2[1] as! Int64, 40)
         
-        #expect(!result.hasNext())
+        XCTAssertFalse(result.hasNext())
     }
 }
