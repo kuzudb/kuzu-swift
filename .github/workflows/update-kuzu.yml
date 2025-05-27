@@ -34,3 +34,8 @@ jobs:
           labels: autoupdate
           draft: false
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Enable Auto-Merge
+        uses: peter-evans/enable-pull-request-automerge@v2
+        with:
+          pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
+          merge-method: squash
