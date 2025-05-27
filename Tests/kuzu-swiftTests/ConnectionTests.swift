@@ -122,7 +122,11 @@ final class ConnectionTests: XCTestCase {
     func testExecute() throws {
         let conn = try Connection(db)
         let stmt = try conn.prepare("RETURN $a;")
+        #if os(Linux)
+        let result = try conn.execute(stmt, ["a": KuzuInt64Wrapper(value: 1)])
+        #else
         let result = try conn.execute(stmt, ["a": Int64(1)])
+        #endif
         
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
@@ -135,7 +139,11 @@ final class ConnectionTests: XCTestCase {
         let stmt = try conn.prepare("RETURN $a;")
         
         do {
+            #if os(Linux)
+            _ = try conn.execute(stmt, ["b": KuzuInt64Wrapper(value: 1)])
+            #else
             _ = try conn.execute(stmt, ["b": Int64(1)])
+            #endif
             XCTFail("Expected error")
         } catch let error as KuzuError {
             XCTAssertTrue(error.message.contains("Parameter b not found"))
