@@ -1,5 +1,7 @@
 name: Update Kuzu
 on:
+  schedule:
+    - cron: "0 8 * * *"
   workflow_dispatch:
     inputs:
       branch:
@@ -33,9 +35,6 @@ jobs:
           base: main
           labels: autoupdate
           draft: false
+          commit-message: "Update Kuzu from branch ${{env.KUZU_BRANCH}}"
+          branch-suffix: timestamp
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Enable Auto-Merge
-        uses: peter-evans/enable-pull-request-automerge@v2
-        with:
-          pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
-          merge-method: squash
