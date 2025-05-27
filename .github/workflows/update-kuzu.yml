@@ -12,7 +12,7 @@ permissions:
 jobs:
   create-new-version:
     name: Create New Version Branch
-    runs-on: ubuntu-24.04
+    runs-on: macos-14
     env:
       KUZU_BRANCH: ${{ github.event.inputs.branch }}
     steps:
