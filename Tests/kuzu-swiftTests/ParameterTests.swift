@@ -455,7 +455,11 @@ final class ParameterTests: XCTestCase {
     }
 
     func testArrayWithMixedTypesParam() throws {
-        let arrayParam: [Any] = ["One", "Two", "Three", 4]
+        #if os(Linux)
+            let arrayParam: [Any] = ["One", "Two", "Three", KuzuInt64Wrapper(value: 4)]
+        #else
+            let arrayParam: [Any] = ["One", "Two", "Three", 4]
+        #endif
         let preparedStatement = try conn.prepare("RETURN $1")
         do {
             _ = try conn.execute(preparedStatement, ["1": arrayParam])
