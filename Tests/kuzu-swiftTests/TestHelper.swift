@@ -8,7 +8,7 @@
 import Foundation
 import Kuzu
 
-internal func getTestDatabase() throws -> (Database, Connection, String){
+internal func getTestDatabase() throws -> (Database, Connection, String) {
     let systemConfig = SystemConfig(
         bufferPoolSize: 256 * 1024 * 1024,
         maxNumThreads: 4,
@@ -18,7 +18,8 @@ internal func getTestDatabase() throws -> (Database, Connection, String){
         autoCheckpoint: true,
         checkpointThreshold: UInt64.max
     )
-    let dbPath = NSTemporaryDirectory() + "kuzu_swift_test_db_" + UUID().uuidString
+    let dbPath =
+        NSTemporaryDirectory() + "kuzu_swift_test_db_" + UUID().uuidString
     let db = try! Database(dbPath, systemConfig)
     let conn = try! Connection(db)
     try initTinySNB(conn: conn)
@@ -27,27 +28,48 @@ internal func getTestDatabase() throws -> (Database, Connection, String){
 
 private func initTinySNB(conn: Connection) throws {
     // Get absolute path to dataset/tinysnb
-    let datasetDir = Bundle.module.url(forResource: "Dataset", withExtension: nil)!
-    
-    let tinySnbPath = datasetDir
+    let datasetDir = Bundle.module.url(
+        forResource: "Dataset",
+        withExtension: nil
+    )!
+
+    let tinySnbPath =
+        datasetDir
         .appendingPathComponent("tinysnb")
         .standardized.path
 
     let schemaPath = "\(tinySnbPath)/schema.cypher"
-    try executeCypherFromFile(filePath: schemaPath, conn: conn, originalString: nil, replaceString: nil)
+    try executeCypherFromFile(
+        filePath: schemaPath,
+        conn: conn,
+        originalString: nil,
+        replaceString: nil
+    )
 
     let copyPath = "\(tinySnbPath)/copy.cypher"
     let originalPath = "dataset/tinysnb"
-    try executeCypherFromFile(filePath: copyPath, conn: conn, originalString: originalPath, replaceString: tinySnbPath)
+    try executeCypherFromFile(
+        filePath: copyPath,
+        conn: conn,
+        originalString: originalPath,
+        replaceString: tinySnbPath
+    )
 
-    _ = try conn.query("create node table moviesSerial (ID SERIAL, name STRING, length INT32, note STRING, PRIMARY KEY (ID));")
+    _ = try conn.query(
+        "create node table moviesSerial (ID SERIAL, name STRING, length INT32, note STRING, PRIMARY KEY (ID));"
+    )
 
     let moviesSerialPath = "\(tinySnbPath)/vMoviesSerial.csv"
     let moviesSerialCopyQuery = "copy moviesSerial from \"\(moviesSerialPath)\""
     _ = try conn.query(moviesSerialCopyQuery)
 }
 
-private func executeCypherFromFile(filePath: String, conn: Connection, originalString: String?, replaceString: String?) throws {
+private func executeCypherFromFile(
+    filePath: String,
+    conn: Connection,
+    originalString: String?,
+    replaceString: String?
+) throws {
     let content = try String(contentsOfFile: filePath, encoding: .utf8)
     let lines = content.components(separatedBy: .newlines)
 
@@ -63,6 +85,6 @@ private func executeCypherFromFile(filePath: String, conn: Connection, originalS
     }
 }
 
-internal func deleteTestDatabaseDirectory(_ dbPath: String){
+internal func deleteTestDatabaseDirectory(_ dbPath: String) {
     try? FileManager.default.removeItem(atPath: dbPath)
 }

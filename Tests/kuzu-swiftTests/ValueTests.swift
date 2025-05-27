@@ -179,13 +179,18 @@ final class ValueTests: XCTestCase {
         XCTAssertEqual(value[2], 0xCD)
         XCTAssertEqual(value[3], 0x1A)
     }
-    
+
     func testUUID() throws {
-        let result = try! conn.query("RETURN UUID('{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}')")
+        let result = try! conn.query(
+            "RETURN UUID('{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}')"
+        )
         XCTAssertTrue(result.hasNext())
         let tuple = try! result.getNext()!
         let value = try tuple.getValue(0) as! UUID
-        XCTAssertEqual(value, UUID(uuidString: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")!)
+        XCTAssertEqual(
+            value,
+            UUID(uuidString: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")!
+        )
     }
 
     func testDate() throws {
@@ -362,7 +367,10 @@ final class ValueTests: XCTestCase {
         XCTAssertEqual(value.properties["age"] as! Int64, 35)
         XCTAssertTrue(value.properties["isStudent"] as! Bool)
         XCTAssertFalse(value.properties["isWorker"] as! Bool)
-        XCTAssertLessThan(abs((value.properties["eyeSight"] as! Double) - 5.0), 0.000001)
+        XCTAssertLessThan(
+            abs((value.properties["eyeSight"] as! Double) - 5.0),
+            0.000001
+        )
     }
 
     func testRelationship() throws {

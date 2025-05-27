@@ -586,6 +586,11 @@ internal func swiftValueToKuzuValue(_ value: Any?)
     var valuePtr: UnsafeMutablePointer<kuzu_value>
     let dtype = Mirror(reflecting: value!).subjectType
     if let number = value as? NSNumber {
+        #if os(Linux)
+            throw KuzuError.valueConversionFailed(
+                "Native Swift numeric types cannot be resolved correctly on Linux. Please use the wrapper structs instead."
+            )
+        #else
         // Handle numeric types based on the real type of the number, instead
         // of runtime casting (e.g. let number as Int), because a number can be
         // casted to multiple types, which can cause inconsistencies.
@@ -628,14 +633,31 @@ internal func swiftValueToKuzuValue(_ value: Any?)
                 "Unsupported numeric type with encoding: \(objCType)"
             )
         }
+        #endif
     } else {
         switch value! {
+        case let kuzuUint64 as KuzuUInt64Wrapper:
+            valuePtr = kuzu_value_create_uint64(UInt64(kuzuUint64.value))
         case let kuzuUint32 as KuzuUInt32Wrapper:
             valuePtr = kuzu_value_create_uint32(UInt32(kuzuUint32.value))
         case let kuzuUint16 as KuzuUInt16Wrapper:
             valuePtr = kuzu_value_create_uint16(UInt16(kuzuUint16.value))
         case let kuzuUint8 as KuzuUInt8Wrapper:
             valuePtr = kuzu_value_create_uint8(UInt8(kuzuUint8.value))
+        case let kuzuInt64 as KuzuInt64Wrapper:
+            valuePtr = kuzu_value_create_int64(Int64(kuzuInt64.value))
+        case let kuzuInt32 as KuzuInt32Wrapper:
+            valuePtr = kuzu_value_create_int32(Int32(kuzuInt32.value))
+        case let kuzuInt16 as KuzuInt16Wrapper:
+            valuePtr = kuzu_value_create_int16(Int16(kuzuInt16.value))
+        case let kuzuInt8 as KuzuInt8Wrapper:
+            valuePtr = kuzu_value_create_int8(Int8(kuzuInt8.value))
+        case let kuzuFloat as KuzuFloatWrapper:
+            valuePtr = kuzu_value_create_float(Float(kuzuFloat.value))
+        case let kuzuDouble as KuzuDoubleWrapper:
+            valuePtr = kuzu_value_create_double(Double(kuzuDouble.value))
+        case let kuzuBool as KuzuBoolWrapper:
+            valuePtr = kuzu_value_create_bool(kuzuBool.value)
         case let string as String:
             valuePtr = kuzu_value_create_string(string)
         case let date as Date:
