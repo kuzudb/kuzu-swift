@@ -606,14 +606,17 @@ internal func swiftValueToKuzuValue(_ value: Any?)
             valuePtr = kuzu_value_create_int32(number as! Int32)
         case "q":
             valuePtr = kuzu_value_create_int64(number as! Int64)
-        case "C":
-            valuePtr = kuzu_value_create_uint8(number as! UInt8)
-        case "I":
-            valuePtr = kuzu_value_create_uint32(number as! UInt32)
-        case "S":
-            valuePtr = kuzu_value_create_uint16(number as! UInt16)
-        case "L":
-            valuePtr = kuzu_value_create_uint32(number as! UInt32)
+        //        Internally Swift does not seem to really use these UInt
+        //        type representations, so we use the `KuzuUIntWrapper`
+        //        structs as a workaround.
+        //        case "C":
+        //            valuePtr = kuzu_value_create_uint8(number as! UInt8)
+        //        case "I":
+        //            valuePtr = kuzu_value_create_uint32(number as! UInt32)
+        //        case "S":
+        //            valuePtr = kuzu_value_create_uint16(number as! UInt16)
+        //        case "L":
+        //            valuePtr = kuzu_value_create_uint32(number as! UInt32)
         case "Q":
             valuePtr = kuzu_value_create_uint64(number as! UInt64)
         case "f":
@@ -627,6 +630,12 @@ internal func swiftValueToKuzuValue(_ value: Any?)
         }
     } else {
         switch value! {
+        case let kuzuUint32 as KuzuUInt32Wrapper:
+            valuePtr = kuzu_value_create_uint32(UInt32(kuzuUint32.value))
+        case let kuzuUint16 as KuzuUInt16Wrapper:
+            valuePtr = kuzu_value_create_uint16(UInt16(kuzuUint16.value))
+        case let kuzuUint8 as KuzuUInt8Wrapper:
+            valuePtr = kuzu_value_create_uint8(UInt8(kuzuUint8.value))
         case let string as String:
             valuePtr = kuzu_value_create_string(string)
         case let date as Date:
