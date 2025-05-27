@@ -25,18 +25,7 @@ jobs:
       - name: Update Kuzu
         working-directory: Scripts/update-kuzu
         run: python3 update-kuzu.py
-      - name: Commit changes
-        run: |
-          echo "CHANGES=true" >> $GITHUB_ENV
-          git checkout -b "update-kuzu-${KUZU_BRANCH}"
-          git add -A
-          git commit -m "Update Kuzu from branch ${KUZU_BRANCH}" || echo "CHANGES=false" >> $GITHUB_ENV
-      - name: Push changes
-        if: env.CHANGES == 'true'
-        run: |
-          git push origin "update-kuzu-${KUZU_BRANCH}" || echo "No changes to push"
       - name: Create Pull Request
-        if: env.CHANGES == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           title: "Update Kuzu from branch ${KUZU_BRANCH}"
