@@ -19,10 +19,6 @@ jobs:
           curl -L https://swiftlygo.xyz/install.sh | sudo bash
           sudo swiftlygo install -y 5.10.1
       - uses: actions/checkout@v4
-      - name: Consolidate test dataset
-        run: |
-          rm -rf Tests/Dataset
-          cp -r Dataset Tests/Dataset
       - name: Build
         run: swift build
       - name: Run tests

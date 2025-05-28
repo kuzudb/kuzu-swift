@@ -53,9 +53,9 @@ final class FlatTupleTests: XCTestCase {
         let tuple = try result.getNext()!
         let m = try tuple.getAsDictionary()
         XCTAssertEqual(m.count, 3)
-        XCTAssertNotNil(m["a.fName"])
-        XCTAssertNotNil(m["a.gender"])
-        XCTAssertNotNil(m["a.age"])
+        XCTAssertNotNil(m["a.fName"] as Any?)
+        XCTAssertNotNil(m["a.gender"] as Any?)
+        XCTAssertNotNil(m["a.age"] as Any?)
         XCTAssertEqual(m["a.fName"] as! String, "Alice")
         XCTAssertEqual(m["a.gender"] as! Int64, 1)
         XCTAssertEqual(m["a.age"] as! Int64, 35)
