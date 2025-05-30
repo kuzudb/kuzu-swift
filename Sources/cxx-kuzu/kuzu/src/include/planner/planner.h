@@ -184,12 +184,18 @@ public:
         const binder::SubqueryGraph& otherSubgraph,
         const std::vector<std::shared_ptr<binder::NodeExpression>>& joinNodes, bool flipPlan);
 
+    // Plan semi mask
+    void appendNodeSemiMask(SemiMaskTargetType targetType, const binder::NodeExpression& node,
+        LogicalPlan& plan);
     LogicalPlan getNodeSemiMaskPlan(SemiMaskTargetType targetType,
         const binder::NodeExpression& node, std::shared_ptr<binder::Expression> nodePredicate);
 
     // This is mostly used when we try to reinterpret function output as node and read its
     // properties, e.g. query_vector_index, gds algorithms ...
     LogicalPlan getNodePropertyScanPlan(const binder::NodeExpression& node);
+
+    // Append dummy sink
+    void appendDummySink(LogicalPlan& plan);
 
     // Append empty result
     void appendEmptyResult(LogicalPlan& plan);
@@ -261,7 +267,7 @@ public:
         LogicalPlan& buildPlan, LogicalPlan& resultPlan);
     void appendIntersect(const std::shared_ptr<binder::Expression>& intersectNodeID,
         binder::expression_vector& boundNodeIDs, LogicalPlan& probePlan,
-        std::vector<std::unique_ptr<LogicalPlan>>& buildPlans);
+        std::vector<LogicalPlan>& buildPlans);
 
     void appendCrossProduct(const LogicalPlan& probePlan, const LogicalPlan& buildPlan,
         LogicalPlan& resultPlan);
