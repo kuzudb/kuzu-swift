@@ -546,6 +546,7 @@ let package = Package(
                 "kuzu/src/planner/operator/scan/logical_scan_node_table.cpp",
                 "kuzu/src/planner/operator/schema.cpp",
                 "kuzu/src/planner/operator/simple/logical_simple.cpp",
+                "kuzu/src/planner/operator/sip/logical_semi_masker.cpp",
                 "kuzu/src/planner/plan/append_accumulate.cpp",
                 "kuzu/src/planner/plan/append_aggregate.cpp",
                 "kuzu/src/planner/plan/append_cross_product.cpp",
