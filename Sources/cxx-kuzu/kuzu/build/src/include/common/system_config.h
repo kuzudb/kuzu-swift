@@ -34,7 +34,7 @@ static constexpr uint64_t KUZU_PAGE_SIZE = static_cast<uint64_t>(1) << PAGE_SIZE
 static constexpr uint64_t TEMP_PAGE_SIZE_LOG2 = 18;
 static const uint64_t TEMP_PAGE_SIZE = static_cast<uint64_t>(1) << TEMP_PAGE_SIZE_LOG2;
 
-#define DEFAULT_REL_STORAGE_DIRECTION BOTH
+#define DEFAULT_REL_STORAGE_DIRECTION BOTH_REL_STORAGE
 #if DEFAULT_REL_STORAGE_DIRECTION == FWD_REL_STORAGE
 static constexpr ExtendDirection DEFAULT_EXTEND_DIRECTION = ExtendDirection::FWD;
 #elif DEFAULT_REL_STORAGE_DIRECTION == BWD_REL_STORAGE
