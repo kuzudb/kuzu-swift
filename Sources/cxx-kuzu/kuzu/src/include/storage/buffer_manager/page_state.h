@@ -10,7 +10,7 @@
 #define BM_MALLOC true
 #endif
 #ifdef __SWIFT__
-#define BM_MALLOC true
+#define BM_MALLOC false
 #endif
 #if BM_MALLOC
 #include <memory>
