@@ -1114,6 +1114,7 @@ let package = Package(
                 .define("KUZU_ROOT_DIRECTORY", to: "\"kuzu\""),
                 .define("ZSTDERRORLIB_VISIBILITY", to: ""),
                 .define("ZSTDLIB_VISIBILITY", to: ""),
+                .define("__SWIFT__"),
                 .define("zstd")
             ]
         ),
