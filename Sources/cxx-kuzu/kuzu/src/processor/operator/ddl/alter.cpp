@@ -5,6 +5,7 @@
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/enums/alter_type.h"
 #include "common/exception/binder.h"
+#include "common/exception/runtime.h"
 #include "processor/execution_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/table.h"
@@ -205,6 +206,15 @@ void Alter::alterTable(main::ClientContext* clientContext, TableCatalogEntry* en
             KU_UNREACHABLE;
         }
         }
+    } break;
+    case AlterType::ADD_FROM_TO_CONNECTION: {
+        auto relGroupEntry = catalog->getTableCatalogEntry(transaction, alterInfo.tableName)
+                                 ->ptrCast<RelGroupCatalogEntry>();
+        auto addFromToConnectionInfo =
+            alterInfo.extraInfo->constPtrCast<BoundExtraAddFromToConnection>();
+        storageManager->addRelTable(relGroupEntry,
+            *relGroupEntry->getRelEntryInfo(addFromToConnectionInfo->srcTableID,
+                addFromToConnectionInfo->dstTableID));
     } break;
     default:
         break;
