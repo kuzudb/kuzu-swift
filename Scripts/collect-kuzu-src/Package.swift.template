@@ -27,7 +27,11 @@ let package = Package(
             sources: [
 $SOURCES
             ],
+            cSettings: [
+                .unsafeFlags(["-O3"])
+            ],
             cxxSettings: [
+                .unsafeFlags(["-O3"]),
 $CXX_SETTINGS
             ]
         ),
