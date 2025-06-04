@@ -4,7 +4,7 @@
 
 #include "catalog/catalog.h"
 #include "shadow_file.h"
-#include "storage/index/hash_index.h"
+#include "storage/index/index.h"
 #include "storage/wal/wal.h"
 
 namespace kuzu {
@@ -16,6 +16,7 @@ namespace catalog {
 class CatalogEntry;
 class NodeTableCatalogEntry;
 class RelGroupCatalogEntry;
+struct RelTableCatalogInfo;
 } // namespace catalog
 
 namespace storage {
@@ -35,6 +36,8 @@ public:
     static void recover(main::ClientContext& clientContext);
 
     void createTable(catalog::TableCatalogEntry* entry);
+    void addRelTable(catalog::RelGroupCatalogEntry* entry,
+        const catalog::RelTableCatalogInfo& info);
 
     bool checkpoint(const catalog::Catalog& catalog);
     void finalizeCheckpoint();
@@ -48,13 +51,23 @@ public:
     bool compressionEnabled() const { return enableCompression; }
     bool isInMemory() const { return inMemory; }
 
+    void registerIndexType(IndexType indexType) {
+        registeredIndexTypes.push_back(std::move(indexType));
+    }
+    std::optional<std::reference_wrapper<const IndexType>> getIndexType(
+        const std::string& typeName) const;
+
     void serialize(const catalog::Catalog& catalog, common::Serializer& ser);
-    void deserialize(const catalog::Catalog& catalog, common::Deserializer& deSer);
+    // We need to pass in the catalog and storageManager explicitly as they can be from
+    // attachedDatabase.
+    void deserialize(main::ClientContext* context, const catalog::Catalog* catalog,
+        common::Deserializer& deSer);
 
 private:
     void initDataFileHandle(common::VirtualFileSystem* vfs, main::ClientContext* context);
 
     void createNodeTable(catalog::NodeTableCatalogEntry* entry);
+
     void createRelTableGroup(catalog::RelGroupCatalogEntry* entry);
 
     void reclaimDroppedTables(const catalog::Catalog& catalog);
@@ -70,6 +83,7 @@ private:
     std::unique_ptr<ShadowFile> shadowFile;
     bool enableCompression;
     bool inMemory;
+    std::vector<IndexType> registeredIndexTypes;
 };
 
 } // namespace storage
