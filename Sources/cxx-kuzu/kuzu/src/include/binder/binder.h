@@ -111,6 +111,8 @@ public:
     std::unique_ptr<BoundStatement> bindDropProperty(const parser::Statement& statement) const;
     std::unique_ptr<BoundStatement> bindRenameProperty(const parser::Statement& statement) const;
     std::unique_ptr<BoundStatement> bindCommentOn(const parser::Statement& statement) const;
+    std::unique_ptr<BoundStatement> bindAddFromToConnection(
+        const parser::Statement& statement) const;
 
     std::vector<PropertyDefinition> bindPropertyDefinitions(
         const std::vector<parser::ParsedPropertyDefinition>& parsedDefinitions,
@@ -273,14 +275,12 @@ public:
     expression_vector bindRecursivePatternRelProjectionList(
         const parser::RecursiveRelPatternInfo& info, const NodeOrRelExpression& expr);
     std::pair<uint64_t, uint64_t> bindVariableLengthRelBound(const parser::RelPattern& relPattern);
-    static void bindQueryRelProperties(RelExpression& rel);
 
     std::shared_ptr<NodeExpression> bindQueryNode(const parser::NodePattern& nodePattern,
         QueryGraph& queryGraph);
     std::shared_ptr<NodeExpression> createQueryNode(const parser::NodePattern& nodePattern);
     KUZU_API std::shared_ptr<NodeExpression> createQueryNode(const std::string& parsedName,
         const std::vector<catalog::TableCatalogEntry*>& entries);
-    static void bindQueryNodeProperties(NodeExpression& node);
 
     /*** bind table entries ***/
     std::vector<catalog::TableCatalogEntry*> bindNodeTableEntries(
