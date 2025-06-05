@@ -71,19 +71,18 @@ struct NodeTableDeleteState final : TableDeleteState {
         : nodeIDVector{nodeIDVector}, pkVector{pkVector} {}
 };
 
-struct PKColumnScanHelper {
-    explicit PKColumnScanHelper(NodeTable* table, PrimaryKeyIndex* pkIndex)
-        : table{table}, pkIndex(pkIndex) {}
-    virtual ~PKColumnScanHelper() = default;
+struct IndexScanHelper {
+    explicit IndexScanHelper(NodeTable* table, Index* index) : table{table}, index(index) {}
+    virtual ~IndexScanHelper() = default;
 
-    virtual std::unique_ptr<NodeTableScanState> initPKScanState(
-        const transaction::Transaction* transaction, common::DataChunk& dataChunk,
-        common::column_id_t pkColumnID);
-    virtual bool processScanOutput(const transaction::Transaction* transaction,
-        NodeGroupScanResult scanResult, const common::ValueVector& scannedVector) = 0;
+    virtual std::unique_ptr<NodeTableScanState> initScanState(
+        const transaction::Transaction* transaction, common::DataChunk& dataChunk);
+    virtual bool processScanOutput(transaction::Transaction* transaction, MemoryManager* mm,
+        NodeGroupScanResult scanResult,
+        const std::vector<common::ValueVector*>& scannedVectors) = 0;
 
     NodeTable* table;
-    PrimaryKeyIndex* pkIndex;
+    Index* index;
 };
 
 class NodeTableVersionRecordHandler final : public VersionRecordHandler {
@@ -93,7 +92,7 @@ public:
     void applyFuncToChunkedGroups(version_record_handler_op_t func,
         common::node_group_idx_t nodeGroupIdx, common::row_idx_t startRow,
         common::row_idx_t numRows, common::transaction_t commitTS) const override;
-    void rollbackInsert(const transaction::Transaction* transaction,
+    void rollbackInsert(transaction::Transaction* transaction,
         common::node_group_idx_t nodeGroupIdx, common::row_idx_t startRow,
         common::row_idx_t numRows) const override;
 
@@ -137,12 +136,39 @@ public:
     template<common::IndexHashable T>
     size_t appendPKWithIndexPos(const transaction::Transaction* transaction,
         const IndexBuffer<T>& buffer, uint64_t bufferOffset, uint64_t indexPos) {
-        return pkIndex->appendWithIndexPos(transaction, buffer, bufferOffset, indexPos,
+        return getPKIndex()->appendWithIndexPos(transaction, buffer, bufferOffset, indexPos,
             [&](common::offset_t offset) { return isVisible(transaction, offset); });
     }
 
+    void addIndex(std::unique_ptr<Index> index);
+
     common::column_id_t getPKColumnID() const { return pkColumnID; }
-    PrimaryKeyIndex* getPKIndex() const { return pkIndex.get(); }
+    PrimaryKeyIndex* getPKIndex() const {
+        const auto index = getIndex(PrimaryKeyIndex::DEFAULT_NAME);
+        KU_ASSERT(index.has_value());
+        return &index.value()->cast<PrimaryKeyIndex>();
+    }
+    std::optional<std::reference_wrapper<IndexHolder>> getIndexHolder(const std::string& name) {
+        for (auto& index : indexes) {
+            if (common::StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+                return index;
+            }
+        }
+        return std::nullopt;
+    }
+    std::optional<Index*> getIndex(const std::string& name) const {
+        for (auto& index : indexes) {
+            if (common::StringUtils::caseInsensitiveEquals(index.getName(), name)) {
+                if (index.isLoaded()) {
+                    return index.getIndex();
+                }
+                throw common::RuntimeException(common::stringFormat(
+                    "Index {} is not loaded yet. Please load the index before accessing it.",
+                    name));
+            }
+        }
+        return std::nullopt;
+    }
     common::column_id_t getNumColumns() const { return columns.size(); }
     Column& getColumn(common::column_id_t columnID) {
         KU_ASSERT(columnID < columns.size());
@@ -163,9 +189,8 @@ public:
     void rollbackCheckpoint() override;
     void reclaimStorage(FileHandle& dataFH) override;
 
-    void rollbackPKIndexInsert(const transaction::Transaction* transaction,
-        common::row_idx_t startRow, common::row_idx_t numRows_,
-        common::node_group_idx_t nodeGroupIdx_);
+    void rollbackPKIndexInsert(transaction::Transaction* transaction, common::row_idx_t startRow,
+        common::row_idx_t numRows_, common::node_group_idx_t nodeGroupIdx_);
     void rollbackGroupCollectionInsert(common::row_idx_t numRows_);
 
     common::node_group_idx_t getNumCommittedNodeGroups() const {
@@ -190,7 +215,8 @@ public:
     }
 
     void serialize(common::Serializer& serializer) const override;
-    void deserialize(catalog::TableCatalogEntry* entry, common::Deserializer& deSer) override;
+    void deserialize(main::ClientContext* context, StorageManager* storageManager,
+        common::Deserializer& deSer) override;
 
 private:
     void validatePkNotExists(const transaction::Transaction* transaction,
@@ -198,14 +224,14 @@ private:
 
     visible_func getVisibleFunc(const transaction::Transaction* transaction) const;
     common::DataChunk constructDataChunkForPKColumn() const;
-    void scanPKColumn(const transaction::Transaction* transaction, PKColumnScanHelper& scanHelper,
+    void scanIndexColumns(transaction::Transaction* transaction, IndexScanHelper& scanHelper,
         const NodeGroupCollection& nodeGroups_) const;
 
 private:
     std::vector<std::unique_ptr<Column>> columns;
     std::unique_ptr<NodeGroupCollection> nodeGroups;
     common::column_id_t pkColumnID;
-    std::unique_ptr<PrimaryKeyIndex> pkIndex;
+    std::vector<IndexHolder> indexes;
     NodeTableVersionRecordHandler versionRecordHandler;
 };
 
