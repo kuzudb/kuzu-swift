@@ -44,7 +44,8 @@ public final class SystemConfig : @unchecked Sendable{
         readOnly: Bool = false,
         maxDbSize: UInt64 = 0,
         autoCheckpoint: Bool = true,
-        checkpointThreshold: UInt64 = UInt64.max
+        checkpointThreshold: UInt64 = UInt64.max,
+        threadQos: qos_class_t = QOS_CLASS_DEFAULT
     ) {
         self.init()
         if bufferPoolSize > 0 {
@@ -62,5 +63,6 @@ public final class SystemConfig : @unchecked Sendable{
         if checkpointThreshold > 0 {
             cSystemConfig.checkpoint_threshold = checkpointThreshold
         }
+        cSystemConfig.thread_qos = threadQos.rawValue
     }
 }

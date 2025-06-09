@@ -42,7 +42,7 @@ struct ScheduledTask {
 #ifndef __SINGLE_THREADED__
 class KUZU_API TaskScheduler {
 public:
-    explicit TaskScheduler(uint64_t numWorkerThreads);
+    explicit TaskScheduler(uint64_t numWorkerThreads, uint32_t threadQos);
     ~TaskScheduler();
 
     // Schedules the dependencies of the given task and finally the task one after another (so
@@ -70,6 +70,7 @@ private:
     std::vector<std::thread> workerThreads;
     std::mutex taskSchedulerMtx;
     std::condition_variable cv;
+    uint32_t threadQos;
     uint64_t nextScheduledTaskID;
 };
 #else
