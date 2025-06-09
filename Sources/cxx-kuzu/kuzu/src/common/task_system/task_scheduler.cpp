@@ -1,12 +1,15 @@
 #include "common/task_system/task_scheduler.h"
+#include <pthread.h>
+#include <pthread/qos.h>
+
 using namespace kuzu::common;
 
 namespace kuzu {
 namespace common {
 
 #ifndef __SINGLE_THREADED__
-TaskScheduler::TaskScheduler(uint64_t numWorkerThreads)
-    : stopWorkerThreads{false}, nextScheduledTaskID{0} {
+TaskScheduler::TaskScheduler(uint64_t numWorkerThreads, uint32_t threadQos)
+    : stopWorkerThreads{false}, nextScheduledTaskID{0}, threadQos(threadQos) {
     for (auto n = 0u; n < numWorkerThreads; ++n) {
         workerThreads.emplace_back([&] { runWorkerThread(); });
     }
@@ -79,6 +82,8 @@ void TaskScheduler::scheduleTaskAndWaitOrError(const std::shared_ptr<Task>& task
 }
 
 void TaskScheduler::runWorkerThread() {
+    auto pthreadQosStatus = pthread_set_qos_class_self_np((qos_class_t)threadQos, 0);
+    KU_ASSERT(pthreadQosStatus == 0);
     std::unique_lock<std::mutex> lck{taskSchedulerMtx, std::defer_lock};
     std::exception_ptr exceptionPtr = nullptr;
     std::shared_ptr<ScheduledTask> scheduledTask = nullptr;

@@ -11,8 +11,8 @@ using namespace kuzu::storage;
 namespace kuzu {
 namespace processor {
 
-QueryProcessor::QueryProcessor(uint64_t numThreads) {
-    taskScheduler = std::make_unique<TaskScheduler>(numThreads);
+QueryProcessor::QueryProcessor(uint64_t numThreads, uint32_t threadQos) {
+    taskScheduler = std::make_unique<TaskScheduler>(numThreads, threadQos);
 }
 
 std::shared_ptr<FactorizedTable> QueryProcessor::execute(PhysicalPlan* physicalPlan,

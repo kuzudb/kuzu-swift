@@ -10,7 +10,7 @@ namespace processor {
 class QueryProcessor {
 
 public:
-    explicit QueryProcessor(uint64_t numThreads);
+    explicit QueryProcessor(uint64_t numThreads, uint32_t threadQos);
 
     inline common::TaskScheduler* getTaskScheduler() { return taskScheduler.get(); }
 
