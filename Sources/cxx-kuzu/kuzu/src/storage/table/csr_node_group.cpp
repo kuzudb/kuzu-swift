@@ -2,6 +2,7 @@
 
 #include "common/constants.h"
 #include "storage/buffer_manager/memory_manager.h"
+#include "storage/file_handle.h"
 #include "storage/storage_utils.h"
 #include "storage/table/rel_table.h"
 #include "transaction/transaction.h"
@@ -469,10 +470,10 @@ void CSRNodeGroup::checkpoint(MemoryManager&, NodeGroupCheckpointState& state) {
     checkpointDataTypesNoLock(state);
 }
 
-void CSRNodeGroup::reclaimStorage(FileHandle& dataFH, const common::UniqLock& lock) const {
-    NodeGroup::reclaimStorage(dataFH, lock);
+void CSRNodeGroup::reclaimStorage(PageManager& pageManager, const UniqLock& lock) const {
+    NodeGroup::reclaimStorage(pageManager, lock);
     if (persistentChunkGroup) {
-        persistentChunkGroup->reclaimStorage(dataFH);
+        persistentChunkGroup->reclaimStorage(pageManager);
     }
 }
 
@@ -481,7 +482,7 @@ static std::unique_ptr<ChunkedCSRNodeGroup> createNewPersistentChunkGroup(
     auto newGroup =
         std::make_unique<ChunkedCSRNodeGroup>(oldPersistentChunkGroup, csrState.columnIDs);
     // checkpointed columns have been moved to the new group, reclaim storage for dropped column
-    oldPersistentChunkGroup.reclaimStorage(csrState.dataFH);
+    oldPersistentChunkGroup.reclaimStorage(*csrState.dataFH.getPageManager());
     return newGroup;
 }
 
@@ -533,7 +534,7 @@ void CSRNodeGroup::checkpointInMemAndOnDisk(const UniqLock& lock, NodeGroupCheck
         }
     }
     if (numTuplesAfterCheckpoint == 0) {
-        reclaimStorage(csrState.dataFH, lock);
+        reclaimStorage(*csrState.dataFH.getPageManager(), lock);
         persistentChunkGroup = nullptr;
     } else {
         KU_ASSERT(csrState.newHeader->sanityCheck());
@@ -862,7 +863,8 @@ void CSRNodeGroup::checkpointInMemOnly(const UniqLock& lock, NodeGroupCheckpoint
             }
             scanChunk.state->getSelVectorUnsafe().setSelSize(numRowsToAppend);
             if (numRowsToAppend > 0) {
-                [[maybe_unused]] auto res = lookup(lock, &DUMMY_CHECKPOINT_TRANSACTION, *scanState);
+                [[maybe_unused]] auto res =
+                    lookupMultiple(lock, &DUMMY_CHECKPOINT_TRANSACTION, *scanState);
                 for (auto idx = 0u; idx < numColumnsToCheckpoint; idx++) {
                     dataChunksToFlush[idx]->getData().append(scanChunk.valueVectors[idx].get(),
                         scanChunk.state->getSelVector());

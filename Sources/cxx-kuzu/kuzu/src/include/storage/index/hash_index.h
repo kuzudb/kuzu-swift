@@ -14,6 +14,7 @@
 #include "hash_index_slot.h"
 #include "index.h"
 #include "storage/buffer_manager/memory_manager.h"
+#include "storage/disk_array_collection.h"
 #include "storage/index/hash_index_utils.h"
 #include "storage/index/in_mem_hash_index.h"
 #include "storage/local_storage/local_hash_index.h"
@@ -33,7 +34,7 @@ class BufferManager;
 class OverflowFileHandle;
 template<typename T>
 class DiskArray;
-class DiskArrayCollection;
+class PageManager;
 
 class OnDiskHashIndex {
 public:
@@ -43,6 +44,7 @@ public:
     virtual bool rollbackInMemory() = 0;
     virtual void rollbackCheckpoint() = 0;
     virtual void bulkReserve(uint64_t numValuesToAppend) = 0;
+    virtual void reclaimStorage(PageManager& pageManager) = 0;
 };
 
 // HashIndex is the entrance to handle all updates and lookups into the index after building from
@@ -154,6 +156,7 @@ public:
     bool checkpointInMemory() override;
     bool rollbackInMemory() override;
     void rollbackCheckpoint() override;
+    void reclaimStorage(PageManager& pageManager) override;
     inline FileHandle* getFileHandle() const { return fileHandle; }
 
 private:
@@ -372,8 +375,8 @@ public:
     bool lookup(const transaction::Transaction* trx, common::ValueVector* keyVector,
         uint64_t vectorPos, common::offset_t& result, visible_func isVisible);
 
-    std::unique_ptr<Index::InsertState> initInsertState(const transaction::Transaction*,
-        MemoryManager*, visible_func isVisible) override {
+    std::unique_ptr<Index::InsertState> initInsertState(transaction::Transaction*, MemoryManager*,
+        visible_func isVisible) override {
         return std::make_unique<InsertState>(isVisible);
     }
     void insert(transaction::Transaction*, const common::ValueVector&,
@@ -431,7 +434,7 @@ public:
     void delete_(common::ValueVector* keyVector);
 
     void checkpointInMemory() override;
-    void checkpoint(bool forceCheckpointAll = false) override;
+    void checkpoint(main::ClientContext*, bool forceCheckpointAll = false) override;
     FileHandle* getFileHandle() const { return fileHandle; }
     OverflowFile* getOverflowFile() const { return overflowFile.get(); }
 
@@ -441,6 +444,7 @@ public:
         KU_ASSERT(indexInfo.keyDataTypes.size() == 1);
         return indexInfo.keyDataTypes[0];
     }
+    void reclaimStorage(PageManager& pageManager) const;
 
     void writeHeaders() const;
 
@@ -456,6 +460,10 @@ public:
 private:
     void initOverflowAndSubIndices(bool inMemMode, MemoryManager& mm,
         PrimaryKeyIndexStorageInfo& storageInfo);
+
+    common::page_idx_t getFirstHeaderPage() const;
+
+    common::page_idx_t getDiskArrayFirstHeaderPage() const;
 
 private:
     FileHandle* fileHandle;
