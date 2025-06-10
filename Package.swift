@@ -401,6 +401,7 @@ let package = Package(
                 "kuzu/src/function/table/current_setting.cpp",
                 "kuzu/src/function/table/db_version.cpp",
                 "kuzu/src/function/table/drop_project_graph.cpp",
+                "kuzu/src/function/table/file_info.cpp",
                 "kuzu/src/function/table/free_space_info.cpp",
                 "kuzu/src/function/table/project_graph.cpp",
                 "kuzu/src/function/table/show_attached_databases.cpp",

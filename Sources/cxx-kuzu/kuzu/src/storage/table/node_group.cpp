@@ -273,6 +273,18 @@ NodeGroupScanResult NodeGroup::scanInternal(const UniqLock& lock, Transaction* t
 }
 
 bool NodeGroup::lookup(const UniqLock& lock, const Transaction* transaction,
+    const TableScanState& state, sel_t posInSel) const {
+    auto& nodeGroupScanState = *state.nodeGroupScanState;
+    const auto pos = state.rowIdxVector->state->getSelVector().getSelectedPositions()[posInSel];
+    KU_ASSERT(!state.rowIdxVector->isNull(pos));
+    const auto rowIdx = state.rowIdxVector->getValue<row_idx_t>(pos);
+    const ChunkedNodeGroup* chunkedGroupToScan = findChunkedGroupFromRowIdx(lock, rowIdx);
+    const auto rowIdxInChunkedGroup = rowIdx - chunkedGroupToScan->getStartRowIdx();
+    return chunkedGroupToScan->lookup(transaction, state, nodeGroupScanState, rowIdxInChunkedGroup,
+        posInSel);
+}
+
+bool NodeGroup::lookupMultiple(const UniqLock& lock, const Transaction* transaction,
     const TableScanState& state) const {
     idx_t numTuplesFound = 0;
     for (auto i = 0u; i < state.rowIdxVector->state->getSelVector().getSelSize(); i++) {
@@ -288,9 +300,15 @@ bool NodeGroup::lookup(const UniqLock& lock, const Transaction* transaction,
     return numTuplesFound == state.rowIdxVector->state->getSelVector().getSelSize();
 }
 
-bool NodeGroup::lookup(const Transaction* transaction, const TableScanState& state) const {
+bool NodeGroup::lookup(const Transaction* transaction, const TableScanState& state,
+    sel_t posInSel) const {
     const auto lock = chunkedGroups.lock();
-    return lookup(lock, transaction, state);
+    return lookup(lock, transaction, state, posInSel);
+}
+
+bool NodeGroup::lookupMultiple(const Transaction* transaction, const TableScanState& state) const {
+    const auto lock = chunkedGroups.lock();
+    return lookupMultiple(lock, transaction, state);
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
@@ -371,13 +389,13 @@ void NodeGroup::rollbackInsert(row_idx_t startRow) {
     numRows = startRow;
 }
 
-void NodeGroup::reclaimStorage(FileHandle& dataFH) {
-    reclaimStorage(dataFH, chunkedGroups.lock());
+void NodeGroup::reclaimStorage(PageManager& pageManager) const {
+    reclaimStorage(pageManager, chunkedGroups.lock());
 }
 
-void NodeGroup::reclaimStorage(FileHandle& dataFH, const common::UniqLock& lock) const {
+void NodeGroup::reclaimStorage(PageManager& pageManager, const UniqLock& lock) const {
     for (auto& chunkedGroup : chunkedGroups.getAllGroups(lock)) {
-        chunkedGroup->reclaimStorage(dataFH);
+        chunkedGroup->reclaimStorage(pageManager);
     }
 }
 
@@ -391,7 +409,7 @@ void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointStat
     std::unique_ptr<ChunkedNodeGroup> checkpointedChunkedGroup;
     if (checkpointedVersionInfo->getNumDeletions(&DUMMY_CHECKPOINT_TRANSACTION, 0, numRows) ==
         numRows - firstGroup->getStartRowIdx()) {
-        reclaimStorage(state.dataFH, lock);
+        reclaimStorage(*state.dataFH.getPageManager(), lock);
         // TODO(Royi) figure out how to make this rollback-friendly
         checkpointedChunkedGroup =
             std::make_unique<ChunkedNodeGroup>(memoryManager, dataTypes, enableCompression,
@@ -467,7 +485,7 @@ std::unique_ptr<ChunkedNodeGroup> NodeGroup::checkpointInMemAndOnDisk(MemoryMana
     // The first chunked group is the only persistent one
     // The checkpointed columns have been moved to the checkpointedChunkedGroup, the
     // remaining must have been dropped
-    chunkedGroups.getGroup(lock, 0)->reclaimStorage(state.dataFH);
+    chunkedGroups.getGroup(lock, 0)->reclaimStorage(*state.dataFH.getPageManager());
     return checkpointedChunkedGroup;
 }
 

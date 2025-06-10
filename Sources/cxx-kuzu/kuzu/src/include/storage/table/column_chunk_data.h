@@ -14,9 +14,11 @@
 #include "storage/enums/residency_state.h"
 #include "storage/table/column_chunk_metadata.h"
 #include "storage/table/column_chunk_stats.h"
-#include "storage/table/column_reader_writer.h"
 #include "storage/table/in_memory_exception_chunk.h"
 
+namespace kuzu::storage {
+class PageManager;
+}
 namespace kuzu {
 namespace evaluator {
 class ExpressionEvaluator;
@@ -89,7 +91,7 @@ class Spiller;
 class KUZU_API ColumnChunkData {
 public:
     friend struct ColumnChunkFactory;
-    // For spilling to disk we need access to the underlying buffer
+    // For spilling to disk, we need access to the underlying buffer
     friend class Spiller;
 
     ColumnChunkData(MemoryManager& mm, common::LogicalType dataType, uint64_t capacity,
@@ -120,7 +122,7 @@ public:
         }
     }
 
-    bool isNull(common::offset_t pos) const;
+    virtual bool isNull(common::offset_t pos) const;
     void setNullData(std::unique_ptr<NullChunkData> nullData_) { nullData = std::move(nullData_); }
     bool hasNullData() const { return nullData != nullptr; }
     NullChunkData* getNullData() { return nullData.get(); }
@@ -236,7 +238,7 @@ public:
 
     void updateStats(const common::ValueVector* vector, const common::SelectionView& selVector);
 
-    virtual void reclaimStorage(FileHandle& dataFH);
+    virtual void reclaimStorage(PageManager& pageManager);
 
 protected:
     // Initializes the data buffer and functions. They are (and should be) only called in
@@ -336,7 +338,7 @@ public:
 
     // Maybe this should be combined with BoolChunkData if the only difference is these
     // functions?
-    bool isNull(common::offset_t pos) const { return getValue<bool>(pos); }
+    bool isNull(common::offset_t pos) const override { return getValue<bool>(pos); }
     void setNull(common::offset_t pos, bool isNull);
 
     bool noNullsGuaranteedInMem() const {
