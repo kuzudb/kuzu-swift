@@ -110,11 +110,10 @@ static std::string createStopWordsTable(const ClientContext& context,
         query +=
             stringFormat("CREATE NODE TABLE `{}` (sw STRING, PRIMARY KEY(sw));", info.tableName);
         std::string stopWordList = "[";
-        for (auto i = 0u; i < FtsExtension::NUM_STOP_WORDS - 1; i++) {
-            stopWordList += stringFormat("\"{}\", ", FtsExtension::EN_STOP_WORDS[i]);
+        for (auto& stopWord : StopWords::getDefaultStopWords()) {
+            stopWordList += stringFormat("\"{}\",", stopWord);
         }
-        stopWordList +=
-            stringFormat("\"{}\"]", FtsExtension::EN_STOP_WORDS[FtsExtension::NUM_STOP_WORDS - 1]);
+        stopWordList.back() = ']';
         query += stringFormat("UNWIND {} AS word CREATE (s:`{}` {sw: word});", stopWordList,
             info.tableName);
     } break;
@@ -271,7 +270,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto docTableName = FTSUtils::getDocsTableName(bindData.tableID, bindData.indexName);
     auto docTableEntry = context.clientContext->getCatalog()->getTableCatalogEntry(
         context.clientContext->getTransaction(), docTableName);
-    graph::GraphEntry entry{{docTableEntry}, {} /* relTableEntries */};
+    graph::NativeGraphEntry entry{{docTableEntry}, {} /* relTableEntries */};
     graph::OnDiskGraph graph(context.clientContext, std::move(entry));
     auto sharedState = LenComputeSharedState{};
     LenCompute lenCompute{&sharedState};
