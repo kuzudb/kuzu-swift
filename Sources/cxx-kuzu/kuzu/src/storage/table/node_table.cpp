@@ -6,7 +6,6 @@
 #include "common/exception/runtime.h"
 #include "common/types/types.h"
 #include "main/client_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 #include "storage/local_storage/local_node_table.h"
 #include "storage/local_storage/local_storage.h"
 #include "storage/local_storage/local_table.h"
@@ -406,7 +405,7 @@ void NodeTable::insert(Transaction* transaction, TableInsertState& insertState) 
         index->insert(transaction, nodeInsertState.nodeIDVector, indexedPropertyVectors,
             *nodeInsertState.indexInsertStates[i]);
     }
-    if (transaction->shouldLogToWAL()) {
+    if (insertState.logToWAL && transaction->shouldLogToWAL()) {
         KU_ASSERT(transaction->isWriteTransaction());
         KU_ASSERT(transaction->getClientContext());
         auto& wal = transaction->getClientContext()->getStorageManager()->getWAL();
@@ -451,7 +450,7 @@ void NodeTable::update(Transaction* transaction, TableUpdateState& updateState) 
             ->update(transaction, rowIdxInGroup, nodeUpdateState.columnID,
                 nodeUpdateState.propertyVector);
     }
-    if (transaction->shouldLogToWAL()) {
+    if (updateState.logToWAL && transaction->shouldLogToWAL()) {
         KU_ASSERT(transaction->isWriteTransaction());
         KU_ASSERT(transaction->getClientContext());
         auto& wal = transaction->getClientContext()->getStorageManager()->getWAL();
@@ -470,6 +469,12 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
     }
     bool isDeleted = false;
     const auto nodeOffset = nodeDeleteState.nodeIDVector.readNodeOffset(pos);
+    for (auto& index : indexes) {
+        auto indexDeleteState = index.getIndex()->initDeleteState(transaction, memoryManager,
+            getVisibleFunc(transaction));
+        index.getIndex()->delete_(transaction, nodeDeleteState.nodeIDVector, *indexDeleteState);
+    }
+
     if (const auto localTable = transaction->getLocalStorage()->getLocalTable(tableID);
         localTable && transaction->isUnCommitted(tableID, nodeOffset)) {
         auto dummyTrx = Transaction::getDummyTransactionFromExistingOne(*transaction);
