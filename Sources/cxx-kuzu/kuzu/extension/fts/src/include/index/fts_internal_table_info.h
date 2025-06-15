@@ -7,7 +7,6 @@ namespace kuzu {
 namespace fts_extension {
 
 struct FTSInternalTableInfo {
-    storage::NodeTable* table;
     storage::NodeTable* stopWordsTable;
     storage::NodeTable* docTable;
     storage::NodeTable* termsTable;

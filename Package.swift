@@ -47,7 +47,6 @@ let package = Package(
                 "kuzu/extension/fts/src/function/stem.cpp",
                 "kuzu/extension/fts/src/index/fts_index.cpp",
                 "kuzu/extension/fts/src/index/fts_internal_table_info.cpp",
-                "kuzu/extension/fts/src/index/fts_update_state.cpp",
                 "kuzu/extension/fts/src/main/fts_extension.cpp",
                 "kuzu/extension/fts/src/utils/fts_utils.cpp",
                 "kuzu/extension/fts/third_party/snowball/libstemmer/libstemmer.c",

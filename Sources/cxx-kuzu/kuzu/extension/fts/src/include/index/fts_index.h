@@ -8,7 +8,6 @@ namespace kuzu {
 namespace fts_extension {
 
 struct FTSInsertState;
-struct FTSDeleteState;
 struct TermInfo;
 
 struct FTSStorageInfo final : storage::IndexStorageInfo {
@@ -38,12 +37,6 @@ public:
 
     void insert(transaction::Transaction* transaction, const common::ValueVector& nodeIDVector,
         const std::vector<common::ValueVector*>& indexVectors, InsertState& insertState) override;
-
-    std::unique_ptr<DeleteState> initDeleteState(const transaction::Transaction* transaction,
-        storage::MemoryManager* mm, storage::visible_func isVisible) override;
-
-    void delete_(transaction::Transaction* transaction, const common::ValueVector& nodeIDVector,
-        DeleteState& deleteState) override;
     void commitInsert(transaction::Transaction*, const common::ValueVector&,
         const std::vector<common::ValueVector*>&, InsertState&) override {
         // DO NOTHING.
@@ -60,9 +53,10 @@ public:
 
 private:
     common::nodeID_t insertToDocTable(transaction::Transaction* transaction,
-        FTSInsertState& ftsInsertState, common::nodeID_t insertedNodeID, uint64_t docLen) const;
+        FTSInsertState& ftsInsertState, common::nodeID_t insertedNodeID,
+        const std::vector<std::string>& terms) const;
 
-    void insertToTermsTable(transaction::Transaction* transaction,
+    void updateTermsTable(transaction::Transaction* transaction,
         std::unordered_map<std::string, TermInfo>& tfCollection,
         FTSInsertState& ftsInsertState) const;
 
@@ -70,16 +64,6 @@ private:
         const std::unordered_map<std::string, TermInfo>& tfCollection,
         FTSInsertState& ftsInsertState, common::nodeID_t docID,
         common::table_id_t termsTableID) const;
-
-    common::nodeID_t deleteFromDocTable(transaction::Transaction* transaction,
-        FTSDeleteState& deleteState, common::nodeID_t deletedNodeID, double& totalDocLen) const;
-
-    void deleteFromTermsTable(transaction::Transaction* transaction,
-        std::unordered_map<std::string, TermInfo>& tfCollection,
-        FTSDeleteState& ftsDeleteState) const;
-
-    void deleteFromAppearsInTable(transaction::Transaction* transaction,
-        FTSDeleteState& ftsDeleteState, common::nodeID_t docID) const;
 
 private:
     FTSInternalTableInfo internalTableInfo;
