@@ -65,6 +65,7 @@ struct DBConfig {
     uint64_t checkpointThreshold;
     bool forceCheckpointOnClose;
     bool enableSpillingToDisk;
+    uint32_t threadQos;
 
     explicit DBConfig(const SystemConfig& systemConfig);
 

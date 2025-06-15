@@ -30,7 +30,7 @@ DBConfig::DBConfig(const SystemConfig& systemConfig)
       maxDBSize{systemConfig.maxDBSize}, enableMultiWrites{false},
       autoCheckpoint{systemConfig.autoCheckpoint},
       checkpointThreshold{systemConfig.checkpointThreshold}, forceCheckpointOnClose{true},
-      enableSpillingToDisk{true} {}
+    enableSpillingToDisk{true}, threadQos(systemConfig.threadQos) {}
 
 ConfigurationOption* DBConfig::getOptionByName(const std::string& optionName) {
     auto lOptionName = optionName;
