@@ -4,7 +4,6 @@
 #include "binder/query/reading_clause/bound_table_function_call.h"
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/exception/binder.h"
-#include "graph/graph_entry_set.h"
 #include "graph/on_disk_graph.h"
 #include "main/client_context.h"
 #include "parser/parser.h"
@@ -61,17 +60,14 @@ static void validateRelSrcDstNodeAreProjected(const TableCatalogEntry& entry,
         catalog, transaction);
 }
 
-NativeGraphEntry GDSFunction::bindGraphEntry(ClientContext& context, const std::string& name) {
-    auto& set = context.getGraphEntrySetUnsafe();
-    set.validateGraphExist(name);
-    auto entry = set.getEntry(name);
-    if (entry->type != GraphEntryType::NATIVE) {
-        throw BinderException("AA");
+GraphEntry GDSFunction::bindGraphEntry(ClientContext& context, const std::string& name) {
+    if (!context.getGraphEntrySetUnsafe().hasGraph(name)) {
+        throw BinderException(stringFormat("Cannot find graph {}.", name));
     }
-    return bindGraphEntry(context, entry->cast<ParsedNativeGraphEntry>());
+    return bindGraphEntry(context, context.getGraphEntrySetUnsafe().getEntry(name));
 }
 
-static NativeGraphEntryTableInfo bindNodeEntry(ClientContext& context, const std::string& tableName,
+static BoundGraphEntryTableInfo bindNodeEntry(ClientContext& context, const std::string& tableName,
     const std::string& predicate) {
     auto catalog = context.getCatalog();
     auto transaction = context.getTransaction();
@@ -92,7 +88,7 @@ static NativeGraphEntryTableInfo bindNodeEntry(ClientContext& context, const std
     }
 }
 
-static NativeGraphEntryTableInfo bindRelEntry(ClientContext& context, const std::string& tableName,
+static BoundGraphEntryTableInfo bindRelEntry(ClientContext& context, const std::string& tableName,
     const std::string& predicate) {
     auto catalog = context.getCatalog();
     auto transaction = context.getTransaction();
@@ -115,11 +111,10 @@ static NativeGraphEntryTableInfo bindRelEntry(ClientContext& context, const std:
     }
 }
 
-NativeGraphEntry GDSFunction::bindGraphEntry(ClientContext& context,
-    const ParsedNativeGraphEntry& entry) {
+GraphEntry GDSFunction::bindGraphEntry(ClientContext& context, const ParsedGraphEntry& entry) {
     auto catalog = context.getCatalog();
     auto transaction = context.getTransaction();
-    auto result = NativeGraphEntry();
+    auto result = GraphEntry();
     table_id_set_t projectedNodeTableIDSet;
     for (auto& nodeInfo : entry.nodeInfos) {
         auto boundInfo = bindNodeEntry(context, nodeInfo.tableName, nodeInfo.predicate);

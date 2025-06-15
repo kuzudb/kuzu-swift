@@ -327,9 +327,9 @@ HNSWSearchState::HNSWSearchState(main::ClientContext* context,
       lowerRelTableEntry{lowerRelTableEntry}, searchType{SearchType::UNFILTERED},
       nbrScanState{nullptr}, secondHopNbrScanState{nullptr} {
     ef = std::max(k, static_cast<uint64_t>(config.efs));
-    graph::NativeGraphEntry lowerGraphEntry{{nodeTableEntry}, {lowerRelTableEntry}};
+    graph::GraphEntry lowerGraphEntry{{nodeTableEntry}, {lowerRelTableEntry}};
     lowerGraph = std::make_unique<graph::OnDiskGraph>(context, std::move(lowerGraphEntry));
-    graph::NativeGraphEntry upperGraphEntry{{nodeTableEntry}, {upperRelTableEntry}};
+    graph::GraphEntry upperGraphEntry{{nodeTableEntry}, {upperRelTableEntry}};
     upperGraph = std::make_unique<graph::OnDiskGraph>(context, std::move(upperGraphEntry));
 }
 

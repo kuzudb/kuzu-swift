@@ -18,7 +18,7 @@ class Transaction;
 } // namespace transaction
 
 namespace graph {
-struct NativeGraphEntry;
+struct GraphEntry;
 
 struct GraphRelInfo {
     common::table_id_t srcTableID;
@@ -178,10 +178,13 @@ public:
     Graph() = default;
     virtual ~Graph() = default;
 
-    virtual NativeGraphEntry* getGraphEntry() = 0;
+    virtual GraphEntry* getGraphEntry() = 0;
 
     // Get id for all node tables.
     virtual std::vector<common::table_id_t> getNodeTableIDs() const = 0;
+
+    // Get id for all relationship tables.
+    virtual std::vector<common::table_id_t> getRelTableIDs() const = 0;
 
     // Get max offset of each table as a map.
     virtual common::table_id_map_t<common::offset_t> getMaxOffsetMap(

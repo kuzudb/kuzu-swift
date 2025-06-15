@@ -444,13 +444,9 @@ std::shared_ptr<RelExpression> Binder::createRecursiveQueryRel(const parser::Rel
         getUniqueExpressionName(parsedName), parsedName, prunedRelEntries, std::move(srcNode),
         std::move(dstNode), directionType, relPattern.getRelType());
     // Bind graph entry.
-    auto graphEntry = graph::NativeGraphEntry();
-    for (auto nodeEntry : node->getEntries()) {
-        graphEntry.nodeInfos.emplace_back(nodeEntry);
-    }
-    for (auto relEntry : rel->getEntries()) {
-        graphEntry.relInfos.emplace_back(relEntry, rel, relPredicate);
-    }
+    auto graphEntry = graph::GraphEntry(node->getEntries(), rel->getEntries());
+    graphEntry.setRelPredicate(relPredicate); // TODO: revisit me
+
     auto bindData = std::make_unique<function::RJBindData>(graphEntry.copy());
     // Bind lower upper bound.
     auto [lowerBound, upperBound] = bindVariableLengthRelBound(relPattern);

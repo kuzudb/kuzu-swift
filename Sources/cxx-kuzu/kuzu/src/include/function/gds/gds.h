@@ -4,7 +4,6 @@
 #include "function/table/bind_data.h"
 #include "graph/graph.h"
 #include "graph/graph_entry.h"
-#include "graph/parsed_graph_entry.h"
 #include "processor/result/factorized_table_pool.h"
 
 namespace kuzu {
@@ -32,11 +31,11 @@ struct KUZU_API GDSOptionalParams {
 };
 
 struct KUZU_API GDSBindData : public TableFuncBindData {
-    graph::NativeGraphEntry graphEntry;
+    graph::GraphEntry graphEntry;
     std::shared_ptr<binder::Expression> nodeOutput;
     std::unique_ptr<GDSOptionalParams> optionalParams;
 
-    GDSBindData(binder::expression_vector columns, graph::NativeGraphEntry graphEntry,
+    GDSBindData(binder::expression_vector columns, graph::GraphEntry graphEntry,
         std::shared_ptr<binder::Expression> nodeOutput,
         std::unique_ptr<GDSOptionalParams> optionalParams = nullptr)
         : TableFuncBindData{std::move(columns)}, graphEntry{graphEntry.copy()},
@@ -85,10 +84,9 @@ class KUZU_API GDSFunction {
     static constexpr char NODE_COLUMN_NAME[] = "node";
 
 public:
-    static graph::NativeGraphEntry bindGraphEntry(main::ClientContext& context,
-        const std::string& name);
-    static graph::NativeGraphEntry bindGraphEntry(main::ClientContext& context,
-        const graph::ParsedNativeGraphEntry& parsedGraphEntry);
+    static graph::GraphEntry bindGraphEntry(main::ClientContext& context, const std::string& name);
+    static graph::GraphEntry bindGraphEntry(main::ClientContext& context,
+        const graph::ParsedGraphEntry& parsedGraphEntry);
     static std::shared_ptr<binder::Expression> bindNodeOutput(const TableFuncBindInput& bindInput,
         const std::vector<catalog::TableCatalogEntry*>& nodeEntries);
     static std::string bindColumnName(const parser::YieldVariable& yieldVariable,
