@@ -31,12 +31,11 @@ void TableScanState::setToTable(const transaction::Transaction*, Table* table_,
 }
 
 TableInsertState::TableInsertState(std::vector<ValueVector*> propertyVectors)
-    : propertyVectors{std::move(propertyVectors)}, logToWAL{true} {}
+    : propertyVectors{std::move(propertyVectors)} {}
 TableInsertState::~TableInsertState() = default;
 TableUpdateState::TableUpdateState(column_id_t columnID, ValueVector& propertyVector)
-    : columnID{columnID}, propertyVector{propertyVector}, logToWAL{true} {}
+    : columnID{columnID}, propertyVector{propertyVector} {}
 TableUpdateState::~TableUpdateState() = default;
-TableDeleteState::TableDeleteState() : logToWAL{true} {}
 TableDeleteState::~TableDeleteState() = default;
 
 Table::Table(const catalog::TableCatalogEntry* tableEntry, const StorageManager* storageManager,

@@ -23,8 +23,6 @@ public:
         common::row_idx_t numRows);
     bool delete_(common::transaction_t transactionID, common::row_idx_t rowIdx);
 
-    bool isSelected(common::transaction_t startTS, common::transaction_t transactionID,
-        common::row_idx_t rowIdx) const;
     void getSelVectorToScan(common::transaction_t startTS, common::transaction_t transactionID,
         common::SelectionVector& selVector, common::row_idx_t startRow,
         common::row_idx_t numRows) const;

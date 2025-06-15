@@ -14,15 +14,13 @@ namespace catalog {
 class IndexCatalogEntry;
 }
 namespace processor {
-struct CopyPartitionerSharedState;
+struct PartitionerSharedState;
 } // namespace processor
 namespace storage {
 class NodeTable;
 } // namespace storage
 
 namespace vector_extension {
-
-struct HNSWIndexPartitionerSharedState;
 
 struct MinNodePriorityQueueComparator {
     bool operator()(const NodeWithDistance& l, const NodeWithDistance& r) const {
@@ -39,6 +37,24 @@ using min_node_priority_queue_t = std::priority_queue<NodeWithDistance,
     std::vector<NodeWithDistance>, MinNodePriorityQueueComparator>;
 using max_node_priority_queue_t = std::priority_queue<NodeWithDistance,
     std::vector<NodeWithDistance>, MaxNodePriorityQueueComparator>;
+
+struct HNSWIndexPartitionerSharedState {
+    std::shared_ptr<processor::PartitionerSharedState> lowerPartitionerSharedState;
+    std::shared_ptr<processor::PartitionerSharedState> upperPartitionerSharedState;
+
+    explicit HNSWIndexPartitionerSharedState(storage::MemoryManager& mm)
+        : lowerPartitionerSharedState{std::make_shared<processor::PartitionerSharedState>(mm)},
+          upperPartitionerSharedState{std::make_shared<processor::PartitionerSharedState>(mm)} {}
+
+    void setTables(storage::NodeTable* nodeTable, storage::RelTable* relTable);
+
+    // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const.
+    void initialize(const common::logical_type_vec_t& columnTypes,
+        const main::ClientContext* clientContext) {
+        lowerPartitionerSharedState->initialize(columnTypes, 1 /*numPartitioners*/, clientContext);
+        upperPartitionerSharedState->initialize(columnTypes, 1 /*numPartitioners*/, clientContext);
+    }
+};
 
 struct VisitedState {
     common::offset_t size;
@@ -161,10 +177,9 @@ public:
 
     void insert(common::offset_t offset, common::offset_t entryPoint_, VisitedState& visited);
     common::offset_t searchNN(const void* queryVector, common::offset_t entryNode) const;
-    void finalize(common::node_group_idx_t nodeGroupIdx, common::offset_t numNodesInTable,
-        const NodeToHNSWGraphOffsetMap& selectedNodesMap) const;
-
-    std::unique_ptr<InMemHNSWGraph> moveGraph() { return std::move(graph); }
+    void finalize(storage::MemoryManager& mm, common::node_group_idx_t nodeGroupIdx,
+        const processor::PartitionerSharedState& partitionerSharedState,
+        common::offset_t numNodesInTable, const NodeToHNSWGraphOffsetMap& selectedNodesMap) const;
 
 private:
     std::vector<NodeWithDistance> searchKNN(const void* queryVector, common::offset_t entryNode,
@@ -209,11 +224,10 @@ public:
     }
     // Note that the input is only `offset`, as we assume embeddings are already cached in memory.
     bool insert(common::offset_t offset, VisitedState& upperVisited, VisitedState& lowerVisited);
-    void finalize(common::node_group_idx_t nodeGroupIdx);
+    void finalize(storage::MemoryManager& mm, common::node_group_idx_t nodeGroupIdx,
+        const HNSWIndexPartitionerSharedState& partitionerSharedState);
 
     void resetEmbeddings() { embeddings.reset(); }
-
-    void moveToPartitionState(HNSWIndexPartitionerSharedState& partitionState);
 
 private:
     std::unique_ptr<InMemHNSWLayer> upperLayer;
@@ -309,17 +323,16 @@ public:
 private:
     common::offset_t searchNNInUpperLayer(transaction::Transaction* transaction,
         const void* queryVector, const HNSWSearchState& searchState) const;
-    std::vector<NodeWithDistance> searchKNNInLayer(transaction::Transaction* transaction,
-        const void* queryVector, common::offset_t entryNode, HNSWSearchState& searchState,
-        bool isUpperLayer) const;
+    std::vector<NodeWithDistance> searchKNNInLowerLayer(transaction::Transaction* transaction,
+        const void* queryVector, common::offset_t entryNode, HNSWSearchState& searchState) const;
     std::vector<NodeWithDistance> searchFromCheckpointed(transaction::Transaction* transaction,
         const void* queryVector, HNSWSearchState& searchState) const;
     void searchFromUnCheckpointed(transaction::Transaction* transaction, const void* queryVector,
         storage::NodeTableScanState& embeddingScanState,
         std::vector<NodeWithDistance>& result) const;
 
-    void initLayerSearchState(transaction::Transaction* transaction, HNSWSearchState& searchState,
-        bool isUpperLayer) const;
+    void initLowerLayerSearchState(transaction::Transaction* transaction,
+        HNSWSearchState& searchState) const;
     void oneHopSearch(transaction::Transaction* transaction, const void* queryVector,
         graph::Graph::EdgeIterator& nbrItr, HNSWSearchState& searchState,
         min_node_priority_queue_t& candidates, max_node_priority_queue_t& results) const;

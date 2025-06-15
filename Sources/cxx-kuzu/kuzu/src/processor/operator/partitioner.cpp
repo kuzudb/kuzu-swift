@@ -2,6 +2,7 @@
 
 #include "binder/expression/expression_util.h"
 #include "processor/execution_context.h"
+#include "processor/operator/persistent/rel_batch_insert.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
@@ -29,14 +30,40 @@ void PartitionerFunctions::partitionRelData(ValueVector* key, ValueVector* parti
     }
 }
 
-void CopyPartitionerSharedState::initialize(const logical_type_vec_t& columnTypes,
+static partition_idx_t getNumPartitions(offset_t numRows) {
+    return (numRows + StorageConfig::NODE_GROUP_SIZE - 1) / StorageConfig::NODE_GROUP_SIZE;
+}
+
+void PartitionerSharedState::initialize(const logical_type_vec_t& columnTypes,
     idx_t numPartitioners, const main::ClientContext* clientContext) {
-    PartitionerSharedState::initialize(columnTypes, numPartitioners, clientContext);
+    KU_ASSERT(numPartitioners >= 1 && numPartitioners <= DIRECTIONS);
+    numNodes[0] = srcNodeTable->getNumTotalRows(clientContext->getTransaction());
+    if (numPartitioners > 1) {
+        numNodes[1] = dstNodeTable->getNumTotalRows(clientContext->getTransaction());
+    }
+    numPartitions[0] = getNumPartitions(numNodes[0]);
+    if (numPartitioners > 1) {
+        numPartitions[1] = getNumPartitions(numNodes[1]);
+    }
     Partitioner::initializePartitioningStates(columnTypes, partitioningBuffers, numPartitions,
         numPartitioners);
 }
 
-void CopyPartitionerSharedState::merge(
+partition_idx_t PartitionerSharedState::getNextPartition(idx_t partitioningIdx,
+    RelBatchInsertProgressSharedState& progressSharedState) {
+    auto nextPartitionIdxToReturn = nextPartitionIdx++;
+    if (nextPartitionIdxToReturn >= numPartitions[partitioningIdx]) {
+        return INVALID_PARTITION_IDX;
+    }
+    ++progressSharedState.partitionsDone;
+    return nextPartitionIdxToReturn;
+}
+
+void PartitionerSharedState::resetState() {
+    nextPartitionIdx = 0;
+}
+
+void PartitionerSharedState::merge(
     const std::vector<std::unique_ptr<PartitioningBuffer>>& localPartitioningStates) {
     std::unique_lock xLck{mtx};
     KU_ASSERT(partitioningBuffers.size() == localPartitioningStates.size());
@@ -44,11 +71,6 @@ void CopyPartitionerSharedState::merge(
          partitioningIdx++) {
         partitioningBuffers[partitioningIdx]->merge(*localPartitioningStates[partitioningIdx]);
     }
-}
-
-void CopyPartitionerSharedState::resetState(common::idx_t partitioningIdx) {
-    PartitionerSharedState::resetState(partitioningIdx);
-    partitioningBuffers[partitioningIdx].reset();
 }
 
 void PartitioningBuffer::merge(const PartitioningBuffer& localPartitioningState) const {
@@ -61,8 +83,8 @@ void PartitioningBuffer::merge(const PartitioningBuffer& localPartitioningState)
 }
 
 Partitioner::Partitioner(PartitionerInfo info, PartitionerDataInfo dataInfo,
-    std::shared_ptr<CopyPartitionerSharedState> sharedState,
-    std::unique_ptr<PhysicalOperator> child, uint32_t id, std::unique_ptr<OPPrintInfo> printInfo)
+    std::shared_ptr<PartitionerSharedState> sharedState, std::unique_ptr<PhysicalOperator> child,
+    uint32_t id, std::unique_ptr<OPPrintInfo> printInfo)
     : Sink{type_, std::move(child), id, std::move(printInfo)}, dataInfo{std::move(dataInfo)},
       info{std::move(info)}, sharedState{std::move(sharedState)} {
     partitionIdxes = std::make_unique<ValueVector>(LogicalTypeID::INT64);
@@ -110,7 +132,7 @@ DataChunk Partitioner::constructDataChunk(const std::shared_ptr<DataChunkState>&
 
 void Partitioner::initializePartitioningStates(const logical_type_vec_t& columnTypes,
     std::vector<std::unique_ptr<PartitioningBuffer>>& partitioningBuffers,
-    const std::array<partition_idx_t, CopyPartitionerSharedState::DIRECTIONS>& numPartitions,
+    const std::array<partition_idx_t, PartitionerSharedState::DIRECTIONS>& numPartitions,
     idx_t numPartitioners) {
     partitioningBuffers.resize(numPartitioners);
     for (auto partitioningIdx = 0u; partitioningIdx < numPartitioners; partitioningIdx++) {

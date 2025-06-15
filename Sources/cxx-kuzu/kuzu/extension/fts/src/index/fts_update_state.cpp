@@ -23,7 +23,6 @@ TermsTableState::TermsTableState(const transaction::Transaction* transaction,
       termsTableUpdateState{tableInfo.dfColumnID, updateVectors.idVector,
           updateVectors.uint64PropVector} {
     termsTableScanState.setToTable(transaction, tableInfo.termsTable, {tableInfo.dfColumnID}, {});
-    termsTableUpdateState.logToWAL = false;
 }
 
 FTSInsertState::FTSInsertState(MemoryManager* mm, Transaction* transaction,
@@ -40,9 +39,6 @@ FTSInsertState::FTSInsertState(MemoryManager* mm, Transaction* transaction,
     tableInfo.docTable->initInsertState(transaction, docTableInsertState);
     tableInfo.termsTable->initInsertState(transaction, termsTableInsertState);
     tableInfo.appearsInfoTable->initInsertState(transaction, appearsInTableInsertState);
-    docTableInsertState.logToWAL = false;
-    termsTableInsertState.logToWAL = false;
-    appearsInTableInsertState.logToWAL = false;
 }
 
 IndexTableState::IndexTableState(MemoryManager* mm, const transaction::Transaction* transaction,
@@ -69,9 +65,6 @@ FTSDeleteState::FTSDeleteState(MemoryManager* mm, const Transaction* transaction
       indexTableState{mm, transaction, tableInfo, std::move(columnIDs), updateVectors.idVector,
           updateVectors.dataChunkState} {
     docTableScanState.setToTable(transaction, tableInfo.docTable, {tableInfo.dfColumnID}, {});
-    docTableDeleteState.logToWAL = false;
-    termsTableDeleteState.logToWAL = false;
-    appearsInTableDeleteState.logToWAL = false;
 }
 
 } // namespace fts_extension

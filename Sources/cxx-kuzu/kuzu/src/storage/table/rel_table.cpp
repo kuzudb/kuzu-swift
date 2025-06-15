@@ -193,7 +193,7 @@ void RelTable::insert(Transaction* transaction, TableInsertState& insertState) {
     KU_ASSERT(transaction->getLocalStorage());
     const auto localTable = transaction->getLocalStorage()->getOrCreateLocalTable(*this);
     localTable->insert(transaction, insertState);
-    if (insertState.logToWAL && transaction->shouldLogToWAL()) {
+    if (transaction->shouldLogToWAL()) {
         KU_ASSERT(transaction->isWriteTransaction());
         KU_ASSERT(transaction->getClientContext());
         auto& wal = transaction->getClientContext()->getStorageManager()->getWAL();
@@ -460,8 +460,8 @@ void RelTable::updateRelOffsets(const LocalRelTable& localRelTable) {
             const auto localRelOffset = internalIDData[rowIdx];
             const auto committedRelOffset = getCommittedOffset(localRelOffset, maxCommittedOffset);
             internalIDData[rowIdx] = committedRelOffset;
+            internalIDData.setTableID(tableID);
         }
-        internalIDData.setTableID(tableID);
     }
     KU_ASSERT(totalNumRows == localNodeGroup.getNumRows());
 }

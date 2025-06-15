@@ -2,7 +2,6 @@
 
 #include "catalog/catalog_entry/index_catalog_entry.h"
 #include "catalog/hnsw_index_catalog_entry.h"
-#include "index/hnsw_rel_batch_insert.h"
 #include "main/client_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
@@ -12,6 +11,16 @@ using namespace kuzu::storage;
 
 namespace kuzu {
 namespace vector_extension {
+
+// NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const function.
+void HNSWIndexPartitionerSharedState::setTables(NodeTable* nodeTable, RelTable* relTable) {
+    lowerPartitionerSharedState->srcNodeTable = nodeTable;
+    lowerPartitionerSharedState->dstNodeTable = nodeTable;
+    lowerPartitionerSharedState->relTable = relTable;
+    upperPartitionerSharedState->srcNodeTable = nodeTable;
+    upperPartitionerSharedState->dstNodeTable = nodeTable;
+    upperPartitionerSharedState->relTable = relTable;
+}
 
 InMemHNSWLayer::InMemHNSWLayer(MemoryManager* mm, InMemHNSWLayerInfo info)
     : entryPoint{common::INVALID_OFFSET}, info{info} {
@@ -88,9 +97,6 @@ static void processNbrNodeInKNNSearch(const void* queryVector, const void* nbrVe
     common::offset_t nbrOffset, uint64_t ef, VisitedState& visited, const metric_func_t& metricFunc,
     uint64_t dimension, min_node_priority_queue_t& candidates, max_node_priority_queue_t& result) {
     visited.add(nbrOffset);
-    if (!nbrVector) {
-        return;
-    }
     auto dist = metricFunc(queryVector, nbrVector, dimension);
     if (result.size() < ef || dist < result.top().distance) {
         if (result.size() >= ef) {
@@ -174,7 +180,8 @@ void InMemHNSWLayer::shrinkForNode(const InMemHNSWLayerInfo& info, InMemHNSWGrap
     graph->setCSRLength(nodeOffset, newSize);
 }
 
-void InMemHNSWLayer::finalize(common::node_group_idx_t nodeGroupIdx,
+void InMemHNSWLayer::finalize(MemoryManager& mm, common::node_group_idx_t nodeGroupIdx,
+    const processor::PartitionerSharedState& partitionerSharedState,
     common::offset_t numNodesInTable, const NodeToHNSWGraphOffsetMap& selectedNodesMap) const {
     const auto startNodeOffset = StorageUtils::getStartOffsetOfNodeGroup(nodeGroupIdx);
     const auto endNodeOffset =
@@ -191,13 +198,8 @@ void InMemHNSWLayer::finalize(common::node_group_idx_t nodeGroupIdx,
         }
         shrinkForNode(info, graph.get(), offsetInGraph, numNbrs);
     }
-}
-
-void InMemHNSWIndex::moveToPartitionState(HNSWIndexPartitionerSharedState& partitionState) {
-    partitionState.lowerPartitionerSharedState->setGraph(lowerLayer->moveGraph(),
-        std::move(lowerGraphSelectionMap));
-    partitionState.upperPartitionerSharedState->setGraph(upperLayer->moveGraph(),
-        std::move(upperGraphSelectionMap));
+    graph->finalize(mm, nodeGroupIdx, partitionerSharedState, startNodeInGraph, endNodeInGraph,
+        numNodesInTable, selectedNodesMap);
 }
 
 std::vector<NodeWithDistance> HNSWIndex::popTopK(max_node_priority_queue_t& result,
@@ -278,10 +280,13 @@ bool InMemHNSWIndex::insert(common::offset_t offset, VisitedState& upperVisited,
 }
 
 // NOLINTNEXTLINE(readability-make-member-function-const): Semantically non-const function.
-void InMemHNSWIndex::finalize(common::node_group_idx_t nodeGroupIdx) {
+void InMemHNSWIndex::finalize(MemoryManager& mm, common::node_group_idx_t nodeGroupIdx,
+    const HNSWIndexPartitionerSharedState& partitionerSharedState) {
     const auto numNodesInTable = lowerLayer->getNumNodes();
-    upperLayer->finalize(nodeGroupIdx, numNodesInTable, *upperGraphSelectionMap);
-    lowerLayer->finalize(nodeGroupIdx, numNodesInTable, *lowerGraphSelectionMap);
+    upperLayer->finalize(mm, nodeGroupIdx, *partitionerSharedState.upperPartitionerSharedState,
+        numNodesInTable, *upperGraphSelectionMap);
+    lowerLayer->finalize(mm, nodeGroupIdx, *partitionerSharedState.lowerPartitionerSharedState,
+        numNodesInTable, *lowerGraphSelectionMap);
 }
 
 std::shared_ptr<common::BufferedSerializer> HNSWStorageInfo::serialize() const {
@@ -406,7 +411,7 @@ std::vector<NodeWithDistance> OnDiskHNSWIndex::searchFromCheckpointed(
         }
         entryPoint = hnswStorageInfo.lowerEntryPoint;
     }
-    return searchKNNInLayer(transaction, queryVector, entryPoint, searchState, false);
+    return searchKNNInLowerLayer(transaction, queryVector, entryPoint, searchState);
 }
 
 void OnDiskHNSWIndex::searchFromUnCheckpointed(transaction::Transaction* transaction,
@@ -424,7 +429,7 @@ void OnDiskHNSWIndex::searchFromUnCheckpointed(transaction::Transaction* transac
     for (auto offset = hnswStorageInfo.numCheckpointedNodes; offset < numTotalRows; offset++) {
         const auto vector = embeddings->getEmbedding(transaction, embeddingScanState, offset);
         if (!vector) {
-            continue; // Skip null or deleted values.
+            continue; // Skip null values.
         }
         auto dist = metricFunc(queryVector, vector, embeddings->getDimension());
         result.emplace_back(offset, dist);
@@ -454,7 +459,7 @@ void OnDiskHNSWIndex::checkpoint(main::ClientContext* context, bool) {
     }
     auto transaction = std::make_unique<transaction::Transaction>(*context,
         transaction::TransactionType::CHECKPOINT, transaction::Transaction::DUMMY_TRANSACTION_ID,
-        transaction::Transaction::START_TRANSACTION_ID - 1);
+        transaction::Transaction::DUMMY_TRANSACTION_ID - 1);
     context->getTransactionContext()->setActiveTransaction(std::move(transaction));
     try {
         const auto catalog = context->getCatalog();
@@ -487,8 +492,8 @@ void OnDiskHNSWIndex::checkpoint(main::ClientContext* context, bool) {
         for (const auto offset : insertState->lowerNodesToShrink) {
             shrinkForNode(context->getTransaction(), offset, false, config.ml, *insertState);
         }
-        context->getTransaction()->commit(nullptr /* wal */);
         hnswStorageInfo.numCheckpointedNodes = numTotalRows;
+        context->getTransaction()->commit(nullptr /* wal */);
     } catch ([[maybe_unused]] std::exception& e) {
         context->getTransaction()->rollback(nullptr /* wal */);
     }
@@ -519,10 +524,9 @@ common::offset_t OnDiskHNSWIndex::searchNNInUpperLayer(transaction::Transaction*
     double lastMinDist = std::numeric_limits<float>::max();
     const auto currNodeVector = embeddings->getEmbedding(transaction,
         *searchState.embeddingScanState.scanState, currentNodeOffset);
-    double minDist = 0.0;
-    if (currNodeVector) {
-        minDist = metricFunc(queryVector, currNodeVector, embeddings->getDimension());
-    }
+    auto minDist = metricFunc(queryVector, currNodeVector, embeddings->getDimension());
+    KU_ASSERT(lastMinDist >= 0);
+    KU_ASSERT(minDist >= 0);
     const auto scanState = searchState.upperGraph->prepareRelScan(*searchState.upperRelTableEntry,
         hnswStorageInfo.upperRelTableID, indexInfo.tableID, {} /* relProperties */);
     while (minDist < lastMinDist) {
@@ -534,13 +538,10 @@ common::offset_t OnDiskHNSWIndex::searchNNInUpperLayer(transaction::Transaction*
                 auto neighbor = neighbors[i];
                 const auto nbrVector = embeddings->getEmbedding(transaction,
                     *searchState.embeddingScanState.scanState, neighbor.offset);
-                if (nbrVector) {
-                    const auto dist =
-                        metricFunc(queryVector, nbrVector, embeddings->getDimension());
-                    if (dist < minDist) {
-                        minDist = dist;
-                        currentNodeOffset = neighbor.offset;
-                    }
+                const auto dist = metricFunc(queryVector, nbrVector, embeddings->getDimension());
+                if (dist < minDist) {
+                    minDist = dist;
+                    currentNodeOffset = neighbor.offset;
                 }
             });
         }
@@ -548,45 +549,37 @@ common::offset_t OnDiskHNSWIndex::searchNNInUpperLayer(transaction::Transaction*
     return currentNodeOffset;
 }
 
-void OnDiskHNSWIndex::initLayerSearchState(transaction::Transaction* transaction,
-    HNSWSearchState& searchState, bool isUpperLayer) const {
+void OnDiskHNSWIndex::initLowerLayerSearchState(transaction::Transaction* transaction,
+    HNSWSearchState& searchState) const {
     searchState.visited.reset();
     const auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
-    const auto& hnswGraph = isUpperLayer ? searchState.upperGraph : searchState.lowerGraph;
-    const auto relEntry =
-        isUpperLayer ? searchState.upperRelTableEntry : searchState.lowerRelTableEntry;
-    const auto relTableID =
-        isUpperLayer ? hnswStorageInfo.upperRelTableID : hnswStorageInfo.lowerRelTableID;
     searchState.nbrScanState =
-        hnswGraph->prepareRelScan(*relEntry, relTableID, indexInfo.tableID, {} /* relProperties */);
+        searchState.lowerGraph->prepareRelScan(*searchState.lowerRelTableEntry,
+            hnswStorageInfo.lowerRelTableID, indexInfo.tableID, {} /* relProperties */);
     searchState.searchType = getFilteredSearchType(transaction, searchState);
     if (searchState.searchType == SearchType::BLIND_TWO_HOP ||
         searchState.searchType == SearchType::DIRECTED_TWO_HOP) {
-        searchState.secondHopNbrScanState = hnswGraph->prepareRelScan(*relEntry, relTableID,
-            indexInfo.tableID, {} /* relProperties */);
+        searchState.secondHopNbrScanState =
+            searchState.lowerGraph->prepareRelScan(*searchState.lowerRelTableEntry,
+                hnswStorageInfo.lowerRelTableID, indexInfo.tableID, {} /* relProperties */);
     }
 }
 
-std::vector<NodeWithDistance> OnDiskHNSWIndex::searchKNNInLayer(
+std::vector<NodeWithDistance> OnDiskHNSWIndex::searchKNNInLowerLayer(
     transaction::Transaction* transaction, const void* queryVector, common::offset_t entryNode,
-    HNSWSearchState& searchState, bool isUpperLayer) const {
+    HNSWSearchState& searchState) const {
     min_node_priority_queue_t candidates;
     max_node_priority_queue_t results;
-    initLayerSearchState(transaction, searchState, isUpperLayer);
+    initLowerLayerSearchState(transaction, searchState);
 
     const auto entryVector =
         embeddings->getEmbedding(transaction, *searchState.embeddingScanState.scanState, entryNode);
-    if (entryVector) {
-        auto dist = metricFunc(queryVector, entryVector, embeddings->getDimension());
-        candidates.push({entryNode, dist});
-        if (searchState.isMasked(entryNode)) {
-            results.push({entryNode, dist});
-        }
-    } else {
-        // This is to make sure in case the entry node is deleted, we can still continue the search.
-        candidates.push({entryNode, std::numeric_limits<double_t>::max()});
-    }
+    auto dist = metricFunc(queryVector, entryVector, embeddings->getDimension());
+    candidates.push({entryNode, dist});
     searchState.visited.add(entryNode);
+    if (searchState.isMasked(entryNode)) {
+        results.push({entryNode, dist});
+    }
     initSearchCandidates(transaction, queryVector, searchState, candidates, results);
 
     while (!candidates.empty()) {
@@ -596,9 +589,8 @@ std::vector<NodeWithDistance> OnDiskHNSWIndex::searchKNNInLayer(
             break;
         }
         candidates.pop();
-        const auto& hnswGraph = isUpperLayer ? searchState.upperGraph : searchState.lowerGraph;
-        auto neighborItr = hnswGraph->scanFwd(common::nodeID_t{candidate, indexInfo.tableID},
-            *searchState.nbrScanState);
+        auto neighborItr = searchState.lowerGraph->scanFwd(
+            common::nodeID_t{candidate, indexInfo.tableID}, *searchState.nbrScanState);
         switch (searchState.searchType) {
         case SearchType::UNFILTERED:
         case SearchType::ONE_HOP_FILTERED: {
@@ -651,9 +643,6 @@ void OnDiskHNSWIndex::initSearchCandidates(transaction::Transaction* transaction
             searchState.visited.add(candidate);
             const auto candidateVector = embeddings->getEmbedding(transaction,
                 *searchState.embeddingScanState.scanState, candidate);
-            if (!candidateVector) {
-                continue;
-            }
             auto candidateDist =
                 metricFunc(queryVector, candidateVector, embeddings->getDimension());
             candidates.push({candidate, candidateDist});
@@ -706,19 +695,17 @@ min_node_priority_queue_t OnDiskHNSWIndex::collectFirstHopNbrsDirected(
             if (!searchState.visited.contains(nbrOffset)) {
                 const auto nbrVector = embeddings->getEmbedding(transaction,
                     *searchState.embeddingScanState.scanState, nbrOffset);
-                if (nbrVector) {
-                    auto dist = metricFunc(queryVector, nbrVector, embeddings->getDimension());
-                    candidatesForSecHop.push({nbrOffset, dist});
-                    if (searchState.isMasked(nbrOffset)) {
-                        if (results.size() < searchState.ef || dist < results.top().distance) {
-                            if (results.size() == searchState.ef) {
-                                results.pop();
-                            }
-                            numVisitedNbrs++;
-                            searchState.visited.add(nbrOffset);
-                            results.push({nbrOffset, dist});
-                            candidates.push({nbrOffset, dist});
+                auto dist = metricFunc(queryVector, nbrVector, embeddings->getDimension());
+                candidatesForSecHop.push({nbrOffset, dist});
+                if (searchState.isMasked(nbrOffset)) {
+                    if (results.size() < searchState.ef || dist < results.top().distance) {
+                        if (results.size() == searchState.ef) {
+                            results.pop();
                         }
+                        numVisitedNbrs++;
+                        searchState.visited.add(nbrOffset);
+                        results.push({nbrOffset, dist});
+                        candidates.push({nbrOffset, dist});
                     }
                 }
             }
@@ -776,8 +763,13 @@ void OnDiskHNSWIndex::insertToLayer(transaction::Transaction* transaction, commo
         }
         entryPoint = hnswStorageInfo.lowerEntryPoint;
     }
-    const auto closest = searchKNNInLayer(transaction, queryVector, entryPoint,
-        insertState.searchState, isUpperLayer);
+    if (isUpperLayer) {
+        // TODO: searchKNN should be layer insensitive.
+        // TODO: Support inserting into the upper layer.
+        return;
+    }
+    const auto closest =
+        searchKNNInLowerLayer(transaction, queryVector, entryPoint, insertState.searchState);
     createRels(transaction, offset, closest, isUpperLayer, insertState);
     for (const auto& n : closest) {
         createRels(transaction, n.nodeOffset, {{offset, std::numeric_limits<double>::max()}},
@@ -817,8 +809,6 @@ void OnDiskHNSWIndex::createRels(transaction::Transaction* transaction, common::
             // If the number of existing rels exceeds the threshold, we need to shrink the rels
             // right away.
             shrinkForNode(transaction, offset, isUpperLayer, maxDegree, insertState);
-            isUpperLayer ? insertState.upperNodesToShrink.erase(offset) :
-                           insertState.lowerNodesToShrink.erase(offset);
         } else {
             isUpperLayer ? insertState.upperNodesToShrink.insert(offset) :
                            insertState.lowerNodesToShrink.insert(offset);
@@ -830,7 +820,6 @@ void OnDiskHNSWIndex::shrinkForNode(transaction::Transaction* transaction, commo
     bool isUpperLayer, common::length_t maxDegree, CheckpointInsertionState& insertState) {
     const auto vector = embeddings->getEmbedding(transaction,
         *insertState.searchState.embeddingScanState.scanState, offset);
-    KU_ASSERT(vector);
     const auto& searchState = insertState.searchState;
     const auto& graph = isUpperLayer ? searchState.upperGraph : searchState.lowerGraph;
     const auto relTableID = isUpperLayer ? storageInfo->cast<HNSWStorageInfo>().upperRelTableID :
@@ -855,9 +844,6 @@ void OnDiskHNSWIndex::shrinkForNode(transaction::Transaction* transaction, commo
     std::vector<NodeWithDistance> nbrs;
     nbrs.reserve(nbrOffsets.size());
     for (size_t i = 0; i < nbrOffsets.size(); i++) {
-        if (!nbrVectors[i]) {
-            continue;
-        }
         auto dist = metricFunc(vector, nbrVectors[i], embeddings->getDimension());
         nbrs.emplace_back(nbrOffsets[i], dist);
     }

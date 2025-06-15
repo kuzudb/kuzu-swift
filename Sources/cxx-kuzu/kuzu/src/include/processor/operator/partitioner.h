@@ -2,12 +2,13 @@
 
 #include "common/enums/column_evaluate_type.h"
 #include "expression_evaluator/expression_evaluator.h"
-#include "processor/operator/base_partitioner_shared_state.h"
 #include "processor/operator/sink.h"
 #include "storage/table/in_mem_chunked_node_group_collection.h"
 
 namespace kuzu {
 namespace storage {
+class NodeTable;
+class RelTable;
 class MemoryManager;
 } // namespace storage
 namespace transaction {
@@ -38,19 +39,31 @@ struct PartitioningInfo;
 struct PartitionerDataInfo;
 struct PartitionerInfo;
 struct RelBatchInsertProgressSharedState;
-
-struct CopyPartitionerSharedState : public PartitionerSharedState {
+struct KUZU_API PartitionerSharedState {
     std::mutex mtx;
+    storage::NodeTable* srcNodeTable;
+    storage::NodeTable* dstNodeTable;
+    storage::RelTable* relTable;
     storage::MemoryManager& mm;
 
-    explicit CopyPartitionerSharedState(storage::MemoryManager& mm) : mm{mm} {}
+    explicit PartitionerSharedState(storage::MemoryManager& mm)
+        : srcNodeTable{nullptr}, dstNodeTable{nullptr}, relTable(nullptr), mm{mm}, numNodes{0, 0},
+          numPartitions{0, 0}, nextPartitionIdx{0} {}
 
+    static constexpr size_t DIRECTIONS = 2;
+    std::array<common::offset_t, DIRECTIONS> numNodes;
+    std::array<common::partition_idx_t, DIRECTIONS>
+        numPartitions; // num of partitions in each direction.
     std::vector<std::unique_ptr<PartitioningBuffer>> partitioningBuffers;
+    std::atomic<common::partition_idx_t> nextPartitionIdx;
 
     void initialize(const common::logical_type_vec_t& columnTypes, common::idx_t numPartitioners,
-        const main::ClientContext* clientContext) override;
+        const main::ClientContext* clientContext);
 
-    void resetState(common::idx_t partitioningIdx) override;
+    common::partition_idx_t getNextPartition(common::idx_t partitioningIdx,
+        RelBatchInsertProgressSharedState& progressSharedState);
+
+    void resetState();
     void merge(const std::vector<std::unique_ptr<PartitioningBuffer>>& localPartitioningStates);
 
     // Must only be called once for any given parameters.
@@ -155,7 +168,7 @@ class Partitioner final : public Sink {
 
 public:
     Partitioner(PartitionerInfo info, PartitionerDataInfo dataInfo,
-        std::shared_ptr<CopyPartitionerSharedState> sharedState,
+        std::shared_ptr<PartitionerSharedState> sharedState,
         std::unique_ptr<PhysicalOperator> child, physical_op_id id,
         std::unique_ptr<OPPrintInfo> printInfo);
 
@@ -163,7 +176,7 @@ public:
     void initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) override;
     void executeInternal(ExecutionContext* context) override;
 
-    std::shared_ptr<CopyPartitionerSharedState> getSharedState() { return sharedState; }
+    std::shared_ptr<PartitionerSharedState> getSharedState() { return sharedState; }
 
     std::unique_ptr<PhysicalOperator> copy() override {
         return std::make_unique<Partitioner>(info.copy(), dataInfo.copy(), sharedState,
@@ -172,7 +185,7 @@ public:
 
     static void initializePartitioningStates(const common::logical_type_vec_t& columnTypes,
         std::vector<std::unique_ptr<PartitioningBuffer>>& partitioningBuffers,
-        const std::array<common::partition_idx_t, CopyPartitionerSharedState::DIRECTIONS>&
+        const std::array<common::partition_idx_t, PartitionerSharedState::DIRECTIONS>&
             numPartitions,
         common::idx_t numPartitioners);
 
@@ -188,7 +201,7 @@ private:
 private:
     PartitionerDataInfo dataInfo;
     PartitionerInfo info;
-    std::shared_ptr<CopyPartitionerSharedState> sharedState;
+    std::shared_ptr<PartitionerSharedState> sharedState;
     std::unique_ptr<PartitionerLocalState> localState;
 
     // Intermediate temp value vector.

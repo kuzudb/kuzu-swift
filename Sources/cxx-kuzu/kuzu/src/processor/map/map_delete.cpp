@@ -15,15 +15,24 @@ using namespace kuzu::storage;
 namespace kuzu {
 namespace processor {
 
-std::vector<RelTable*> getFwdRelTables(table_id_t nodeTableID, const main::ClientContext* context) {
+static void checkDetachDeleteRelDirection(const RelTable* relTable, const NodeTable* nodeTable) {
+    if (relTable->getStorageDirections().size() < NUM_REL_DIRECTIONS) {
+        throw RuntimeException(stringFormat(
+            "Cannot detach delete from node table '{}' as it has connected edges in rel "
+            "table '{}' (detach delete only supports deleting from rel tables with "
+            "storage direction 'both').",
+            nodeTable->getTableName(), relTable->getTableName()));
+    }
+}
+
+std::vector<RelTable*> getFwdRelTables(table_id_t nodeTableID, main::ClientContext* context) {
     std::vector<RelTable*> result;
-    for (const auto entry :
-        context->getCatalog()->getRelGroupEntries(context->getTransaction(), false)) {
+    for (auto entry : context->getCatalog()->getRelGroupEntries(context->getTransaction())) {
         auto& relGroupEntry = entry->constCast<RelGroupCatalogEntry>();
         for (auto& relEntryInfo : relGroupEntry.getRelEntryInfos()) {
-            const auto srcTableID = relEntryInfo.nodePair.srcTableID;
+            auto srcTableID = relEntryInfo.nodePair.srcTableID;
             if (srcTableID == nodeTableID) {
-                const auto relTable = context->getStorageManager()->getTable(relEntryInfo.oid);
+                auto relTable = context->getStorageManager()->getTable(relEntryInfo.oid);
                 result.push_back(relTable->ptrCast<RelTable>());
             }
         }
@@ -31,15 +40,14 @@ std::vector<RelTable*> getFwdRelTables(table_id_t nodeTableID, const main::Clien
     return result;
 }
 
-std::vector<RelTable*> getBwdRelTables(table_id_t nodeTableID, const main::ClientContext* context) {
+std::vector<RelTable*> getBwdRelTables(table_id_t nodeTableID, main::ClientContext* context) {
     std::vector<RelTable*> result;
-    for (const auto entry :
-        context->getCatalog()->getRelGroupEntries(context->getTransaction(), false)) {
+    for (auto entry : context->getCatalog()->getRelGroupEntries(context->getTransaction())) {
         auto& relGroupEntry = entry->constCast<RelGroupCatalogEntry>();
         for (auto& relEntryInfo : relGroupEntry.getRelEntryInfos()) {
-            const auto dstTableID = relEntryInfo.nodePair.dstTableID;
+            auto dstTableID = relEntryInfo.nodePair.dstTableID;
             if (dstTableID == nodeTableID) {
-                const auto relTable = context->getStorageManager()->getTable(relEntryInfo.oid);
+                auto relTable = context->getStorageManager()->getTable(relEntryInfo.oid);
                 result.push_back(relTable->ptrCast<RelTable>());
             }
         }
@@ -56,9 +64,11 @@ NodeTableDeleteInfo PlanMapper::getNodeTableDeleteInfo(const TableCatalogEntry& 
     std::unordered_set<RelTable*> bwdRelTables;
     auto& nodeEntry = entry.constCast<NodeTableCatalogEntry>();
     for (auto relTable : getFwdRelTables(nodeEntry.getTableID(), clientContext)) {
+        checkDetachDeleteRelDirection(relTable, table);
         fwdRelTables.insert(relTable);
     }
     for (auto relTable : getBwdRelTables(nodeEntry.getTableID(), clientContext)) {
+        checkDetachDeleteRelDirection(relTable, table);
         bwdRelTables.insert(relTable);
     }
     return NodeTableDeleteInfo(table, std::move(fwdRelTables), std::move(bwdRelTables), pkPos);

@@ -330,30 +330,35 @@ std::pair<std::unique_ptr<ColumnChunk>, std::unique_ptr<ColumnChunk>> ChunkedNod
 bool ChunkedNodeGroup::lookup(const Transaction* transaction, const TableScanState& state,
     const NodeGroupScanState& nodeGroupScanState, offset_t rowIdxInChunk, sel_t posInOutput) const {
     KU_ASSERT(rowIdxInChunk + 1 <= numRows);
-    const bool hasValuesToRead = versionInfo ? versionInfo->isSelected(transaction->getStartTS(),
-                                                   transaction->getID(), rowIdxInChunk) :
-                                               true;
-    if (!hasValuesToRead) {
-        return false;
+    std::unique_ptr<SelectionVector> selVector = nullptr;
+    bool hasValuesToScan = true;
+    if (versionInfo) {
+        selVector = std::make_unique<SelectionVector>(DEFAULT_VECTOR_CAPACITY);
+        versionInfo->getSelVectorToScan(transaction->getStartTS(), transaction->getID(), *selVector,
+            rowIdxInChunk, 1);
+        hasValuesToScan = selVector->getSelSize() > 0;
     }
-    for (auto i = 0u; i < state.columnIDs.size(); i++) {
-        const auto columnID = state.columnIDs[i];
-        if (columnID == INVALID_COLUMN_ID) {
-            state.outputVectors[i]->setAllNull();
-            continue;
+    if (hasValuesToScan) {
+        for (auto i = 0u; i < state.columnIDs.size(); i++) {
+            const auto columnID = state.columnIDs[i];
+            if (columnID == INVALID_COLUMN_ID) {
+                state.outputVectors[i]->setAllNull();
+                continue;
+            }
+            if (columnID == ROW_IDX_COLUMN_ID) {
+                state.rowIdxVector->setValue<row_idx_t>(
+                    state.rowIdxVector->state->getSelVector()[posInOutput],
+                    rowIdxInChunk + startRowIdx);
+                continue;
+            }
+            KU_ASSERT(columnID < chunks.size());
+            KU_ASSERT(i < nodeGroupScanState.chunkStates.size());
+            chunks[columnID]->lookup(transaction, nodeGroupScanState.chunkStates[i], rowIdxInChunk,
+                *state.outputVectors[i],
+                state.outputVectors[i]->state->getSelVector()[posInOutput]);
         }
-        if (columnID == ROW_IDX_COLUMN_ID) {
-            state.rowIdxVector->setValue<row_idx_t>(
-                state.rowIdxVector->state->getSelVector()[posInOutput],
-                rowIdxInChunk + startRowIdx);
-            continue;
-        }
-        KU_ASSERT(columnID < chunks.size());
-        KU_ASSERT(i < nodeGroupScanState.chunkStates.size());
-        chunks[columnID]->lookup(transaction, nodeGroupScanState.chunkStates[i], rowIdxInChunk,
-            *state.outputVectors[i], state.outputVectors[i]->state->getSelVector()[posInOutput]);
     }
-    return true;
+    return hasValuesToScan;
 }
 
 void ChunkedNodeGroup::update(const Transaction* transaction, row_idx_t rowIdxInChunk,

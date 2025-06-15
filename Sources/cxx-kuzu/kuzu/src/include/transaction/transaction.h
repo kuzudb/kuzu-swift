@@ -2,6 +2,7 @@
 
 #include <mutex>
 
+#include "common/enums/statement_type.h"
 #include "common/types/types.h"
 
 namespace kuzu {
@@ -101,7 +102,12 @@ public:
     int64_t getCurrentTS() const { return currentTS; }
     main::ClientContext* getClientContext() const { return clientContext; }
 
-    void setForceCheckpoint() { forceCheckpoint = true; }
+    void checkForceCheckpoint(common::StatementType statementType) {
+        // Note: We always force checkpoint for COPY_FROM statement.
+        if (statementType == common::StatementType::COPY_FROM) {
+            forceCheckpoint = true;
+        }
+    }
     bool shouldAppendToUndoBuffer() const {
         return getID() > DUMMY_TRANSACTION_ID && !isReadOnly();
     }

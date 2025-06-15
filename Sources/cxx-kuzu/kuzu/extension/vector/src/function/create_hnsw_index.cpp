@@ -6,7 +6,6 @@
 #include "function/hnsw_index_functions.h"
 #include "function/table/bind_data.h"
 #include "index/hnsw_index_utils.h"
-#include "index/hnsw_rel_batch_insert.h"
 #include "planner/operator/logical_operator.h"
 #include "planner/operator/logical_table_function_call.h"
 #include "processor/execution_context.h"
@@ -166,7 +165,7 @@ static std::unique_ptr<PhysicalOperator> getPhysicalPlan(PlanMapper* planMapper,
     auto lowerRelTable = storageManager->getTable(lowerRelTableEntry->getSingleRelEntryInfo().oid)
                              ->ptrCast<storage::RelTable>();
     // Initialize partitioner shared state.
-    auto& partitionerSharedState = finalizeFuncSharedState->partitionerSharedState;
+    const auto partitionerSharedState = finalizeFuncSharedState->partitionerSharedState;
     partitionerSharedState->setTables(nodeTable, upperRelTable);
     logical_type_vec_t callColumnTypes;
     callColumnTypes.push_back(LogicalType::INTERNAL_ID());
@@ -192,18 +191,16 @@ static std::unique_ptr<PhysicalOperator> getPhysicalPlan(PlanMapper* planMapper,
         fTable, &storageManager->getWAL(), clientContext->getMemoryManager());
     auto copyRelUpper = planMapper->createRelBatchInsertOp(clientContext,
         partitionerSharedState->upperPartitionerSharedState, upperBatchInsertSharedState,
-        upperCopyFromInfo, logicalOp->getSchema(), common::RelDataDirection::FWD, nodeTableID,
-        nodeTableID, columnIDs, LogicalType::copy(columnTypes), planMapper->getOperatorID(),
-        std::make_unique<HNSWRelBatchInsert>());
+        upperCopyFromInfo, logicalOp->getSchema(), RelDataDirection::FWD, nodeTableID, nodeTableID,
+        columnIDs, LogicalType::copy(columnTypes), planMapper->getOperatorID());
     binder::BoundCopyFromInfo lowerCopyFromInfo(lowerRelTableName, TableType::REL, nullptr, nullptr,
         {}, {}, nullptr);
     const auto lowerBatchInsertSharedState = std::make_shared<BatchInsertSharedState>(lowerRelTable,
         fTable, &storageManager->getWAL(), clientContext->getMemoryManager());
     auto copyRelLower = planMapper->createRelBatchInsertOp(clientContext,
         partitionerSharedState->lowerPartitionerSharedState, lowerBatchInsertSharedState,
-        lowerCopyFromInfo, logicalOp->getSchema(), common::RelDataDirection::FWD, nodeTableID,
-        nodeTableID, columnIDs, LogicalType::copy(columnTypes), planMapper->getOperatorID(),
-        std::make_unique<HNSWRelBatchInsert>());
+        lowerCopyFromInfo, logicalOp->getSchema(), RelDataDirection::FWD, nodeTableID, nodeTableID,
+        columnIDs, LogicalType::copy(columnTypes), planMapper->getOperatorID());
     physical_op_vector_t children;
     children.push_back(std::move(copyRelUpper));
     children.push_back(std::move(copyRelLower));
@@ -233,11 +230,13 @@ static std::unique_ptr<TableFuncBindData> finalizeHNSWBindFunc(main::ClientConte
 }
 
 static std::unique_ptr<TableFuncSharedState> initFinalizeHNSWSharedState(
-    const TableFuncInitSharedStateInput&) {
-    return std::make_unique<FinalizeHNSWSharedState>();
+    const TableFuncInitSharedStateInput& input) {
+    return std::make_unique<FinalizeHNSWSharedState>(
+        *input.context->clientContext->getMemoryManager());
 }
 
 static offset_t finalizeHNSWTableFunc(const TableFuncInput& input, TableFuncOutput&) {
+    const auto& context = *input.context->clientContext;
     const auto sharedState = input.sharedState->ptrCast<FinalizeHNSWSharedState>();
     const auto& hnswIndex = input.sharedState->ptrCast<FinalizeHNSWSharedState>()->hnswIndex;
     const auto morsel = sharedState->getMorsel();
@@ -245,7 +244,7 @@ static offset_t finalizeHNSWTableFunc(const TableFuncInput& input, TableFuncOutp
         return 0;
     }
     for (auto i = morsel.startOffset; i < morsel.endOffset; i++) {
-        hnswIndex->finalize(i);
+        hnswIndex->finalize(*context.getMemoryManager(), i, *sharedState->partitionerSharedState);
     }
     sharedState->numNodeGroupsFinalized.fetch_add(morsel.endOffset - morsel.startOffset);
     return morsel.endOffset - morsel.startOffset;
@@ -284,10 +283,6 @@ static void finalizeHNSWTableFinalizeFunc(const ExecutionContext* context,
     auto nodeTable =
         clientContext->getStorageManager()->getTable(nodeTableID)->ptrCast<storage::NodeTable>();
     nodeTable->addIndex(std::move(onDiskIndex));
-    // Force checkpoint is needed to ensure that the index is persisted before we can support the
-    // replay of index creation.
-    transaction->setForceCheckpoint();
-    index->moveToPartitionState(*hnswSharedState->partitionerSharedState);
 }
 
 static double finalizeHNSWProgressFunc(TableFuncSharedState* sharedState) {
