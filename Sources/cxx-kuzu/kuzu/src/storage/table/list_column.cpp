@@ -210,13 +210,14 @@ void ListColumn::lookupInternal(const Transaction* transaction, const ChunkState
     const auto listEndOffset = readOffset(transaction, state, offsetInChunk);
     const auto size = readSize(transaction, state, offsetInChunk);
     const auto listStartOffset = listEndOffset - size;
-    auto dataVector = ListVector::getDataVector(resultVector);
-    auto currentListDataSize = ListVector::getDataVectorSize(resultVector);
-    ListVector::resizeDataVector(resultVector, currentListDataSize + size);
+    const auto offsetInVector =
+        posInVector == 0 ? 0 : resultVector->getValue<offset_t>(posInVector - 1);
+    resultVector->setValue(posInVector, list_entry_t{offsetInVector, size});
+    ListVector::resizeDataVector(resultVector, offsetInVector + size);
+    const auto dataVector = ListVector::getDataVector(resultVector);
     dataColumn->scan(transaction,
         state.childrenStates[ListChunkData::DATA_COLUMN_CHILD_READ_STATE_IDX], listStartOffset,
-        listEndOffset, dataVector, currentListDataSize);
-    resultVector->setValue(posInVector, list_entry_t{currentListDataSize, size});
+        listEndOffset, dataVector, offsetInVector);
 }
 
 void ListColumn::scanUnfiltered(Transaction* transaction, const ChunkState& state,

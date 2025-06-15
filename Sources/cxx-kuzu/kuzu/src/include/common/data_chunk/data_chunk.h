@@ -31,12 +31,12 @@ public:
 
     void resetAuxiliaryBuffer();
 
-    uint32_t getNumValueVectors() const { return valueVectors.size(); }
+    inline uint32_t getNumValueVectors() const { return valueVectors.size(); }
 
-    const ValueVector& getValueVector(uint64_t valueVectorPos) const {
+    inline const ValueVector& getValueVector(uint64_t valueVectorPos) const {
         return *valueVectors[valueVectorPos];
     }
-    ValueVector& getValueVectorMutable(uint64_t valueVectorPos) const {
+    inline ValueVector& getValueVectorMutable(uint64_t valueVectorPos) const {
         return *valueVectors[valueVectorPos];
     }
 

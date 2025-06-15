@@ -156,17 +156,18 @@ void StorageManager::reclaimDroppedTables(const Catalog& catalog) {
     }
 }
 
-bool StorageManager::checkpoint(main::ClientContext* context) {
+bool StorageManager::checkpoint(const Catalog& catalog) {
+    std::lock_guard lck{mtx};
     bool hasChanges = false;
-    const auto catalog = context->getCatalog();
-    const auto nodeTableEntries = catalog->getNodeTableEntries(&DUMMY_CHECKPOINT_TRANSACTION);
-    const auto relGroupEntries = catalog->getRelGroupEntries(&DUMMY_CHECKPOINT_TRANSACTION);
-    for (const auto entry : nodeTableEntries) {
-        if (!tables.contains(entry->getTableID())) {
-            throw RuntimeException(stringFormat(
-                "Checkpoint failed: table {} not found in storage manager.", entry->getName()));
+    const auto nodeTableEntries = catalog.getNodeTableEntries(&DUMMY_CHECKPOINT_TRANSACTION);
+    const auto relGroupEntries = catalog.getRelGroupEntries(&DUMMY_CHECKPOINT_TRANSACTION);
+    for (const auto tableEntry : nodeTableEntries) {
+        if (!tables.contains(tableEntry->getTableID())) {
+            throw RuntimeException(
+                stringFormat("Checkpoint failed: table {} not found in storage manager.",
+                    tableEntry->getName()));
         }
-        hasChanges = tables.at(entry->getTableID())->checkpoint(context, entry) || hasChanges;
+        hasChanges = tables.at(tableEntry->getTableID())->checkpoint(tableEntry) || hasChanges;
     }
     for (const auto entry : relGroupEntries) {
         for (auto& info : entry->getRelEntryInfos()) {
@@ -174,11 +175,11 @@ bool StorageManager::checkpoint(main::ClientContext* context) {
                 throw RuntimeException(stringFormat(
                     "Checkpoint failed: table {} not found in storage manager.", entry->getName()));
             }
-            hasChanges = tables.at(info.oid)->checkpoint(context, entry) || hasChanges;
+            hasChanges = tables.at(info.oid)->checkpoint(entry) || hasChanges;
         }
         entry->vacuumColumnIDs(1);
     }
-    reclaimDroppedTables(*catalog);
+    reclaimDroppedTables(catalog);
     return hasChanges;
 }
 
