@@ -26,7 +26,8 @@ final class FlatTupleTests: XCTestCase {
     }
 
     func testTupleGetAsString() throws {
-        let query = "MATCH (a:person) RETURN a.fName, a.age ORDER BY a.fName LIMIT 1;"
+        let query =
+            "MATCH (a:person) RETURN a.fName, a.age ORDER BY a.fName LIMIT 1;"
         let result = try conn.query(query)
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
@@ -35,7 +36,8 @@ final class FlatTupleTests: XCTestCase {
     }
 
     func testTupleGetAsArray() throws {
-        let query = "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
+        let query =
+            "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
         let result = try conn.query(query)
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
@@ -47,7 +49,8 @@ final class FlatTupleTests: XCTestCase {
     }
 
     func testTupleGetAsDictionary() throws {
-        let query = "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
+        let query =
+            "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
         let result = try conn.query(query)
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!
@@ -62,7 +65,8 @@ final class FlatTupleTests: XCTestCase {
     }
 
     func testGetValue() throws {
-        let query = "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
+        let query =
+            "MATCH (a:person) RETURN a.fName, a.gender, a.age ORDER BY a.fName LIMIT 1;"
         let result = try conn.query(query)
         XCTAssertTrue(result.hasNext())
         let tuple = try result.getNext()!

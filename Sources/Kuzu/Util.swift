@@ -591,48 +591,48 @@ internal func swiftValueToKuzuValue(_ value: Any?)
                 "Native Swift numeric types cannot be resolved correctly on Linux. Please use the wrapper structs instead."
             )
         #else
-        // Handle numeric types based on the real type of the number, instead
-        // of runtime casting (e.g. let number as Int), because a number can be
-        // casted to multiple types, which can cause inconsistencies.
-        // See https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/ObjCRuntimeGuide/Articles/ocrtTypeEncodings.html
-        let objCType = String(cString: number.objCType)
-        switch objCType {
-        case "c":
-            // Boolean is encoded as char in Swift / Objective-C.
-            valuePtr =
-                CFGetTypeID(number) == CFBooleanGetTypeID()
-                ? kuzu_value_create_bool(number as! Bool)
-                : kuzu_value_create_int8(number as! Int8)
-        case "i":
-            valuePtr = kuzu_value_create_int32(number as! Int32)
-        case "s":
-            valuePtr = kuzu_value_create_int16(number as! Int16)
-        case "l":
-            valuePtr = kuzu_value_create_int32(number as! Int32)
-        case "q":
-            valuePtr = kuzu_value_create_int64(number as! Int64)
-        //        Internally Swift does not seem to really use these UInt
-        //        type representations, so we use the `KuzuUIntWrapper`
-        //        structs as a workaround.
-        //        case "C":
-        //            valuePtr = kuzu_value_create_uint8(number as! UInt8)
-        //        case "I":
-        //            valuePtr = kuzu_value_create_uint32(number as! UInt32)
-        //        case "S":
-        //            valuePtr = kuzu_value_create_uint16(number as! UInt16)
-        //        case "L":
-        //            valuePtr = kuzu_value_create_uint32(number as! UInt32)
-        case "Q":
-            valuePtr = kuzu_value_create_uint64(number as! UInt64)
-        case "f":
-            valuePtr = kuzu_value_create_float(number as! Float32)
-        case "d":
-            valuePtr = kuzu_value_create_double(number as! Double)
-        default:
-            throw KuzuError.valueConversionFailed(
-                "Unsupported numeric type with encoding: \(objCType)"
-            )
-        }
+            // Handle numeric types based on the real type of the number, instead
+            // of runtime casting (e.g. let number as Int), because a number can be
+            // casted to multiple types, which can cause inconsistencies.
+            // See https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/ObjCRuntimeGuide/Articles/ocrtTypeEncodings.html
+            let objCType = String(cString: number.objCType)
+            switch objCType {
+            case "c":
+                // Boolean is encoded as char in Swift / Objective-C.
+                valuePtr =
+                    CFGetTypeID(number) == CFBooleanGetTypeID()
+                    ? kuzu_value_create_bool(number as! Bool)
+                    : kuzu_value_create_int8(number as! Int8)
+            case "i":
+                valuePtr = kuzu_value_create_int32(number as! Int32)
+            case "s":
+                valuePtr = kuzu_value_create_int16(number as! Int16)
+            case "l":
+                valuePtr = kuzu_value_create_int32(number as! Int32)
+            case "q":
+                valuePtr = kuzu_value_create_int64(number as! Int64)
+            //        Internally Swift does not seem to really use these UInt
+            //        type representations, so we use the `KuzuUIntWrapper`
+            //        structs as a workaround.
+            //        case "C":
+            //            valuePtr = kuzu_value_create_uint8(number as! UInt8)
+            //        case "I":
+            //            valuePtr = kuzu_value_create_uint32(number as! UInt32)
+            //        case "S":
+            //            valuePtr = kuzu_value_create_uint16(number as! UInt16)
+            //        case "L":
+            //            valuePtr = kuzu_value_create_uint32(number as! UInt32)
+            case "Q":
+                valuePtr = kuzu_value_create_uint64(number as! UInt64)
+            case "f":
+                valuePtr = kuzu_value_create_float(number as! Float32)
+            case "d":
+                valuePtr = kuzu_value_create_double(number as! Double)
+            default:
+                throw KuzuError.valueConversionFailed(
+                    "Unsupported numeric type with encoding: \(objCType)"
+                )
+            }
         #endif
     } else {
         switch value! {

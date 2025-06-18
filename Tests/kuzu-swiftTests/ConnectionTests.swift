@@ -59,7 +59,7 @@ final class ConnectionTests: XCTestCase {
             }
 
             // Give the query time to start
-            try await Task.sleep(nanoseconds: 500_000_000)
+            try await Task.sleep(nanoseconds: 1000_000_000)
             conn.interrupt()
 
             // Wait for task to finish

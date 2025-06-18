@@ -14,7 +14,6 @@ internal func getTestDatabase() throws -> (Database, Connection, String) {
         maxNumThreads: 4,
         enableCompression: true,
         readOnly: false,
-        maxDbSize: 16 * 1024 * 1024 * 1024,
         autoCheckpoint: true,
         checkpointThreshold: UInt64.max
     )

@@ -23,7 +23,6 @@ final class ExtensionTests: XCTestCase {
             maxNumThreads: 4,
             enableCompression: true,
             readOnly: false,
-            maxDbSize: 512 * 1024 * 1024,
             autoCheckpoint: true,
             checkpointThreshold: UInt64.max
         )

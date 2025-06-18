@@ -25,7 +25,6 @@ final class DatabaseTests: XCTestCase {
             maxNumThreads: 1,
             enableCompression: false,
             readOnly: false,
-            maxDbSize: 4 * 1024 * 1024 * 1024,
             autoCheckpoint: true,
             checkpointThreshold: 0
         )

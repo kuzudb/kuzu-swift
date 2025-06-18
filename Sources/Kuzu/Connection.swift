@@ -8,8 +8,9 @@
 @_implementationOnly import cxx_kuzu
 
 /// Represents a connection to a Kuzu database.
-public final class Connection : @unchecked Sendable{
+public final class Connection: @unchecked Sendable {
     internal var cConnection: kuzu_connection
+    internal var database: Database
 
     /// Opens a connection to the specified database.
     /// - Parameter database: The database to connect to
@@ -22,6 +23,7 @@ public final class Connection : @unchecked Sendable{
                 "Connection initialization failed with error code: \(state)"
             )
         }
+        self.database = database
     }
 
     deinit {

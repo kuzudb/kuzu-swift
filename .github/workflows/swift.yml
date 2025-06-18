@@ -8,9 +8,17 @@ jobs:
   build-and-test:
     strategy:
       matrix:
-        runner: [macos-14, ubuntu-24.04]
+        include:
+          - runner: macos-14
+            config: debug
+          - runner: macos-14
+            config: release
+          - runner: ubuntu-24.04
+            config: debug
+          - runner: ubuntu-24.04
+            config: release
       fail-fast: false
-    name: Build and Test on ${{ matrix.runner }}
+    name: Build and Test on ${{ matrix.runner }} (${{ matrix.config }})
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Set up Swift
@@ -19,7 +27,7 @@ jobs:
           curl -L https://swiftlygo.xyz/install.sh | sudo bash
           sudo swiftlygo install -y 5.10.1
       - uses: actions/checkout@v4
-      - name: Build
-        run: swift build
-      - name: Run tests
-        run: swift test
+      - name: Build (${{ matrix.config }} mode)
+        run: swift build -c ${{ matrix.config }}
+      - name: Run tests (${{ matrix.config }} mode)
+        run: swift test -c ${{ matrix.config }}
