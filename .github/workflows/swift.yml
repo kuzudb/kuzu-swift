@@ -19,7 +19,11 @@ jobs:
           curl -L https://swiftlygo.xyz/install.sh | sudo bash
           sudo swiftlygo install -y 5.10.1
       - uses: actions/checkout@v4
-      - name: Build
-        run: swift build
-      - name: Run tests
-        run: swift test
+      - name: Build (debug mode)
+        run: swift build -c debug
+      - name: Run tests (debug mode)
+        run: swift test -c debug
+      - name: Build (release mode)
+        run: swift build -c release
+      - name: Run tests (release mode)
+        run: swift test -c release
