@@ -18,13 +18,21 @@ public final class SystemConfig: @unchecked Sendable {
     /// Creates a new system configuration with default values.
     ///
     /// The default system configuration is as follows:
-    /// - BufferPoolSize: 80% of the total system memory
-    /// - MaxNumThreads: Number of CPU cores
+    /// - BufferPoolSize: 80% of the total system memory on macOS and Linux, 2GB on iOS, 1GB on tvOS, and 128MB on watchOS
+    /// - MaxNumThreads: Number of CPU cores available in the system
     /// - EnableCompression: true
     /// - ReadOnly: false
-    /// - MaxDbSize: 0 (unlimited)
     public init() {
         cSystemConfig = kuzu_default_system_config()
+        #if os(iOS)
+            cSystemConfig.buffer_pool_size = 2048 * 1024 * 1024
+        #endif
+        #if os(tvOS)
+            cSystemConfig.buffer_pool_size = 1024 * 1024 * 1024
+        #endif
+        #if os(watchOS)
+            cSystemConfig.buffer_pool_size = 128 * 1024 * 1024
+        #endif
     }
 
     /// Creates a new system configuration with the specified parameters.
@@ -34,7 +42,6 @@ public final class SystemConfig: @unchecked Sendable {
     ///   - maxNumThreads: The maximum number of threads that can be used by the database system. If 0, uses default (number of CPU cores).
     ///   - enableCompression: A boolean flag to enable or disable compression. Default is true.
     ///   - readOnly: A boolean flag to open the database in read-only mode. Default is false.
-    ///   - maxDbSize: The maximum size of the database in bytes. If 0, size is unlimited.
     ///   - autoCheckpoint: Whether to automatically create checkpoints. Default is true.
     ///   - checkpointThreshold: The threshold for creating checkpoints. If set to UInt64.max, uses default value.
     public convenience init(
@@ -42,7 +49,6 @@ public final class SystemConfig: @unchecked Sendable {
         maxNumThreads: UInt64 = 0,
         enableCompression: Bool = true,
         readOnly: Bool = false,
-        maxDbSize: UInt64 = 0,
         autoCheckpoint: Bool = true,
         checkpointThreshold: UInt64 = UInt64.max
     ) {
@@ -55,9 +61,6 @@ public final class SystemConfig: @unchecked Sendable {
         }
         cSystemConfig.enable_compression = enableCompression
         cSystemConfig.read_only = readOnly
-        if maxDbSize > 0 {
-            cSystemConfig.max_db_size = maxDbSize
-        }
         cSystemConfig.auto_checkpoint = autoCheckpoint
         if checkpointThreshold > 0 {
             cSystemConfig.checkpoint_threshold = checkpointThreshold
