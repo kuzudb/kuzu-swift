@@ -11,7 +11,7 @@ import Foundation
 /// A class representing a row in the result set of a query.
 /// FlatTuple provides access to the values in a query result row and methods to convert them to different formats.
 /// It conforms to `CustomStringConvertible` protocol for easy string representation.
-public final class FlatTuple: CustomStringConvertible, @unchecked Sendable{
+public final class FlatTuple: CustomStringConvertible, @unchecked Sendable {
     internal var cFlatTuple: kuzu_flat_tuple
     internal var queryResult: QueryResult
 

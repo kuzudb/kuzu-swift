@@ -12,7 +12,7 @@ import Foundation
 ///
 /// The configuration includes settings for buffer pool size, thread management,
 /// compression, read-only mode, and database size limits.
-public final class SystemConfig : @unchecked Sendable{
+public final class SystemConfig: @unchecked Sendable {
     internal var cSystemConfig: kuzu_system_config
 
     /// Creates a new system configuration with default values.

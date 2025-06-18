@@ -28,13 +28,13 @@ public enum KuzuError: Error {
     public var message: String {
         switch self {
         case .databaseInitializationFailed(let msg),
-             .connectionInitializationFailed(let msg),
-             .queryExecutionFailed(let msg),
-             .prepareStatmentFailed(let msg),
-             .valueConversionFailed(let msg),
-             .getFlatTupleFailed(let msg),
-             .getNextQueryResultFailed(let msg),
-             .getValueFailed(let msg):
+            .connectionInitializationFailed(let msg),
+            .queryExecutionFailed(let msg),
+            .prepareStatmentFailed(let msg),
+            .valueConversionFailed(let msg),
+            .getFlatTupleFailed(let msg),
+            .getNextQueryResultFailed(let msg),
+            .getValueFailed(let msg):
             return msg
         }
     }
@@ -42,7 +42,7 @@ public enum KuzuError: Error {
 
 /// Represents the internal ID of a node or relationship in Kuzu.
 /// It conforms to the Equatable protocol for easy comparison.
-public struct KuzuInternalId : Equatable{
+public struct KuzuInternalId: Equatable {
     /// The table ID of the node or relationship.
     public let tableId: UInt64
     /// The offset within the table.
@@ -96,7 +96,7 @@ public struct KuzuRecursiveRelationship {
 /// the underlying NSNumber type is the same for both types (type 'q').
 public struct KuzuUInt32Wrapper: Codable {
     public var value: UInt32
-    
+
     public init(value: UInt32) {
         self.value = value
     }
@@ -107,7 +107,7 @@ public struct KuzuUInt32Wrapper: Codable {
 /// the underlying NSNumber type is the same for both types (type 'i').
 public struct KuzuUInt16Wrapper: Codable {
     public var value: UInt16
-    
+
     public init(value: UInt16) {
         self.value = value
     }
@@ -118,7 +118,7 @@ public struct KuzuUInt16Wrapper: Codable {
 /// the underlying NSNumber type is the same for both types (type 's').
 public struct KuzuUInt8Wrapper: Codable {
     public var value: UInt8
-    
+
     public init(value: UInt8) {
         self.value = value
     }
@@ -130,7 +130,7 @@ public struct KuzuUInt8Wrapper: Codable {
 /// However, it is required on Linux, because CoreFoundation is not available.
 public struct KuzuUInt64Wrapper: Codable {
     public var value: UInt64
-    
+
     public init(value: UInt64) {
         self.value = value
     }
@@ -142,7 +142,7 @@ public struct KuzuUInt64Wrapper: Codable {
 /// However, it is required on Linux, because CoreFoundation is not available.
 public struct KuzuInt64Wrapper: Codable {
     public var value: Int64
-    
+
     public init(value: Int64) {
         self.value = value
     }
@@ -154,7 +154,7 @@ public struct KuzuInt64Wrapper: Codable {
 /// However, it is required on Linux, because CoreFoundation is not available.
 public struct KuzuInt32Wrapper: Codable {
     public var value: Int32
-    
+
     public init(value: Int32) {
         self.value = value
     }
@@ -166,7 +166,7 @@ public struct KuzuInt32Wrapper: Codable {
 /// However, it is required on Linux, because CoreFoundation is not available.
 public struct KuzuInt16Wrapper: Codable {
     public var value: Int16
-    
+
     public init(value: Int16) {
         self.value = value
     }
@@ -178,7 +178,7 @@ public struct KuzuInt16Wrapper: Codable {
 /// However, it is required on Linux, because CoreFoundation is not available.
 public struct KuzuInt8Wrapper: Codable {
     public var value: Int8
-    
+
     public init(value: Int8) {
         self.value = value
     }
@@ -190,7 +190,7 @@ public struct KuzuInt8Wrapper: Codable {
 /// However, it is required on Linux, because CoreFoundation is not available.
 public struct KuzuFloatWrapper: Codable {
     public var value: Float
-    
+
     public init(value: Float) {
         self.value = value
     }
@@ -202,7 +202,7 @@ public struct KuzuFloatWrapper: Codable {
 /// However, it is required on Linux, because CoreFoundation is not available.
 public struct KuzuDoubleWrapper: Codable {
     public var value: Double
-    
+
     public init(value: Double) {
         self.value = value
     }
@@ -214,7 +214,7 @@ public struct KuzuDoubleWrapper: Codable {
 /// However, it is required on Linux, because CoreFoundation is not available.
 public struct KuzuBoolWrapper: Codable {
     public var value: Bool
-    
+
     public init(value: Bool) {
         self.value = value
     }

@@ -456,7 +456,9 @@ final class ParameterTests: XCTestCase {
 
     func testArrayWithMixedTypesParam() throws {
         #if os(Linux)
-            let arrayParam: [Any] = ["One", "Two", "Three", KuzuInt64Wrapper(value: 4)]
+            let arrayParam: [Any] = [
+                "One", "Two", "Three", KuzuInt64Wrapper(value: 4),
+            ]
         #else
             let arrayParam: [Any] = ["One", "Two", "Three", 4]
         #endif
