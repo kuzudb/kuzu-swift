@@ -233,6 +233,13 @@ static decltype(auto) deserializeAlterRecord(Deserializer& deserializer) {
         deserializer.deserializeValue(newName);
         extraInfo = std::make_unique<BoundExtraRenameTableInfo>(std::move(newName));
     } break;
+    case AlterType::ADD_FROM_TO_CONNECTION: {
+        table_id_t fromTableID = INVALID_TABLE_ID;
+        table_id_t toTableID = INVALID_TABLE_ID;
+        deserializer.deserializeValue(fromTableID);
+        deserializer.deserializeValue(toTableID);
+        extraInfo = std::make_unique<BoundExtraAddFromToConnection>(fromTableID, toTableID);
+    } break;
     default: {
         KU_UNREACHABLE;
     }
@@ -299,7 +306,7 @@ std::unique_ptr<TableInsertionRecord> TableInsertionRecord::deserialize(Deserial
     deserializer.deserializeValue<row_idx_t>(numRows);
     deserializer.validateDebuggingInfo(key, "num_vectors");
     deserializer.deserializeValue(numVectors);
-    auto resultChunkState = std::make_shared<DataChunkState>();
+    auto resultChunkState = DataChunkState::getSingleValueDataChunkState();
     valueVectors.reserve(numVectors);
     for (auto i = 0u; i < numVectors; i++) {
         valueVectors.push_back(ValueVector::deSerialize(deserializer,
