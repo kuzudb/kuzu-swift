@@ -46,7 +46,7 @@ void WALReplayer::replay() const {
         Deserializer deserializer(std::make_unique<BufferedFileReader>(std::move(fileInfo)));
         RUNTIME_CHECK(bool nextRecordShouldBeRollback = false);
         while (!deserializer.finished()) {
-            // If an exception occurs while deserializing we will stop replaying
+            // If an exception occurs while deserializing, we will stop replaying
             auto walRecord = WALRecord::deserialize(deserializer, clientContext);
             KU_ASSERT(
                 !nextRecordShouldBeRollback || walRecord->type == WALRecordType::ROLLBACK_RECORD);
@@ -92,6 +92,9 @@ void WALReplayer::replayWALRecord(const WALRecord& walRecord) const {
     case WALRecordType::DROP_CATALOG_ENTRY_RECORD: {
         replayDropCatalogEntryRecord(walRecord);
     } break;
+    case WALRecordType::ALTER_TABLE_ENTRY_RECORD: {
+        replayAlterTableEntryRecord(walRecord);
+    } break;
     case WALRecordType::TABLE_INSERTION_RECORD: {
         replayTableInsertionRecord(walRecord);
     } break;
@@ -112,9 +115,6 @@ void WALReplayer::replayWALRecord(const WALRecord& walRecord) const {
     } break;
     case WALRecordType::COPY_TABLE_RECORD: {
         replayCopyTableRecord(walRecord);
-    } break;
-    case WALRecordType::ALTER_TABLE_ENTRY_RECORD: {
-        replayAlterTableEntryRecord(walRecord);
     } break;
     case WALRecordType::UPDATE_SEQUENCE_RECORD: {
         replayUpdateSequenceRecord(walRecord);
@@ -185,26 +185,49 @@ void WALReplayer::replayDropCatalogEntryRecord(const WALRecord& walRecord) const
 void WALReplayer::replayAlterTableEntryRecord(const WALRecord& walRecord) const {
     auto binder = Binder(&clientContext);
     auto& alterEntryRecord = walRecord.constCast<AlterTableEntryRecord>();
-    clientContext.getCatalog()->alterTableEntry(clientContext.getTransaction(),
-        *alterEntryRecord.ownedAlterInfo);
-    if (alterEntryRecord.ownedAlterInfo->alterType == AlterType::ADD_PROPERTY) {
+    auto catalog = clientContext.getCatalog();
+    auto transaction = clientContext.getTransaction();
+    auto storageManager = clientContext.getStorageManager();
+    auto ownedAlterInfo = alterEntryRecord.ownedAlterInfo.get();
+    catalog->alterTableEntry(transaction, *ownedAlterInfo);
+    switch (ownedAlterInfo->alterType) {
+    case AlterType::ADD_PROPERTY: {
         const auto exprBinder = binder.getExpressionBinder();
-        const auto addInfo =
-            alterEntryRecord.ownedAlterInfo->extraInfo->constPtrCast<BoundExtraAddPropertyInfo>();
+        const auto addInfo = ownedAlterInfo->extraInfo->constPtrCast<BoundExtraAddPropertyInfo>();
         // We don't implicit cast here since it must already be done the first time
         const auto boundDefault =
             exprBinder->bindExpression(*addInfo->propertyDefinition.defaultExpr);
         auto exprMapper = ExpressionMapper();
         const auto defaultValueEvaluator = exprMapper.getEvaluator(boundDefault);
         defaultValueEvaluator->init(ResultSet(0) /* dummy ResultSet */, &clientContext);
-        const auto schema = clientContext.getCatalog()->getTableCatalogEntry(
-            clientContext.getTransaction(), alterEntryRecord.ownedAlterInfo->tableName);
-        const auto& addedProp = schema->getProperty(addInfo->propertyDefinition.getName());
+        const auto entry = catalog->getTableCatalogEntry(transaction, ownedAlterInfo->tableName);
+        const auto& addedProp = entry->getProperty(addInfo->propertyDefinition.getName());
         TableAddColumnState state{addedProp, *defaultValueEvaluator};
         KU_ASSERT(clientContext.getStorageManager());
-        const auto storageManager = clientContext.getStorageManager();
-        storageManager->getTable(schema->getTableID())
-            ->addColumn(clientContext.getTransaction(), state);
+        switch (entry->getTableType()) {
+        case TableType::REL: {
+            for (auto& relEntryInfo : entry->cast<RelGroupCatalogEntry>().getRelEntryInfos()) {
+                storageManager->getTable(relEntryInfo.oid)->addColumn(transaction, state);
+            }
+        } break;
+        case TableType::NODE: {
+            storageManager->getTable(entry->getTableID())->addColumn(transaction, state);
+        } break;
+        default: {
+            KU_UNREACHABLE;
+        }
+        }
+    } break;
+    case AlterType::ADD_FROM_TO_CONNECTION: {
+        auto extraInfo = ownedAlterInfo->extraInfo->constPtrCast<BoundExtraAlterFromToConnection>();
+        auto relGroupEntry = catalog->getTableCatalogEntry(transaction, ownedAlterInfo->tableName)
+                                 ->ptrCast<RelGroupCatalogEntry>();
+        auto relEntryInfo =
+            relGroupEntry->getRelEntryInfo(extraInfo->fromTableID, extraInfo->toTableID);
+        storageManager->addRelTable(relGroupEntry, *relEntryInfo);
+    } break;
+    default:
+        break;
     }
 }
 
