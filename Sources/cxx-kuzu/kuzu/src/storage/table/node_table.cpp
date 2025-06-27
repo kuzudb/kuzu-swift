@@ -167,7 +167,9 @@ bool RollbackPKDeleter::processScanOutput(Transaction* transaction, MemoryManage
             static constexpr auto isVisible = [](offset_t) { return true; };
             if (offset_t lookupOffset = 0;
                 pkIndex.lookup(transaction, key, lookupOffset, isVisible)) {
-                pkIndex.delete_(key);
+                // If we delete the key then it will not be visible to future transactions within
+                // this process
+                pkIndex.discardLocal(key);
             }
         }
     };
@@ -295,6 +297,7 @@ bool NodeTable::scanInternal(Transaction* transaction, TableScanState& scanState
     return scanState.scanNext(transaction);
 }
 
+template<bool lock>
 bool NodeTable::lookup(const Transaction* transaction, const TableScanState& scanState) const {
     KU_ASSERT(scanState.nodeIDVector->state->getSelVector().getSelSize() == 1);
     const auto nodeIDPos = scanState.nodeIDVector->state->getSelVector()[0];
@@ -308,9 +311,19 @@ bool NodeTable::lookup(const Transaction* transaction, const TableScanState& sca
                 StorageUtils::getStartOffsetOfNodeGroup(scanState.nodeGroupIdx) :
             nodeOffset - StorageUtils::getStartOffsetOfNodeGroup(scanState.nodeGroupIdx);
     scanState.rowIdxVector->setValue<row_idx_t>(nodeIDPos, rowIdxInGroup);
-    return scanState.nodeGroup->lookup(transaction, scanState);
+    if constexpr (lock) {
+        return scanState.nodeGroup->lookup(transaction, scanState);
+    } else {
+        return scanState.nodeGroup->lookupNoLock(transaction, scanState);
+    }
 }
 
+template bool NodeTable::lookup<true>(const Transaction* transaction,
+    const TableScanState& scanState) const;
+template bool NodeTable::lookup<false>(const Transaction* transaction,
+    const TableScanState& scanState) const;
+
+template<bool lock>
 void NodeTable::lookupMultiple(Transaction* transaction, TableScanState& scanState) const {
     const auto numRowsToRead = scanState.nodeIDVector->state->getSelSize();
     for (auto i = 0u; i < numRowsToRead; i++) {
@@ -339,9 +352,18 @@ void NodeTable::lookupMultiple(Transaction* transaction, TableScanState& scanSta
             initScanState(transaction, scanState);
         }
         scanState.rowIdxVector->setValue<row_idx_t>(nodeIDPos, rowIdxInGroup);
-        [[maybe_unused]] auto res = scanState.nodeGroup->lookup(transaction, scanState, i);
+        if constexpr (lock) {
+            (void)scanState.nodeGroup->lookup(transaction, scanState, i);
+        } else {
+            (void)scanState.nodeGroup->lookupNoLock(transaction, scanState, i);
+        }
     }
 }
+
+template void NodeTable::lookupMultiple<true>(Transaction* transaction,
+    TableScanState& scanState) const;
+template void NodeTable::lookupMultiple<false>(Transaction* transaction,
+    TableScanState& scanState) const;
 
 offset_t NodeTable::validateUniquenessConstraint(const Transaction* transaction,
     const std::vector<ValueVector*>& propertyVectors) const {

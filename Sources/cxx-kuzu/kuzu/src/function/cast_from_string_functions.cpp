@@ -296,7 +296,7 @@ template<typename T>
 static bool splitCStringList(const char* input, uint64_t len, T& state, const CSVOption* option) {
     auto end = input + len;
     uint64_t lvl = 1;
-    bool seen_value = false;
+    bool seenValue = false;
 
     // locate [
     skipWhitespace(input, end);
@@ -305,33 +305,37 @@ static bool splitCStringList(const char* input, uint64_t len, T& state, const CS
     }
     skipWhitespace(++input, end);
 
-    auto start_ptr = input;
+    bool justFinishedEntry = true; // true at start
+    auto startPtr = input;
     while (input < end) {
         auto ch = *input;
         if (ch == CopyConstants::DEFAULT_CSV_LIST_BEGIN_CHAR) {
             if (!skipToClose(input, end, ++lvl, CopyConstants::DEFAULT_CSV_LIST_END_CHAR, option)) {
                 return false;
             }
-        } else if (ch == '\'' || ch == '"') {
+        } else if ((ch == '\'' || ch == '"') && justFinishedEntry) {
+            const char* prevInput = input;
             if (!skipToCloseQuotes(input, end)) {
-                return false;
+                input = prevInput;
             }
         } else if (ch == '{') {
             uint64_t struct_lvl = 0;
             skipToClose(input, end, struct_lvl, '}', option);
         } else if (ch == ',' || ch == CopyConstants::DEFAULT_CSV_LIST_END_CHAR) { // split
-            if (ch != CopyConstants::DEFAULT_CSV_LIST_END_CHAR || start_ptr < input || seen_value) {
-                state.handleValue(start_ptr, input, option);
-                seen_value = true;
+            if (ch != CopyConstants::DEFAULT_CSV_LIST_END_CHAR || startPtr < input || seenValue) {
+                state.handleValue(startPtr, input, option);
+                seenValue = true;
             }
             if (ch == CopyConstants::DEFAULT_CSV_LIST_END_CHAR) { // last ]
                 lvl--;
                 break;
             }
             skipWhitespace(++input, end);
-            start_ptr = input;
+            startPtr = input;
+            justFinishedEntry = true;
             continue;
         }
+        justFinishedEntry = false;
         input++;
     }
     skipWhitespace(++input, end);
@@ -843,14 +847,34 @@ void CastString::operation(const ku_string_t& input, union_entry_t& result,
         resultVector, rowToAdd, CSVOption);
 }
 
+static void setVectorNull(ValueVector* vector, uint64_t vectorPos, std::string_view strVal,
+    const CSVOption* option) {
+    auto& type = vector->dataType;
+    switch (type.getLogicalTypeID()) {
+    case LogicalTypeID::STRING: {
+        if (std::any_of(option->nullStrings.begin(), option->nullStrings.end(),
+                [&](const std::string& nullStr) { return nullStr == strVal; })) {
+            vector->setNull(vectorPos, true /* isNull */);
+            return;
+        }
+    } break;
+    default: {
+        if (isNull(strVal)) {
+            vector->setNull(vectorPos, true /* isNull */);
+            return;
+        }
+    } break;
+    }
+    vector->setNull(vectorPos, false /* isNull */);
+}
+
 void CastString::copyStringToVector(ValueVector* vector, uint64_t vectorPos,
     std::string_view strVal, const CSVOption* option) {
     auto& type = vector->dataType;
-    if (strVal.empty() || isNull(strVal) || isAnyType(strVal)) {
-        vector->setNull(vectorPos, true /* isNull */);
+    setVectorNull(vector, vectorPos, strVal, option);
+    if (vector->isNull(vectorPos)) {
         return;
     }
-    vector->setNull(vectorPos, false /* isNull */);
     switch (type.getLogicalTypeID()) {
     case LogicalTypeID::INT128: {
         int128_t val = 0;
