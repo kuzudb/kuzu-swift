@@ -188,10 +188,11 @@ static void serializeAlterExtraInfo(Serializer& serializer, const BoundAlterInfo
         auto renameTableInfo = extraInfo->constPtrCast<BoundExtraRenameTableInfo>();
         serializer.write(renameTableInfo->newName);
     } break;
-    case AlterType::ADD_FROM_TO_CONNECTION: {
-        auto fromToConnectionInfo = extraInfo->constPtrCast<BoundExtraAddFromToConnection>();
-        serializer.write(fromToConnectionInfo->srcTableID);
-        serializer.write(fromToConnectionInfo->dstTableID);
+    case AlterType::ADD_FROM_TO_CONNECTION:
+    case AlterType::DROP_FROM_TO_CONNECTION: {
+        auto connectionInfo = extraInfo->constPtrCast<BoundExtraAlterFromToConnection>();
+        serializer.write(connectionInfo->fromTableID);
+        serializer.write(connectionInfo->toTableID);
     } break;
     default: {
         KU_UNREACHABLE;
@@ -232,6 +233,14 @@ static decltype(auto) deserializeAlterRecord(Deserializer& deserializer) {
         std::string newName;
         deserializer.deserializeValue(newName);
         extraInfo = std::make_unique<BoundExtraRenameTableInfo>(std::move(newName));
+    } break;
+    case AlterType::ADD_FROM_TO_CONNECTION:
+    case AlterType::DROP_FROM_TO_CONNECTION: {
+        table_id_t fromTableID = INVALID_TABLE_ID;
+        table_id_t toTableID = INVALID_TABLE_ID;
+        deserializer.deserializeValue(fromTableID);
+        deserializer.deserializeValue(toTableID);
+        extraInfo = std::make_unique<BoundExtraAlterFromToConnection>(fromTableID, toTableID);
     } break;
     default: {
         KU_UNREACHABLE;
@@ -299,7 +308,7 @@ std::unique_ptr<TableInsertionRecord> TableInsertionRecord::deserialize(Deserial
     deserializer.deserializeValue<row_idx_t>(numRows);
     deserializer.validateDebuggingInfo(key, "num_vectors");
     deserializer.deserializeValue(numVectors);
-    auto resultChunkState = std::make_shared<DataChunkState>();
+    auto resultChunkState = DataChunkState::getSingleValueDataChunkState();
     valueVectors.reserve(numVectors);
     for (auto i = 0u; i < numVectors; i++) {
         valueVectors.push_back(ValueVector::deSerialize(deserializer,

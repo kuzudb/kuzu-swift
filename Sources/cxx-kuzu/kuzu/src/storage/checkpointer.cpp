@@ -14,24 +14,76 @@
 namespace kuzu {
 namespace storage {
 
+void DatabaseHeader::updateCatalogPageRange(PageManager& pageManager, PageRange newPageRange) {
+    if (catalogPageRange.startPageIdx != common::INVALID_PAGE_IDX) {
+        pageManager.freePageRange(catalogPageRange);
+    }
+    catalogPageRange = newPageRange;
+}
+
+void DatabaseHeader::updateMetadataPageRange(PageManager& pageManager, PageRange newPageRange) {
+    if (metadataPageRange.startPageIdx != common::INVALID_PAGE_IDX) {
+        pageManager.freePageRange(metadataPageRange);
+    }
+    metadataPageRange = newPageRange;
+}
+
+static void writeMagicBytes(common::Serializer& serializer) {
+    serializer.writeDebuggingInfo("magic");
+    const auto numMagicBytes = strlen(StorageVersionInfo::MAGIC_BYTES);
+    for (auto i = 0u; i < numMagicBytes; i++) {
+        serializer.serializeValue<uint8_t>(StorageVersionInfo::MAGIC_BYTES[i]);
+    }
+}
+
+void DatabaseHeader::serialize(common::Serializer& ser) const {
+    writeMagicBytes(ser);
+    ser.writeDebuggingInfo("storage_version");
+    ser.serializeValue(StorageVersionInfo::getStorageVersion());
+    ser.writeDebuggingInfo("catalog");
+    ser.serializeValue(catalogPageRange.startPageIdx);
+    ser.serializeValue(catalogPageRange.numPages);
+    ser.writeDebuggingInfo("metadata");
+    ser.serializeValue(metadataPageRange.startPageIdx);
+    ser.serializeValue(metadataPageRange.numPages);
+}
+
 Checkpointer::Checkpointer(main::ClientContext& clientContext)
     : clientContext{clientContext},
       isInMemory{main::DBConfig::isDBPathInMemory(clientContext.getDatabasePath())} {}
 
-PageRange Checkpointer::serializeCatalog(catalog::Catalog& catalog,
-    StorageManager& storageManager) {
+PageRange Checkpointer::serializeCatalog(const catalog::Catalog& catalog,
+    StorageManager& storageManager) const {
     auto catalogWriter = std::make_shared<common::MetaWriter>(clientContext.getMemoryManager());
     common::Serializer catalogSerializer(catalogWriter);
     catalog.serialize(catalogSerializer);
     return catalogWriter->flush(storageManager.getDataFH(), storageManager.getShadowFile());
 }
 
-PageRange Checkpointer::serializeMetadata(catalog::Catalog& catalog,
-    StorageManager& storageManager) {
+PageRange Checkpointer::serializeMetadata(const catalog::Catalog& catalog,
+    StorageManager& storageManager) const {
     auto metadataWriter = std::make_shared<common::MetaWriter>(clientContext.getMemoryManager());
     common::Serializer metadataSerializer(metadataWriter);
     storageManager.serialize(catalog, metadataSerializer);
-    return metadataWriter->flush(storageManager.getDataFH(), storageManager.getShadowFile());
+
+    // We need to preallocate the pages for the page manager before we actually serialize it
+    // This is because the page manager needs to track the pages used for itself
+    // The number of pages needed for the page manager should only decrease after making an
+    // additional allocation so we just calculate the number of pages needed to serialize the
+    // current state of the page manager
+    // Thus it is possible that we allocate an extra page that we won't end up writing to when we
+    // flush the metadata writer. This may cause a discrepancy between the number of tracked pages
+    // and the number of physical pages in the file but shouldn't cause any actual incorrect
+    // behaviour in the database
+    auto& pageManager = *storageManager.getDataFH()->getPageManager();
+    const auto pagesForPageManager = pageManager.estimatePagesNeededForSerialize();
+    const auto allocatedPages =
+        pageManager.allocatePageRange(metadataWriter->getNumPagesToFlush() + pagesForPageManager);
+    pageManager.serialize(metadataSerializer);
+
+    metadataWriter->flush(allocatedPages, storageManager.getDataFH(),
+        storageManager.getShadowFile());
+    return allocatedPages;
 }
 
 void Checkpointer::writeCheckpoint() {
@@ -96,36 +148,18 @@ void Checkpointer::writeCheckpoint() {
     dataFH->getPageManager()->resetVersion();
 }
 
-static void writeMagicBytes(common::Serializer& serializer) {
-    serializer.writeDebuggingInfo("magic");
-    const auto numMagicBytes = strlen(StorageVersionInfo::MAGIC_BYTES);
-    for (auto i = 0u; i < numMagicBytes; i++) {
-        serializer.serializeValue<uint8_t>(StorageVersionInfo::MAGIC_BYTES[i]);
-    }
-}
-
 void Checkpointer::writeDatabaseHeader(const DatabaseHeader& header) {
-    const auto& catalogPageRange = header.catalogPageRange;
-    const auto& metadataPageRange = header.metadataPageRange;
-
     auto headerWriter = std::make_shared<common::MetaWriter>(clientContext.getMemoryManager());
     common::Serializer headerSerializer(headerWriter);
-    writeMagicBytes(headerSerializer);
-    headerSerializer.writeDebuggingInfo("storage_version");
-    headerSerializer.serializeValue(StorageVersionInfo::getStorageVersion());
-    headerSerializer.writeDebuggingInfo("catalog");
-    headerSerializer.serializeValue(catalogPageRange.startPageIdx);
-    headerSerializer.serializeValue(catalogPageRange.numPages);
-    headerSerializer.writeDebuggingInfo("metadata");
-    headerSerializer.serializeValue(metadataPageRange.startPageIdx);
-    headerSerializer.serializeValue(metadataPageRange.numPages);
+    header.serialize(headerSerializer);
     auto headerPage = headerWriter->getPage(0);
 
     const auto storageManager = clientContext.getStorageManager();
     auto dataFH = storageManager->getDataFH();
     auto& shadowFile = storageManager->getShadowFile();
-    auto shadowHeader = ShadowUtils::createShadowVersionIfNecessaryAndPinPage(0,
-        true /* skipReadingOriginalPage */, *dataFH, shadowFile);
+    auto shadowHeader = ShadowUtils::createShadowVersionIfNecessaryAndPinPage(
+        common::StorageConstants::DB_HEADER_PAGE_IDX, true /* skipReadingOriginalPage */, *dataFH,
+        shadowFile);
     memcpy(shadowHeader.frame, headerPage.data(), common::KUZU_PAGE_SIZE);
     shadowFile.getShadowingFH().unpinPage(shadowHeader.shadowPage);
 }
@@ -236,7 +270,6 @@ void Checkpointer::readCheckpoint() {
         storageManager);
 }
 
-// TODO(Guodong): Double check here to reduce passed params.
 void Checkpointer::readCheckpoint(const std::string& dbPath, main::ClientContext* context,
     common::VirtualFileSystem* vfs, catalog::Catalog* catalog, StorageManager* storageManager) {
     auto fileInfo = vfs->openFile(StorageUtils::getDataFName(vfs, dbPath),
@@ -244,26 +277,18 @@ void Checkpointer::readCheckpoint(const std::string& dbPath, main::ClientContext
     auto reader = std::make_unique<common::BufferedFileReader>(std::move(fileInfo));
     common::Deserializer deSer(std::move(reader));
     auto currentHeader = readDatabaseHeader(deSer);
+    if (currentHeader.catalogPageRange.startPageIdx == common::INVALID_PAGE_IDX) {
+        // If the catalog page range is invalid, it means there is no catalog to read, thus the
+        // database is empty.
+        return;
+    }
     deSer.getReader()->cast<common::BufferedFileReader>()->resetReadOffset(
         currentHeader.catalogPageRange.startPageIdx * common::KUZU_PAGE_SIZE);
     catalog->deserialize(deSer);
     deSer.getReader()->cast<common::BufferedFileReader>()->resetReadOffset(
         currentHeader.metadataPageRange.startPageIdx * common::KUZU_PAGE_SIZE);
     storageManager->deserialize(context, catalog, deSer);
-}
-
-void DatabaseHeader::updateCatalogPageRange(PageManager& pageManager, PageRange newPageRange) {
-    if (catalogPageRange.startPageIdx != common::INVALID_PAGE_IDX) {
-        pageManager.freePageRange(catalogPageRange);
-    }
-    catalogPageRange = newPageRange;
-}
-
-void DatabaseHeader::updateMetadataPageRange(PageManager& pageManager, PageRange newPageRange) {
-    if (metadataPageRange.startPageIdx != common::INVALID_PAGE_IDX) {
-        pageManager.freePageRange(metadataPageRange);
-    }
-    metadataPageRange = newPageRange;
+    storageManager->getDataFH()->getPageManager()->deserialize(deSer);
 }
 
 } // namespace storage
