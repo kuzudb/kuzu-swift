@@ -731,7 +731,6 @@ let package = Package(
                 "kuzu/src/processor/operator/simple/import_db.cpp",
                 "kuzu/src/processor/operator/simple/install_extension.cpp",
                 "kuzu/src/processor/operator/simple/load_extension.cpp",
-                "kuzu/src/processor/operator/simple/simple.cpp",
                 "kuzu/src/processor/operator/simple/uninstall_extension.cpp",
                 "kuzu/src/processor/operator/simple/use_database.cpp",
                 "kuzu/src/processor/operator/sink.cpp",
