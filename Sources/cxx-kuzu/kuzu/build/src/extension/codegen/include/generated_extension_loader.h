@@ -10,7 +10,7 @@
 namespace kuzu {
 namespace extension {
 
-void loadLinkedExtensions(main::ClientContext* context);
+void loadLinkedExtensions(main::ClientContext* context, std::vector<LoadedExtension>& loadedExtensions);
 
 } // namespace extension
 } // namespace kuzu
