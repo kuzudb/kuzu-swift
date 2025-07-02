@@ -724,6 +724,7 @@ let package = Package(
                 "kuzu/src/processor/operator/scan/scan_multi_rel_tables.cpp",
                 "kuzu/src/processor/operator/scan/scan_node_table.cpp",
                 "kuzu/src/processor/operator/scan/scan_rel_table.cpp",
+                "kuzu/src/processor/operator/scan/scan_table.cpp",
                 "kuzu/src/processor/operator/semi_masker.cpp",
                 "kuzu/src/processor/operator/simple/attach_database.cpp",
                 "kuzu/src/processor/operator/simple/detach_database.cpp",
