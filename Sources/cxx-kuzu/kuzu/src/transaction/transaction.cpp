@@ -77,8 +77,11 @@ void Transaction::commit(storage::WAL* wal) {
 }
 
 void Transaction::rollback(storage::WAL* wal) {
+    // Rolling back the local storage will free + evict all optimistically-allocated pages
+    // Since the undo buffer may do some scanning (e.g. to delete inserted keys from the hash index)
+    // this must be rolled back first
+    undoBuffer->rollback(clientContext);
     localStorage->rollback();
-    undoBuffer->rollback(this);
     if (shouldLogToWAL()) {
         KU_ASSERT(wal);
         wal->logRollback();
@@ -88,6 +91,11 @@ void Transaction::rollback(storage::WAL* wal) {
 
 uint64_t Transaction::getEstimatedMemUsage() const {
     return localStorage->getEstimatedMemUsage() + undoBuffer->getMemUsage();
+}
+
+bool Transaction::isUnCommitted(common::table_id_t tableID, common::offset_t nodeOffset) const {
+    return localStorage && localStorage->getLocalTable(tableID) &&
+           nodeOffset >= getMinUncommittedNodeOffset(tableID);
 }
 
 void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntry& catalogEntry,

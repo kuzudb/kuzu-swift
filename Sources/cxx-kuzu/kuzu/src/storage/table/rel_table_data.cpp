@@ -31,9 +31,9 @@ void PersistentVersionRecordHandler::applyFuncToChunkedGroups(version_record_han
     }
 }
 
-void PersistentVersionRecordHandler::rollbackInsert(Transaction* transaction,
+void PersistentVersionRecordHandler::rollbackInsert(main::ClientContext* context,
     node_group_idx_t nodeGroupIdx, row_idx_t startRow, row_idx_t numRows) const {
-    VersionRecordHandler::rollbackInsert(transaction, nodeGroupIdx, startRow, numRows);
+    VersionRecordHandler::rollbackInsert(context, nodeGroupIdx, startRow, numRows);
     relTableData->rollbackGroupCollectionInsert(numRows, true);
 }
 
@@ -47,9 +47,9 @@ void InMemoryVersionRecordHandler::applyFuncToChunkedGroups(version_record_handl
     nodeGroup->applyFuncToChunkedGroups(func, startRow, numRows, commitTS);
 }
 
-void InMemoryVersionRecordHandler::rollbackInsert(Transaction* transaction,
+void InMemoryVersionRecordHandler::rollbackInsert(main::ClientContext* context,
     node_group_idx_t nodeGroupIdx, row_idx_t startRow, row_idx_t numRows) const {
-    VersionRecordHandler::rollbackInsert(transaction, nodeGroupIdx, startRow, numRows);
+    VersionRecordHandler::rollbackInsert(context, nodeGroupIdx, startRow, numRows);
     auto* nodeGroup = relTableData->getNodeGroupNoLock(nodeGroupIdx);
     const auto numRowsToRollback = std::min(numRows, nodeGroup->getNumRows() - startRow);
     nodeGroup->rollbackInsert(startRow);
@@ -59,33 +59,33 @@ void InMemoryVersionRecordHandler::rollbackInsert(Transaction* transaction,
 RelTableData::RelTableData(FileHandle* dataFH, MemoryManager* mm, ShadowFile* shadowFile,
     const RelGroupCatalogEntry& relGroupEntry, table_id_t tableID, RelDataDirection direction,
     table_id_t nbrTableID, bool enableCompression)
-    : dataFH{dataFH}, tableID{tableID}, tableName{relGroupEntry.getName()}, memoryManager{mm},
+    : tableID{tableID}, tableName{relGroupEntry.getName()}, memoryManager{mm},
       shadowFile{shadowFile}, enableCompression{enableCompression}, direction{direction},
       multiplicity{relGroupEntry.getMultiplicity(direction)}, persistentVersionRecordHandler(this),
       inMemoryVersionRecordHandler(this) {
-    initCSRHeaderColumns();
-    initPropertyColumns(relGroupEntry, nbrTableID);
+    initCSRHeaderColumns(dataFH);
+    initPropertyColumns(relGroupEntry, nbrTableID, dataFH);
     // default to using the persistent version record handler
     // if we want to use the in-memory handler, we will explicitly pass it into
     // nodeGroups.pushInsertInfo()
-    nodeGroups = std::make_unique<NodeGroupCollection>(getColumnTypes(), enableCompression, dataFH,
-        &persistentVersionRecordHandler);
+    nodeGroups = std::make_unique<NodeGroupCollection>(getColumnTypes(), enableCompression,
+        ResidencyState::ON_DISK, &persistentVersionRecordHandler);
 }
 
-void RelTableData::initCSRHeaderColumns() {
+void RelTableData::initCSRHeaderColumns(FileHandle* dataFH) {
     // No NULL values is allowed for the csr length and offset column.
     auto csrOffsetColumnName = StorageUtils::getColumnName("", StorageUtils::ColumnType::CSR_OFFSET,
         RelDirectionUtils::relDirectionToString(direction));
     csrHeaderColumns.offset = std::make_unique<Column>(csrOffsetColumnName, LogicalType::UINT64(),
-        dataFH, memoryManager, shadowFile, enableCompression, false /* requireNUllColumn */);
+        dataFH, memoryManager, shadowFile, enableCompression, false /* requireNullColumn */);
     auto csrLengthColumnName = StorageUtils::getColumnName("", StorageUtils::ColumnType::CSR_LENGTH,
         RelDirectionUtils::relDirectionToString(direction));
     csrHeaderColumns.length = std::make_unique<Column>(csrLengthColumnName, LogicalType::UINT64(),
-        dataFH, memoryManager, shadowFile, enableCompression, false /* requireNUllColumn */);
+        dataFH, memoryManager, shadowFile, enableCompression, false /* requireNullColumn */);
 }
 
 void RelTableData::initPropertyColumns(const RelGroupCatalogEntry& relGroupEntry,
-    table_id_t nbrTableID) {
+    table_id_t nbrTableID, FileHandle* dataFH) {
     const auto maxColumnID = relGroupEntry.getMaxColumnID();
     columns.resize(maxColumnID + 1);
     auto nbrIDColName = StorageUtils::getColumnName("NBR_ID", StorageUtils::ColumnType::DEFAULT,
@@ -145,11 +145,12 @@ bool RelTableData::delete_(Transaction* transaction, ValueVector& boundNodeIDVec
     return isDeleted;
 }
 
-void RelTableData::addColumn(Transaction* transaction, TableAddColumnState& addColumnState) {
+void RelTableData::addColumn(Transaction* transaction, TableAddColumnState& addColumnState,
+    PageAllocator& pageAllocator) {
     auto& definition = addColumnState.propertyDefinition;
     columns.push_back(ColumnFactory::createColumn(definition.getName(), definition.getType().copy(),
-        dataFH, memoryManager, shadowFile, enableCompression));
-    nodeGroups->addColumn(transaction, addColumnState);
+        pageAllocator.getDataFH(), memoryManager, shadowFile, enableCompression));
+    nodeGroups->addColumn(transaction, addColumnState, &pageAllocator);
 }
 
 std::pair<CSRNodeGroupScanSource, row_idx_t> RelTableData::findMatchingRow(Transaction* transaction,
@@ -247,7 +248,8 @@ void RelTableData::pushInsertInfo(const Transaction* transaction, const CSRNodeG
         getVersionRecordHandler(source), shouldIncrementNumRows);
 }
 
-void RelTableData::checkpoint(const std::vector<column_id_t>& columnIDs) {
+void RelTableData::checkpoint(const std::vector<column_id_t>& columnIDs,
+    PageAllocator& pageAllocator) {
     std::vector<std::unique_ptr<Column>> checkpointColumns;
     for (auto i = 0u; i < columnIDs.size(); i++) {
         const auto columnID = columnIDs[i];
@@ -260,7 +262,7 @@ void RelTableData::checkpoint(const std::vector<column_id_t>& columnIDs) {
         checkpointColumnPtrs.push_back(column.get());
     }
 
-    CSRNodeGroupCheckpointState state{columnIDs, std::move(checkpointColumnPtrs), *dataFH,
+    CSRNodeGroupCheckpointState state{columnIDs, std::move(checkpointColumnPtrs), pageAllocator,
         memoryManager, csrHeaderColumns.offset.get(), csrHeaderColumns.length.get()};
     nodeGroups->checkpoint(*memoryManager, state);
 }
@@ -288,8 +290,8 @@ void RelTableData::rollbackGroupCollectionInsert(row_idx_t numRows_, bool isPers
     nodeGroups->rollbackInsert(numRows_, !isPersistent);
 }
 
-void RelTableData::reclaimStorage(PageManager& pageManager) const {
-    nodeGroups->reclaimStorage(pageManager);
+void RelTableData::reclaimStorage(PageAllocator& pageAllocator) const {
+    nodeGroups->reclaimStorage(pageAllocator);
 }
 
 } // namespace storage
