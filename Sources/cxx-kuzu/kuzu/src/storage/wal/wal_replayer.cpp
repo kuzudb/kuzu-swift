@@ -61,14 +61,14 @@ void WALReplayer::replay() const {
         }
         if (clientContext.getTransactionContext()->hasActiveTransaction()) {
             // Handle the case that either the last transaction is not committed or the wal file is
-            // corrupted and there is no COMMIT record for the last transaction. We should rollback
+            // corrupted and there is no COMMIT record for the last transaction. We should roll back
             // under this case, and clear the WAL file.
             clientContext.getTransactionContext()->rollback();
             clientContext.getStorageManager()->getWAL().clearWAL();
         }
     } catch (const Exception& e) {
         if (clientContext.getTransactionContext()->hasActiveTransaction()) {
-            // Handle the case that some transaction went during replaying. We should rollback
+            // Handle the case that some transaction went during replaying. We should roll back
             // under this case.
             clientContext.getTransactionContext()->rollback();
         }
@@ -190,6 +190,7 @@ void WALReplayer::replayAlterTableEntryRecord(const WALRecord& walRecord) const 
     auto storageManager = clientContext.getStorageManager();
     auto ownedAlterInfo = alterEntryRecord.ownedAlterInfo.get();
     catalog->alterTableEntry(transaction, *ownedAlterInfo);
+    auto& pageAllocator = *clientContext.getStorageManager()->getDataFH()->getPageManager();
     switch (ownedAlterInfo->alterType) {
     case AlterType::ADD_PROPERTY: {
         const auto exprBinder = binder.getExpressionBinder();
@@ -207,11 +208,13 @@ void WALReplayer::replayAlterTableEntryRecord(const WALRecord& walRecord) const 
         switch (entry->getTableType()) {
         case TableType::REL: {
             for (auto& relEntryInfo : entry->cast<RelGroupCatalogEntry>().getRelEntryInfos()) {
-                storageManager->getTable(relEntryInfo.oid)->addColumn(transaction, state);
+                storageManager->getTable(relEntryInfo.oid)
+                    ->addColumn(transaction, state, pageAllocator);
             }
         } break;
         case TableType::NODE: {
-            storageManager->getTable(entry->getTableID())->addColumn(transaction, state);
+            storageManager->getTable(entry->getTableID())
+                ->addColumn(transaction, state, pageAllocator);
         } break;
         default: {
             KU_UNREACHABLE;
@@ -267,7 +270,7 @@ void WALReplayer::replayNodeTableInsertRecord(const WALRecord& walRecord) const 
     const auto insertState =
         std::make_unique<NodeTableInsertState>(*nodeIDVector, pkVector, propertyVectors);
     KU_ASSERT(clientContext.getTransaction() && clientContext.getTransaction()->isRecovery());
-    table.initInsertState(clientContext.getTransaction(), *insertState);
+    table.initInsertState(&clientContext, *insertState);
     anchorState->getSelVectorUnsafe().setToFiltered(1);
     for (auto i = 0u; i < numNodes; i++) {
         anchorState->getSelVectorUnsafe()[0] = i;
@@ -300,7 +303,7 @@ void WALReplayer::replayRelTableInsertRecord(const WALRecord& walRecord) const {
     KU_ASSERT(clientContext.getTransaction() && clientContext.getTransaction()->isRecovery());
     for (auto i = 0u; i < numRels; i++) {
         anchorState->getSelVectorUnsafe()[0] = i;
-        table.initInsertState(clientContext.getTransaction(), *insertState);
+        table.initInsertState(&clientContext, *insertState);
         table.insert(clientContext.getTransaction(), *insertState);
     }
 }

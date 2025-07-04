@@ -158,29 +158,27 @@ public:
     common::TableType getTableType() const { return tableType; }
     common::table_id_t getTableID() const { return tableID; }
     std::string getTableName() const { return tableName; }
-    FileHandle* getDataFH() const { return dataFH; }
 
     // Note that `resetCachedBoundNodeIDs` is only applicable to RelTable for now.
     virtual void initScanState(transaction::Transaction* transaction, TableScanState& readState,
         bool resetCachedBoundNodeSelVec = true) const = 0;
     bool scan(transaction::Transaction* transaction, TableScanState& scanState);
 
-    virtual void initInsertState(transaction::Transaction* transaction,
-        TableInsertState& insertState) = 0;
+    virtual void initInsertState(main::ClientContext* context, TableInsertState& insertState) = 0;
     virtual void insert(transaction::Transaction* transaction, TableInsertState& insertState) = 0;
     virtual void update(transaction::Transaction* transaction, TableUpdateState& updateState) = 0;
     virtual bool delete_(transaction::Transaction* transaction, TableDeleteState& deleteState) = 0;
 
     virtual void addColumn(transaction::Transaction* transaction,
-        TableAddColumnState& addColumnState) = 0;
+        TableAddColumnState& addColumnState, PageAllocator& pageAllocator) = 0;
     void dropColumn() { setHasChanges(); }
 
-    virtual void commit(transaction::Transaction* transaction,
-        catalog::TableCatalogEntry* tableEntry, LocalTable* localTable) = 0;
-    virtual bool checkpoint(main::ClientContext* context,
-        catalog::TableCatalogEntry* tableEntry) = 0;
+    virtual void commit(main::ClientContext* context, catalog::TableCatalogEntry* tableEntry,
+        LocalTable* localTable) = 0;
+    virtual bool checkpoint(main::ClientContext* context, catalog::TableCatalogEntry* tableEntry,
+        storage::PageAllocator& pageAllocator) = 0;
     virtual void rollbackCheckpoint() = 0;
-    virtual void reclaimStorage(PageManager& pageManager) const = 0;
+    virtual void reclaimStorage(PageAllocator& pageAllocator) const = 0;
 
     virtual common::row_idx_t getNumTotalRows(const transaction::Transaction* transaction) = 0;
 
@@ -216,7 +214,6 @@ protected:
     common::table_id_t tableID;
     std::string tableName;
     bool enableCompression;
-    FileHandle* dataFH;
     MemoryManager* memoryManager;
     ShadowFile* shadowFile;
     std::atomic<bool> hasChanges;
