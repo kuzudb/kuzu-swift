@@ -7,6 +7,7 @@
 #include "catalog/catalog_entry/type_catalog_entry.h"
 #include "common/file_system/file_info.h"
 #include "common/serializer/buffered_file.h"
+#include "extension/extension_manager.h"
 #include "main/client_context.h"
 #include "processor/expression_mapper.h"
 #include "storage/local_storage/local_rel_table.h"
@@ -38,7 +39,7 @@ void WALReplayer::replay() const {
     auto fileInfo =
         clientContext.getVFSUnsafe()->openFile(walFilePath, FileOpenFlags(FileFlags::READ_ONLY));
     const auto walFileSize = fileInfo->getFileSize();
-    // Check if the wal file is empty or corrupted. so nothing to read.
+    // Check if the wal file is empty. If so, nothing to read.
     if (walFileSize == 0) {
         return;
     }
@@ -53,7 +54,7 @@ void WALReplayer::replay() const {
             try {
                 replayWALRecord(*walRecord);
                 RUNTIME_CHECK(nextRecordShouldBeRollback = false);
-            } catch (const Exception& e) {
+            } catch (const Exception&) {
                 // exception while replaying a WAL record
                 // stop executing the current query, the next record should be a rollback record
                 RUNTIME_CHECK(nextRecordShouldBeRollback = true);
@@ -61,21 +62,21 @@ void WALReplayer::replay() const {
         }
         if (clientContext.getTransactionContext()->hasActiveTransaction()) {
             // Handle the case that either the last transaction is not committed or the wal file is
-            // corrupted and there is no COMMIT record for the last transaction. We should rollback
+            // corrupted and there is no COMMIT record for the last transaction. We should roll back
             // under this case, and clear the WAL file.
             clientContext.getTransactionContext()->rollback();
             clientContext.getStorageManager()->getWAL().clearWAL();
         }
-    } catch (const Exception& e) {
+    } catch (const Exception&) {
         if (clientContext.getTransactionContext()->hasActiveTransaction()) {
-            // Handle the case that some transaction went during replaying. We should rollback
+            // Handle the case that some transaction went during replaying. We should roll back
             // under this case.
             clientContext.getTransactionContext()->rollback();
         }
     }
 }
 
-void WALReplayer::replayWALRecord(const WALRecord& walRecord) const {
+void WALReplayer::replayWALRecord(WALRecord& walRecord) const {
     switch (walRecord.type) {
     case WALRecordType::BEGIN_TRANSACTION_RECORD: {
         clientContext.getTransactionContext()->beginRecoveryTransaction();
@@ -101,7 +102,7 @@ void WALReplayer::replayWALRecord(const WALRecord& walRecord) const {
     case WALRecordType::NODE_DELETION_RECORD: {
         replayNodeDeletionRecord(walRecord);
     } break;
-    case WALRecordType::NODE_UDPATE_RECORD: {
+    case WALRecordType::NODE_UPDATE_RECORD: {
         replayNodeUpdateRecord(walRecord);
     } break;
     case WALRecordType::REL_DELETION_RECORD: {
@@ -119,6 +120,9 @@ void WALReplayer::replayWALRecord(const WALRecord& walRecord) const {
     case WALRecordType::UPDATE_SEQUENCE_RECORD: {
         replayUpdateSequenceRecord(walRecord);
     } break;
+    case WALRecordType::LOAD_EXTENSION_RECORD: {
+        replayLoadExtensionRecord(walRecord);
+    } break;
     case WALRecordType::CHECKPOINT_RECORD: {
         // This record should not be replayed. It is only used to indicate that the previous records
         // had been replayed and shadow files are created.
@@ -129,11 +133,11 @@ void WALReplayer::replayWALRecord(const WALRecord& walRecord) const {
     }
 }
 
-void WALReplayer::replayCreateCatalogEntryRecord(const WALRecord& walRecord) const {
+void WALReplayer::replayCreateCatalogEntryRecord(WALRecord& walRecord) const {
     auto catalog = clientContext.getCatalog();
     auto transaction = clientContext.getTransaction();
     auto storageManager = clientContext.getStorageManager();
-    auto& record = walRecord.constCast<CreateCatalogEntryRecord>();
+    auto& record = walRecord.cast<CreateCatalogEntryRecord>();
     switch (record.ownedCatalogEntry->getType()) {
     case CatalogEntryType::NODE_TABLE_ENTRY:
     case CatalogEntryType::REL_GROUP_ENTRY: {
@@ -156,6 +160,9 @@ void WALReplayer::replayCreateCatalogEntryRecord(const WALRecord& walRecord) con
         auto& typeEntry = record.ownedCatalogEntry->constCast<TypeCatalogEntry>();
         catalog->createType(transaction, typeEntry.getName(), typeEntry.getLogicalType().copy());
     } break;
+    case CatalogEntryType::INDEX_ENTRY: {
+        catalog->createIndex(transaction, std::move(record.ownedCatalogEntry));
+    } break;
     default: {
         KU_UNREACHABLE;
     }
@@ -176,6 +183,9 @@ void WALReplayer::replayDropCatalogEntryRecord(const WALRecord& walRecord) const
     case CatalogEntryType::SEQUENCE_ENTRY: {
         catalog->dropSequence(transaction, entryID);
     } break;
+    case CatalogEntryType::INDEX_ENTRY: {
+        catalog->dropIndex(transaction, entryID);
+    } break;
     default: {
         KU_UNREACHABLE;
     }
@@ -190,6 +200,7 @@ void WALReplayer::replayAlterTableEntryRecord(const WALRecord& walRecord) const 
     auto storageManager = clientContext.getStorageManager();
     auto ownedAlterInfo = alterEntryRecord.ownedAlterInfo.get();
     catalog->alterTableEntry(transaction, *ownedAlterInfo);
+    auto& pageAllocator = *clientContext.getStorageManager()->getDataFH()->getPageManager();
     switch (ownedAlterInfo->alterType) {
     case AlterType::ADD_PROPERTY: {
         const auto exprBinder = binder.getExpressionBinder();
@@ -207,11 +218,13 @@ void WALReplayer::replayAlterTableEntryRecord(const WALRecord& walRecord) const 
         switch (entry->getTableType()) {
         case TableType::REL: {
             for (auto& relEntryInfo : entry->cast<RelGroupCatalogEntry>().getRelEntryInfos()) {
-                storageManager->getTable(relEntryInfo.oid)->addColumn(transaction, state);
+                storageManager->getTable(relEntryInfo.oid)
+                    ->addColumn(transaction, state, pageAllocator);
             }
         } break;
         case TableType::NODE: {
-            storageManager->getTable(entry->getTableID())->addColumn(transaction, state);
+            storageManager->getTable(entry->getTableID())
+                ->addColumn(transaction, state, pageAllocator);
         } break;
         default: {
             KU_UNREACHABLE;
@@ -267,7 +280,7 @@ void WALReplayer::replayNodeTableInsertRecord(const WALRecord& walRecord) const 
     const auto insertState =
         std::make_unique<NodeTableInsertState>(*nodeIDVector, pkVector, propertyVectors);
     KU_ASSERT(clientContext.getTransaction() && clientContext.getTransaction()->isRecovery());
-    table.initInsertState(clientContext.getTransaction(), *insertState);
+    table.initInsertState(&clientContext, *insertState);
     anchorState->getSelVectorUnsafe().setToFiltered(1);
     for (auto i = 0u; i < numNodes; i++) {
         anchorState->getSelVectorUnsafe()[0] = i;
@@ -300,7 +313,7 @@ void WALReplayer::replayRelTableInsertRecord(const WALRecord& walRecord) const {
     KU_ASSERT(clientContext.getTransaction() && clientContext.getTransaction()->isRecovery());
     for (auto i = 0u; i < numRels; i++) {
         anchorState->getSelVectorUnsafe()[0] = i;
-        table.initInsertState(clientContext.getTransaction(), *insertState);
+        table.initInsertState(&clientContext, *insertState);
         table.insert(clientContext.getTransaction(), *insertState);
     }
 }
@@ -393,6 +406,11 @@ void WALReplayer::replayUpdateSequenceRecord(const WALRecord& walRecord) const {
     const auto entry =
         clientContext.getCatalog()->getSequenceEntry(clientContext.getTransaction(), sequenceID);
     entry->nextKVal(clientContext.getTransaction(), sequenceEntryRecord.kCount);
+}
+
+void WALReplayer::replayLoadExtensionRecord(const WALRecord& walRecord) const {
+    const auto& loadExtensionRecord = walRecord.constCast<LoadExtensionRecord>();
+    clientContext.getExtensionManager()->loadExtension(loadExtensionRecord.path, &clientContext);
 }
 
 } // namespace storage

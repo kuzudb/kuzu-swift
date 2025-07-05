@@ -10,9 +10,6 @@ void NodeSetInfo::init(const ResultSet& resultSet, main::ClientContext* context)
     if (columnVectorPos.isValid()) {
         columnVector = resultSet.getValueVector(columnVectorPos).get();
     }
-    if (pkVectorPos.isValid()) {
-        pkVector = resultSet.getValueVector(pkVectorPos).get();
-    }
     evaluator->init(resultSet, context);
     columnDataVector = evaluator->resultVector.get();
 }
@@ -21,7 +18,7 @@ void NodeSetExecutor::init(ResultSet* resultSet, ExecutionContext* context) {
     info.init(*resultSet, context->clientContext);
 }
 
-void NodeSetExecutor::setNodeID(common::nodeID_t nodeID) const {
+void NodeSetExecutor::setNodeID(nodeID_t nodeID) const {
     info.nodeIDVector->setValue(info.nodeIDVector->state->getSelVector()[0], nodeID);
 }
 
@@ -44,7 +41,7 @@ static void writeColumnUpdateResult(ValueVector* idVector, ValueVector* columnVe
 }
 
 void SingleLabelNodeSetExecutor::set(ExecutionContext* context) {
-    if (tableInfo.columnID == common::INVALID_COLUMN_ID) {
+    if (tableInfo.columnID == INVALID_COLUMN_ID) {
         // Not a valid column. Set projected column to null.
         if (info.columnVectorPos.isValid()) {
             info.columnVector->setNull(info.columnDataVector->state->getSelVector()[0], true);
@@ -54,7 +51,6 @@ void SingleLabelNodeSetExecutor::set(ExecutionContext* context) {
     info.evaluator->evaluate();
     auto updateState = std::make_unique<storage::NodeTableUpdateState>(tableInfo.columnID,
         *info.nodeIDVector, *info.columnDataVector);
-    updateState->pkVector = info.pkVector;
     tableInfo.table->update(context->clientContext->getTransaction(), *updateState);
     if (info.columnVectorPos.isValid()) {
         writeColumnUpdateResult(info.nodeIDVector, info.columnVector, info.columnDataVector);
@@ -76,7 +72,6 @@ void MultiLabelNodeSetExecutor::set(ExecutionContext* context) {
     auto& tableInfo = tableInfos.at(nodeID.tableID);
     auto updateState = std::make_unique<storage::NodeTableUpdateState>(tableInfo.columnID,
         *info.nodeIDVector, *info.columnDataVector);
-    updateState->pkVector = info.pkVector;
     tableInfo.table->update(context->clientContext->getTransaction(), *updateState);
     if (info.columnVectorPos.isValid()) {
         writeColumnUpdateResult(info.nodeIDVector, info.columnVector, info.columnDataVector);
@@ -98,7 +93,7 @@ void RelSetExecutor::init(ResultSet* resultSet, ExecutionContext* context) {
     info.init(*resultSet, context->clientContext);
 }
 
-void RelSetExecutor::setRelID(common::nodeID_t relID) const {
+void RelSetExecutor::setRelID(nodeID_t relID) const {
     info.relIDVector->setValue(info.relIDVector->state->getSelVector()[0], relID);
 }
 
