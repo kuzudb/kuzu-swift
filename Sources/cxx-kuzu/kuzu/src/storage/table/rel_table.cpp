@@ -138,8 +138,8 @@ RelTable::RelTable(RelGroupCatalogEntry* relGroupEntry, table_id_t fromTableID,
     for (auto direction : relGroupEntry->getRelDataDirections()) {
         auto nbrTableID = RelDirectionUtils::getNbrTableID(direction, fromTableID, toTableID);
         directedRelData.emplace_back(
-            std::make_unique<RelTableData>(dataFH, memoryManager, shadowFile, *relGroupEntry,
-                relEntryInfo->oid, direction, nbrTableID, enableCompression));
+            std::make_unique<RelTableData>(storageManager->getDataFH(), memoryManager, shadowFile,
+                *relGroupEntry, relEntryInfo->oid, direction, nbrTableID, enableCompression));
     }
 }
 
@@ -227,7 +227,7 @@ void RelTable::update(Transaction* transaction, TableUpdateState& updateState) {
                 relUpdateState.relIDVector, relUpdateState.columnID, relUpdateState.propertyVector);
         }
     }
-    if (transaction->shouldLogToWAL()) {
+    if (updateState.logToWAL && transaction->shouldLogToWAL()) {
         KU_ASSERT(transaction->isWriteTransaction());
         KU_ASSERT(transaction->getClientContext());
         auto& wal = transaction->getClientContext()->getStorageManager()->getWAL();
@@ -260,7 +260,7 @@ bool RelTable::delete_(Transaction* transaction, TableDeleteState& deleteState) 
     }
     if (isDeleted) {
         hasChanges = true;
-        if (transaction->shouldLogToWAL()) {
+        if (deleteState.logToWAL && transaction->shouldLogToWAL()) {
             KU_ASSERT(transaction->isWriteTransaction());
             KU_ASSERT(transaction->getClientContext());
             auto& wal = transaction->getClientContext()->getStorageManager()->getWAL();
@@ -293,7 +293,7 @@ void RelTable::detachDelete(Transaction* transaction, RelDataDirection direction
     initScanState(transaction, *relReadState);
     detachDeleteForCSRRels(transaction, tableData, reverseTableData, relReadState.get(),
         deleteState);
-    if (transaction->shouldLogToWAL()) {
+    if (deleteState->logToWAL && transaction->shouldLogToWAL()) {
         KU_ASSERT(transaction->isWriteTransaction());
         KU_ASSERT(transaction->getClientContext());
         auto& wal = transaction->getClientContext()->getStorageManager()->getWAL();
@@ -360,7 +360,8 @@ void RelTable::detachDeleteForCSRRels(Transaction* transaction, RelTableData* ta
     }
 }
 
-void RelTable::addColumn(Transaction* transaction, TableAddColumnState& addColumnState) {
+void RelTable::addColumn(Transaction* transaction, TableAddColumnState& addColumnState,
+    PageAllocator& pageAllocator) {
     LocalTable* localTable = nullptr;
     if (transaction->getLocalStorage()) {
         localTable = transaction->getLocalStorage()->getLocalTable(tableID);
@@ -369,7 +370,7 @@ void RelTable::addColumn(Transaction* transaction, TableAddColumnState& addColum
         localTable->addColumn(transaction, addColumnState);
     }
     for (auto& directedRelData : directedRelData) {
-        directedRelData->addColumn(transaction, addColumnState);
+        directedRelData->addColumn(transaction, addColumnState, pageAllocator);
     }
     hasChanges = true;
 }
@@ -395,7 +396,7 @@ void RelTable::pushInsertInfo(const Transaction* transaction, RelDataDirection d
     getDirectedTableData(direction)->pushInsertInfo(transaction, nodeGroup, numRows_, source);
 }
 
-void RelTable::commit(Transaction* transaction, TableCatalogEntry* tableEntry,
+void RelTable::commit(main::ClientContext* context, TableCatalogEntry* tableEntry,
     LocalTable* localTable) {
     auto& localRelTable = localTable->cast<LocalRelTable>();
     if (localRelTable.isEmpty()) {
@@ -419,6 +420,7 @@ void RelTable::commit(Transaction* transaction, TableCatalogEntry* tableEntry,
         columnIDsToCommit.push_back(columnID);
     }
     // commit rel table data
+    auto transaction = context->getTransaction();
     for (auto& relData : directedRelData) {
         const auto direction = relData->getDirection();
         const auto columnToSkip = (direction == RelDataDirection::FWD) ?
@@ -439,9 +441,9 @@ void RelTable::commit(Transaction* transaction, TableCatalogEntry* tableEntry,
     localRelTable.clear();
 }
 
-void RelTable::reclaimStorage(PageManager& pageManager) const {
+void RelTable::reclaimStorage(PageAllocator& pageAllocator) const {
     for (auto& relData : directedRelData) {
-        relData->reclaimStorage(pageManager);
+        relData->reclaimStorage(pageAllocator);
     }
 }
 
@@ -490,7 +492,8 @@ void RelTable::prepareCommitForNodeGroup(const Transaction* transaction,
     }
 }
 
-bool RelTable::checkpoint(main::ClientContext*, TableCatalogEntry* tableEntry) {
+bool RelTable::checkpoint(main::ClientContext*, TableCatalogEntry* tableEntry,
+    PageAllocator& pageAllocator) {
     bool ret = hasChanges;
     if (hasChanges) {
         // Deleted columns are vacuumed and not checkpointed or serialized.
@@ -500,7 +503,7 @@ bool RelTable::checkpoint(main::ClientContext*, TableCatalogEntry* tableEntry) {
             columnIDs.push_back(tableEntry->getColumnID(property.getName()));
         }
         for (auto& directedRelData : directedRelData) {
-            directedRelData->checkpoint(columnIDs);
+            directedRelData->checkpoint(columnIDs, pageAllocator);
         }
         hasChanges = false;
     }

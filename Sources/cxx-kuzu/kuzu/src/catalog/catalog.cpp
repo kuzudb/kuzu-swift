@@ -289,7 +289,8 @@ bool Catalog::containsType(const Transaction* transaction, const std::string& ty
 }
 
 void Catalog::createIndex(Transaction* transaction,
-    std::unique_ptr<IndexCatalogEntry> indexCatalogEntry) {
+    std::unique_ptr<CatalogEntry> indexCatalogEntry) {
+    KU_ASSERT(indexCatalogEntry->getType() == CatalogEntryType::INDEX_ENTRY);
     indexes->createEntry(transaction, std::move(indexCatalogEntry));
 }
 
@@ -307,10 +308,36 @@ std::vector<IndexCatalogEntry*> Catalog::getIndexEntries(const Transaction* tran
     return result;
 }
 
+std::vector<IndexCatalogEntry*> Catalog::getIndexEntries(const Transaction* transaction,
+    table_id_t tableID) const {
+    std::vector<IndexCatalogEntry*> result;
+    for (auto& [_, entry] : indexes->getEntries(transaction)) {
+        auto indexEntry = entry->ptrCast<IndexCatalogEntry>();
+        if (indexEntry->getTableID() == tableID) {
+            result.push_back(indexEntry);
+        }
+    }
+    return result;
+}
+
 bool Catalog::containsIndex(const Transaction* transaction, table_id_t tableID,
     const std::string& indexName) const {
     return indexes->containsEntry(transaction,
         IndexCatalogEntry::getInternalIndexName(tableID, indexName));
+}
+
+bool Catalog::containsIndex(const Transaction* transaction, table_id_t tableID,
+    property_id_t propertyID) const {
+    for (auto& [_, entry] : indexes->getEntries(transaction)) {
+        auto indexEntry = entry->ptrCast<IndexCatalogEntry>();
+        if (indexEntry->getTableID() != tableID) {
+            continue;
+        }
+        if (indexEntry->containsPropertyID(propertyID)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void Catalog::dropAllIndexes(Transaction* transaction, table_id_t tableID) {
@@ -327,6 +354,14 @@ void Catalog::dropIndex(Transaction* transaction, table_id_t tableID,
     auto uniqueName = IndexCatalogEntry::getInternalIndexName(tableID, indexName);
     const auto entry = indexes->getEntry(transaction, uniqueName);
     indexes->dropEntry(transaction, uniqueName, entry->getOID());
+}
+
+void Catalog::dropIndex(Transaction* transaction, oid_t indexOID) {
+    const auto entry = indexes->getEntryOfOID(transaction, indexOID);
+    if (entry == nullptr) {
+        throw CatalogException{stringFormat("Index with OID {} does not exist.", indexOID)};
+    }
+    indexes->dropEntry(transaction, entry->getName(), indexOID);
 }
 
 bool Catalog::containsFunction(const Transaction* transaction, const std::string& name,

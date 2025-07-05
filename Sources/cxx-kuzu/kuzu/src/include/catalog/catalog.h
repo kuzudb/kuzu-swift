@@ -126,24 +126,31 @@ public:
 
     // ----------------------------- Indexes ----------------------------
 
-    // Check if index entry exists.
+    // Check if index exists for given table and name
     bool containsIndex(const transaction::Transaction* transaction, common::table_id_t tableID,
         const std::string& indexName) const;
+    // Check if index exists for given table and property
+    bool containsIndex(const transaction::Transaction* transaction, common::table_id_t tableID,
+        common::property_id_t propertyID) const;
     // Get index entry with name.
     IndexCatalogEntry* getIndex(const transaction::Transaction* transaction,
         common::table_id_t tableID, const std::string& indexName) const;
     // Get all index entries.
     std::vector<IndexCatalogEntry*> getIndexEntries(
         const transaction::Transaction* transaction) const;
+    // Get all index entries for given table
+    std::vector<IndexCatalogEntry*> getIndexEntries(const transaction::Transaction* transaction,
+        common::table_id_t tableID) const;
 
     // Create index entry.
     void createIndex(transaction::Transaction* transaction,
-        std::unique_ptr<IndexCatalogEntry> indexCatalogEntry);
+        std::unique_ptr<CatalogEntry> indexCatalogEntry);
     // Drop all index entries within a table.
     void dropAllIndexes(transaction::Transaction* transaction, common::table_id_t tableID);
     // Drop index entry with name.
     void dropIndex(transaction::Transaction* transaction, common::table_id_t tableID,
         const std::string& indexName) const;
+    void dropIndex(transaction::Transaction* transaction, common::oid_t indexOID);
 
     // ----------------------------- Functions ----------------------------
 

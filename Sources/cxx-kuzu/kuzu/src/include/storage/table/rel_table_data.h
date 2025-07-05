@@ -31,9 +31,8 @@ public:
     void applyFuncToChunkedGroups(version_record_handler_op_t func,
         common::node_group_idx_t nodeGroupIdx, common::row_idx_t startRow,
         common::row_idx_t numRows, common::transaction_t commitTS) const override;
-    void rollbackInsert(transaction::Transaction* transaction,
-        common::node_group_idx_t nodeGroupIdx, common::row_idx_t startRow,
-        common::row_idx_t numRows) const override;
+    void rollbackInsert(main::ClientContext* context, common::node_group_idx_t nodeGroupIdx,
+        common::row_idx_t startRow, common::row_idx_t numRows) const override;
 
 private:
     RelTableData* relTableData;
@@ -46,9 +45,8 @@ public:
     void applyFuncToChunkedGroups(version_record_handler_op_t func,
         common::node_group_idx_t nodeGroupIdx, common::row_idx_t startRow,
         common::row_idx_t numRows, common::transaction_t commitTS) const override;
-    void rollbackInsert(transaction::Transaction* transaction,
-        common::node_group_idx_t nodeGroupIdx, common::row_idx_t startRow,
-        common::row_idx_t numRows) const override;
+    void rollbackInsert(main::ClientContext* context, common::node_group_idx_t nodeGroupIdx,
+        common::row_idx_t startRow, common::row_idx_t numRows) const override;
 
 private:
     RelTableData* relTableData;
@@ -65,7 +63,8 @@ public:
         const common::ValueVector& dataVector) const;
     bool delete_(transaction::Transaction* transaction, common::ValueVector& boundNodeIDVector,
         const common::ValueVector& relIDVector);
-    void addColumn(transaction::Transaction* transaction, TableAddColumnState& addColumnState);
+    void addColumn(transaction::Transaction* transaction, TableAddColumnState& addColumnState,
+        PageAllocator& pageAllocator);
 
     bool checkIfNodeHasRels(transaction::Transaction* transaction,
         common::ValueVector* srcNodeIDVector) const;
@@ -97,8 +96,9 @@ public:
 
     TableStats getStats() const { return nodeGroups->getStats(); }
 
-    void reclaimStorage(PageManager& pageManager) const;
-    void checkpoint(const std::vector<common::column_id_t>& columnIDs);
+    void reclaimStorage(PageAllocator& pageAllocator) const;
+    void checkpoint(const std::vector<common::column_id_t>& columnIDs,
+        PageAllocator& pageAllocator);
 
     void pushInsertInfo(const transaction::Transaction* transaction, const CSRNodeGroup& nodeGroup,
         common::row_idx_t numRows_, CSRNodeGroupScanSource source);
@@ -115,9 +115,9 @@ public:
     common::RelDataDirection getDirection() const { return direction; }
 
 private:
-    void initCSRHeaderColumns();
+    void initCSRHeaderColumns(FileHandle* dataFH);
     void initPropertyColumns(const catalog::RelGroupCatalogEntry& relGroupEntry,
-        common::table_id_t nbrTableID);
+        common::table_id_t nbrTableID, FileHandle* dataFH);
 
     std::pair<CSRNodeGroupScanSource, common::row_idx_t> findMatchingRow(
         transaction::Transaction* transaction, common::ValueVector& boundNodeIDVector,
@@ -146,7 +146,6 @@ private:
     const VersionRecordHandler* getVersionRecordHandler(CSRNodeGroupScanSource source) const;
 
 private:
-    FileHandle* dataFH;
     common::table_id_t tableID;
     std::string tableName;
     MemoryManager* memoryManager;
