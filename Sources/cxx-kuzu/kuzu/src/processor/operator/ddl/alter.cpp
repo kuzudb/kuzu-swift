@@ -110,16 +110,30 @@ static bool checkAddPropertyConflicts(const TableCatalogEntry& tableEntry,
 }
 
 static bool checkDropPropertyConflicts(const TableCatalogEntry& tableEntry,
-    const BoundAlterInfo& info) {
+    const BoundAlterInfo& info, main::ClientContext& context) {
     const auto& extraInfo = info.extraInfo->constCast<BoundExtraDropPropertyInfo>();
     auto propertyName = extraInfo.propertyName;
     validatePropertyExist(info.onConflict, tableEntry, propertyName);
-
-    if (tableEntry.getTableType() == TableType::NODE &&
-        tableEntry.constCast<NodeTableCatalogEntry>().getPrimaryKeyName() == propertyName) {
-        throw RuntimeException("Cannot drop primary key of a node table.");
+    if (tableEntry.containsProperty(propertyName)) {
+        // Check constrains if we are going to drop a property that exists.
+        auto propertyID = tableEntry.getPropertyID(propertyName);
+        // Check primary key constraint
+        if (tableEntry.getTableType() == TableType::NODE &&
+            tableEntry.constCast<NodeTableCatalogEntry>().getPrimaryKeyID() == propertyID) {
+            throw BinderException(stringFormat(
+                "Cannot drop property {} in table {} because it is used as primary key.",
+                propertyName, tableEntry.getName()));
+        }
+        // Check secondary index constraints
+        auto catalog = context.getCatalog();
+        auto transaction = context.getTransaction();
+        if (catalog->containsIndex(transaction, tableEntry.getTableID(), propertyID)) {
+            throw BinderException(stringFormat(
+                "Cannot drop property {} in table {} because it is used in one or more indexes. "
+                "Please remove the associated indexes before attempting to drop this property.",
+                propertyName, tableEntry.getName()));
+        }
     }
-
     return skipAlter(info.onConflict,
         [&tableEntry, &propertyName]() { return !tableEntry.containsProperty(propertyName); });
 }
@@ -216,7 +230,7 @@ void Alter::alterTable(main::ClientContext* clientContext, const TableCatalogEnt
     case AlterType::DROP_PROPERTY: {
         auto& extraInfo = info.extraInfo->constCast<BoundExtraDropPropertyInfo>();
         auto propertyName = extraInfo.propertyName;
-        if (checkDropPropertyConflicts(entry, info)) {
+        if (checkDropPropertyConflicts(entry, info, *clientContext)) {
             appendMessage(propertyNotInTableMessage(tableName, propertyName), memoryManager);
             return;
         }
@@ -279,6 +293,9 @@ void Alter::alterTable(main::ClientContext* clientContext, const TableCatalogEnt
     // Handle storage changes
     const auto storageManager = clientContext->getStorageManager();
     catalog->alterTableEntry(transaction, alterInfo);
+    // We don't use an optimistic allocator in this case since rollback of new columns is already
+    // handled by checkpoint
+    auto& pageAllocator = *storageManager->getDataFH()->getPageManager();
     switch (info.alterType) {
     case AlterType::ADD_PROPERTY: {
         auto& boundAddPropInfo = info.extraInfo->constCast<BoundExtraAddPropertyInfo>();
@@ -288,13 +305,14 @@ void Alter::alterTable(main::ClientContext* clientContext, const TableCatalogEnt
         storage::TableAddColumnState state{addedProp, *defaultValueEvaluator};
         switch (alteredEntry->getTableType()) {
         case TableType::NODE: {
-            storageManager->getTable(alteredEntry->getTableID())->addColumn(transaction, state);
+            storageManager->getTable(alteredEntry->getTableID())
+                ->addColumn(transaction, state, pageAllocator);
         } break;
         case TableType::REL: {
             for (auto& innerRelEntry :
                 alteredEntry->cast<RelGroupCatalogEntry>().getRelEntryInfos()) {
                 auto* relTable = storageManager->getTable(innerRelEntry.oid);
-                relTable->addColumn(transaction, state);
+                relTable->addColumn(transaction, state, pageAllocator);
             }
         } break;
         default: {

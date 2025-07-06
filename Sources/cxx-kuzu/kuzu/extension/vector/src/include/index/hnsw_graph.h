@@ -7,7 +7,6 @@
 #include "processor/operator/base_partitioner_shared_state.h"
 #include "storage/buffer_manager/memory_manager.h"
 #include "storage/local_cached_column.h"
-#include "storage/table/column_chunk_data.h"
 
 namespace kuzu {
 namespace storage {
@@ -96,7 +95,7 @@ private:
     storage::CachedColumn* data;
 };
 
-class OnDiskEmbeddingScanState : public GetEmbeddingsScanState {
+class OnDiskEmbeddingScanState final : public GetEmbeddingsScanState {
 public:
     OnDiskEmbeddingScanState(const transaction::Transaction* transaction,
         storage::MemoryManager* mm, storage::NodeTable& nodeTable, common::column_id_t columnID,

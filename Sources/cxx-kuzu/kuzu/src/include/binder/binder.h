@@ -141,6 +141,7 @@ public:
     std::unique_ptr<BoundStatement> bindCopyRelFrom(const parser::Statement& statement,
         catalog::RelGroupCatalogEntry& relGroupEntry, const std::string& fromTableName,
         const std::string& toTableName);
+    std::unique_ptr<BoundStatement> bindLegacyCopyRelGroupFrom(const parser::Statement& copyFrom);
 
     std::unique_ptr<BoundStatement> bindCopyToClause(const parser::Statement& statement);
 
@@ -298,18 +299,11 @@ public:
     std::vector<PropertyDefinition> bindRelPropertyDefinitions(const parser::CreateTableInfo& info);
 
     /*** validations ***/
-    static void validateOrderByFollowedBySkipOrLimitInWithClause(
-        const BoundProjectionBody& boundProjectionBody);
-    static bool isOrderByKeyTypeSupported(const common::LogicalType& dataType);
-
     KUZU_API static void validateTableExistence(const main::ClientContext& context,
         const std::string& tableName);
     KUZU_API static void validateNodeTableType(const catalog::TableCatalogEntry* entry);
     KUZU_API static void validateColumnExistence(const catalog::TableCatalogEntry* entry,
         const std::string& columnName);
-
-    void validateNoIndexOnProperty(const std::string& tableName,
-        const std::string& propertyName) const;
 
     void validateAllInputParametersParsed() const;
     /*** helpers ***/
