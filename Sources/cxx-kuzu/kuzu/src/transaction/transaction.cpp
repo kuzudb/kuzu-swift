@@ -77,8 +77,11 @@ void Transaction::commit(storage::WAL* wal) {
 }
 
 void Transaction::rollback(storage::WAL* wal) {
+    // Rolling back the local storage will free + evict all optimistically-allocated pages
+    // Since the undo buffer may do some scanning (e.g. to delete inserted keys from the hash index)
+    // this must be rolled back first
+    undoBuffer->rollback(clientContext);
     localStorage->rollback();
-    undoBuffer->rollback(this);
     if (shouldLogToWAL()) {
         KU_ASSERT(wal);
         wal->logRollback();
@@ -88,6 +91,11 @@ void Transaction::rollback(storage::WAL* wal) {
 
 uint64_t Transaction::getEstimatedMemUsage() const {
     return localStorage->getEstimatedMemUsage() + undoBuffer->getMemUsage();
+}
+
+bool Transaction::isUnCommitted(common::table_id_t tableID, common::offset_t nodeOffset) const {
+    return localStorage && localStorage->getLocalTable(tableID) &&
+           nodeOffset >= getMinUncommittedNodeOffset(tableID);
 }
 
 void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntry& catalogEntry,
@@ -101,6 +109,7 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
     KU_ASSERT(wal);
     const auto newCatalogEntry = catalogEntry.getNext();
     switch (newCatalogEntry->getType()) {
+    case CatalogEntryType::INDEX_ENTRY:
     case CatalogEntryType::NODE_TABLE_ENTRY:
     case CatalogEntryType::REL_GROUP_ENTRY: {
         if (catalogEntry.getType() == CatalogEntryType::DUMMY_ENTRY) {
@@ -131,16 +140,16 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
             return;
         }
         switch (catalogEntry.getType()) {
+        case CatalogEntryType::INDEX_ENTRY:
         case CatalogEntryType::NODE_TABLE_ENTRY:
         case CatalogEntryType::REL_GROUP_ENTRY:
         case CatalogEntryType::SEQUENCE_ENTRY: {
             wal->logDropCatalogEntryRecord(catalogEntry.getOID(), catalogEntry.getType());
         } break;
-        case CatalogEntryType::INDEX_ENTRY:
         case CatalogEntryType::SCALAR_FUNCTION_ENTRY:
         case CatalogEntryType::TABLE_FUNCTION_ENTRY:
         case CatalogEntryType::STANDALONE_TABLE_FUNCTION_ENTRY: {
-            // DO NOTHING. We don't persistent index/function entries.
+            // DO NOTHING. We don't persist function entries.
         } break;
         case CatalogEntryType::SCALAR_MACRO_ENTRY:
         case CatalogEntryType::TYPE_ENTRY:
@@ -151,11 +160,10 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
         }
         }
     } break;
-    case CatalogEntryType::INDEX_ENTRY:
     case CatalogEntryType::SCALAR_FUNCTION_ENTRY:
     case CatalogEntryType::TABLE_FUNCTION_ENTRY:
     case CatalogEntryType::STANDALONE_TABLE_FUNCTION_ENTRY: {
-        // DO NOTHING. We don't persistent function/index entries.
+        // DO NOTHING. We don't persist function entries.
     } break;
     default: {
         throw common::RuntimeException(
