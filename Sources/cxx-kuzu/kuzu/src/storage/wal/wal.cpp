@@ -2,13 +2,13 @@
 
 #include "binder/ddl/bound_alter_info.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
-#include "common/constants.h"
 #include "common/file_system/file_info.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/serializer/buffered_file.h"
 #include "common/serializer/serializer.h"
 #include "common/vector/value_vector.h"
 #include "main/db_config.h"
+#include "storage/storage_utils.h"
 
 using namespace kuzu::catalog;
 using namespace kuzu::common;
@@ -17,18 +17,16 @@ using namespace kuzu::binder;
 namespace kuzu {
 namespace storage {
 
-WAL::WAL(const std::string& directory, bool readOnly, VirtualFileSystem* vfs,
-    main::ClientContext* context)
-    : directory{directory}, vfs{vfs} {
-    if (main::DBConfig::isDBPathInMemory(directory)) {
+WAL::WAL(const std::string& dbPath, bool readOnly, VirtualFileSystem* vfs,
+    main::ClientContext* context) {
+    if (main::DBConfig::isDBPathInMemory(dbPath)) {
         return;
     }
-    fileInfo =
-        vfs->openFile(vfs->joinPath(directory, std::string(StorageConstants::WAL_FILE_SUFFIX)),
-            FileOpenFlags(readOnly ? FileFlags::READ_ONLY :
-                                     FileFlags::CREATE_IF_NOT_EXISTS | FileFlags::READ_ONLY |
-                                         FileFlags::WRITE),
-            context);
+    fileInfo = vfs->openFile(StorageUtils::getWALFilePath(dbPath),
+        FileOpenFlags(
+            readOnly ? FileFlags::READ_ONLY :
+                       FileFlags::CREATE_IF_NOT_EXISTS | FileFlags::READ_ONLY | FileFlags::WRITE),
+        context);
     bufferedWriter = std::make_shared<BufferedFileWriter>(*fileInfo);
     // WAL should always be APPEND only. We don't want to overwrite the file as it may still contain
     // records not replayed. This can happen if checkpoint is not triggered before the Database is
@@ -69,14 +67,6 @@ void WAL::logAndFlushCheckpoint() {
 void WAL::logCreateCatalogEntryRecord(CatalogEntry* catalogEntry, bool isInternal) {
     std::unique_lock lck{mtx};
     CreateCatalogEntryRecord walRecord(catalogEntry, isInternal);
-    addNewWALRecordNoLock(walRecord);
-}
-
-void WAL::logCreateCatalogEntryRecord(CatalogEntry* catalogEntry,
-    std::vector<CatalogEntry*> childrenEntries, bool isInternal) {
-    std::unique_lock lck{mtx};
-    CreateCatalogEntryRecord walRecord(catalogEntry, isInternal);
-    walRecord.childrenEntries = childrenEntries;
     addNewWALRecordNoLock(walRecord);
 }
 
@@ -147,6 +137,12 @@ void WAL::logUpdateSequenceRecord(sequence_id_t sequenceID, uint64_t kCount) {
     addNewWALRecordNoLock(walRecord);
 }
 
+void WAL::logLoadExtension(std::string path) {
+    std::unique_lock lck{mtx};
+    LoadExtensionRecord walRecord(std::move(path));
+    addNewWALRecordNoLock(walRecord);
+}
+
 void WAL::clearWAL() {
     bufferedWriter->getFileInfo().truncate(0);
     bufferedWriter->resetOffsets();
@@ -162,7 +158,6 @@ void WAL::flushAllPages() {
 // NOLINTNEXTLINE(readability-make-member-function-const): semantically non-const function.
 void WAL::addNewWALRecordNoLock(const WALRecord& walRecord) {
     KU_ASSERT(walRecord.type != WALRecordType::INVALID_RECORD);
-    KU_ASSERT(!main::DBConfig::isDBPathInMemory(directory));
     Serializer serializer(bufferedWriter);
     walRecord.serialize(serializer);
 }

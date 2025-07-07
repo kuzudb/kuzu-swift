@@ -7,7 +7,7 @@
 namespace kuzu {
 namespace common {
 
-struct LocalFileInfo : public FileInfo {
+struct LocalFileInfo final : FileInfo {
 #ifdef _WIN32
     LocalFileInfo(std::string path, const void* handle, FileSystem* fileSystem)
         : FileInfo{std::move(path), fileSystem}, handle{handle} {}
@@ -41,7 +41,8 @@ public:
 
     void createDir(const std::string& dir) const override;
 
-    void removeFileIfExists(const std::string& path) override;
+    void removeFileIfExists(const std::string& path,
+        const main::ClientContext* context = nullptr) override;
 
     bool fileOrPathExists(const std::string& path, main::ClientContext* context = nullptr) override;
 

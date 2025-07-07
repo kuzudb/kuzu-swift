@@ -38,7 +38,8 @@ public:
 
     void createDir(const std::string& dir) const override;
 
-    void removeFileIfExists(const std::string& path) override;
+    void removeFileIfExists(const std::string& path,
+        const main::ClientContext* context = nullptr) override;
 
     bool fileOrPathExists(const std::string& path, main::ClientContext* context = nullptr) override;
 
@@ -66,7 +67,7 @@ protected:
 private:
     FileSystem* findFileSystem(const std::string& path) const;
 
-    FileCompressionType autoDetectCompressionType(const std::string& path) const;
+    static FileCompressionType autoDetectCompressionType(const std::string& path);
 
 private:
     std::vector<std::unique_ptr<FileSystem>> subSystems;

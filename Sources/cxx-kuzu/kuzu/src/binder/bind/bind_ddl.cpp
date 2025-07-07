@@ -6,7 +6,6 @@
 #include "binder/ddl/bound_drop.h"
 #include "binder/expression_visitor.h"
 #include "catalog/catalog.h"
-#include "catalog/catalog_entry/index_catalog_entry.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "common/enums/extend_direction_util.h"
@@ -118,28 +117,6 @@ static void validatePrimaryKey(const std::string& pkColName,
         break;
     default:
         throw BinderException(ExceptionMessage::invalidPKType(pkType.toString()));
-    }
-}
-
-void Binder::validateNoIndexOnProperty(const std::string& tableName,
-    const std::string& propertyName) const {
-    auto transaction = clientContext->getTransaction();
-    auto catalog = clientContext->getCatalog();
-    auto tableEntry = catalog->getTableCatalogEntry(transaction, tableName);
-    if (!tableEntry->containsProperty(propertyName)) {
-        return;
-    }
-    auto propertyID = tableEntry->getPropertyID(propertyName);
-    for (auto indexCatalogEntry : catalog->getIndexEntries(transaction)) {
-        auto propertiesWithIndex = indexCatalogEntry->getPropertyIDs();
-        if (indexCatalogEntry->getTableID() == tableEntry->getTableID() &&
-            std::find(propertiesWithIndex.begin(), propertiesWithIndex.end(), propertyID) !=
-                propertiesWithIndex.end()) {
-            throw BinderException{stringFormat(
-                "Cannot drop property {} in table {} because it is used in one or more indexes. "
-                "Please remove the associated indexes before attempting to drop this property.",
-                propertyName, tableName)};
-        }
     }
 }
 
@@ -266,6 +243,7 @@ std::unique_ptr<BoundStatement> Binder::bindCreateTableAs(const Statement& state
     case TableType::NODE: {
         // first column is primary key column temporarily for now
         auto pkName = columnNames[0];
+        validatePrimaryKey(pkName, propertyDefinitions);
         auto boundCopyFromInfo = bindCopyNodeFromInfo(createInfo->tableName, propertyDefinitions,
             createTable.getSource(), options_t{}, columnNames, columnTypes, false /* byColumn */);
         auto boundExtraInfo =
@@ -274,7 +252,7 @@ std::unique_ptr<BoundStatement> Binder::bindCreateTableAs(const Statement& state
             createInfo->tableName, createInfo->onConflict, std::move(boundExtraInfo),
             clientContext->useInternalCatalogEntry());
         auto boundCreateTable = std::make_unique<BoundCreateTable>(std::move(boundCreateInfo),
-            BoundStatementResult::createEmptyResult());
+            BoundStatementResult::createSingleStringColumnResult());
         boundCreateTable->setCopyInfo(std::move(boundCopyFromInfo));
         return boundCreateTable;
     }
@@ -301,7 +279,7 @@ std::unique_ptr<BoundStatement> Binder::bindCreateTableAs(const Statement& state
         boundCreateInfo.extraInfo->ptrCast<BoundExtraCreateTableInfo>()->propertyDefinitions =
             std::move(propertyDefinitions);
         auto boundCreateTable = std::make_unique<BoundCreateTable>(std::move(boundCreateInfo),
-            BoundStatementResult::createEmptyResult());
+            BoundStatementResult::createSingleStringColumnResult());
         boundCreateTable->setCopyInfo(std::move(boundCopyFromInfo));
         return boundCreateTable;
     }
@@ -459,7 +437,6 @@ std::unique_ptr<BoundStatement> Binder::bindDropProperty(const Statement& statem
     auto extraInfo = info->extraInfo->constPtrCast<ExtraDropPropertyInfo>();
     auto tableName = info->tableName;
     auto propertyName = extraInfo->propertyName;
-    validateNoIndexOnProperty(tableName, propertyName);
     auto boundExtraInfo = std::make_unique<BoundExtraDropPropertyInfo>(propertyName);
     auto boundInfo = BoundAlterInfo(AlterType::DROP_PROPERTY, tableName, std::move(boundExtraInfo),
         info->onConflict);
