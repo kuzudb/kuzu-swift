@@ -220,6 +220,7 @@ let package = Package(
                 "kuzu/src/common/data_chunk/data_chunk_collection.cpp",
                 "kuzu/src/common/data_chunk/data_chunk_state.cpp",
                 "kuzu/src/common/data_chunk/sel_vector.cpp",
+                "kuzu/src/common/database_lifecycle_manager.cpp",
                 "kuzu/src/common/enums/accumulate_type.cpp",
                 "kuzu/src/common/enums/conflict_action.cpp",
                 "kuzu/src/common/enums/drop_type.cpp",

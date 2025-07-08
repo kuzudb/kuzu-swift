@@ -1,5 +1,7 @@
 #include "function/built_in_function_utils.h"
 
+#include <sstream>
+
 #include "catalog/catalog_entry/function_catalog_entry.h"
 #include "common/exception/binder.h"
 #include "function/aggregate_function.h"
@@ -486,16 +488,32 @@ void BuiltInFunctionsUtils::validateSpecialCases(std::vector<Function*>& candida
     }
 }
 
-static std::string getFunctionMatchFailureMsg(const std::string name,
-    const std::vector<LogicalType>& inputTypes, const std::string& supportedInputs,
-    bool isDistinct = false) {
-    auto result = stringFormat("Cannot match a built-in function for given function {}{}{}.", name,
-        isDistinct ? "DISTINCT " : "", LogicalTypeUtils::toString(inputTypes));
-    if (supportedInputs.empty()) {
-        result += " Expect empty inputs.";
-    } else {
-        result += " Supported inputs are\n" + supportedInputs;
+static std::string alignedString(const std::string& input) {
+    std::istringstream stream(input);
+    std::ostringstream result;
+    std::string line;
+    std::string prefix = "Expected: ";
+    std::string padding(prefix.length(), ' ');
+    bool firstLine = true;
+    while (std::getline(stream, line)) {
+        if (firstLine) {
+            result << line << '\n';
+            firstLine = false;
+        } else {
+            result << padding << line << '\n';
+        }
     }
+    return result.str();
+}
+
+std::string BuiltInFunctionsUtils::getFunctionMatchFailureMsg(const std::string name,
+    const std::vector<LogicalType>& inputTypes, const std::string& supportedInputs,
+    bool isDistinct) {
+    std::string result = stringFormat("Function {} did not receive correct arguments:\n", name);
+    result += stringFormat("Actual:   {}{}\n", isDistinct ? "DISTINCT " : "",
+        inputTypes.empty() ? "()" : LogicalTypeUtils::toString(inputTypes));
+    result += stringFormat("Expected: {}\n",
+        supportedInputs.empty() ? "()" : alignedString(supportedInputs));
     return result;
 }
 
@@ -511,8 +529,8 @@ void validateNonEmptyCandidateFunctions(std::vector<AggregateFunction*>& candida
             }
             supportedInputsString += aggregateFunction->signatureToString() + "\n";
         }
-        throw BinderException(
-            getFunctionMatchFailureMsg(name, inputTypes, supportedInputsString, isDistinct));
+        throw BinderException(BuiltInFunctionsUtils::getFunctionMatchFailureMsg(name, inputTypes,
+            supportedInputsString, isDistinct));
     }
 }
 
@@ -527,7 +545,8 @@ void validateNonEmptyCandidateFunctions(std::vector<Function*>& candidateFunctio
             }
             supportedInputsString += function->signatureToString() + "\n";
         }
-        throw BinderException(getFunctionMatchFailureMsg(name, inputTypes, supportedInputsString));
+        throw BinderException(BuiltInFunctionsUtils::getFunctionMatchFailureMsg(name, inputTypes,
+            supportedInputsString));
     }
 }
 
