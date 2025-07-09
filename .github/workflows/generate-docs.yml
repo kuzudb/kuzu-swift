@@ -14,11 +14,17 @@ jobs:
               --output-path ./docs \
               --transform-for-static-hosting \
               --hosting-base-path swift
+      # upload-artifact rejects certain characters in the path, so we zip the 
+      # documentation directory before uploading.
+      - name: Zip documentation
+        run: |
+          mv docs swift
+          zip -r kuzu-swift-docs.zip swift
       - name: Upload documentation
         uses: actions/upload-artifact@v4
         with:
           name: kuzu-swift-docs
-          path: docs
+          path: kuzu-swift-docs.zip
   update-docs:
     runs-on: ubuntu-22.04
     name: Update Documentation Repository
@@ -36,7 +42,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: kuzu-swift-docs
-          path: api-docs/swift
+          path: api-docs
+      - name: Unzip Swift docs
+        run: |
+          cd api-docs
+          unzip kuzu-swift-docs.zip
+          rm -f kuzu-swift-docs.zip
       - name: Push changes
         working-directory: api-docs
         run: |

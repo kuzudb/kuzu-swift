@@ -5,7 +5,6 @@
 #include "common/string_utils.h"
 #include "extension/extension.h"
 #include "generated_extension_loader.h"
-#include "storage/wal/local_wal.h"
 
 namespace kuzu {
 namespace extension {
@@ -46,9 +45,8 @@ void ExtensionManager::loadExtension(const std::string& path, main::ClientContex
     (*init)(context);
     loadedExtensions.push_back(LoadedExtension(extensionName, fullPath,
         isOfficial ? ExtensionSource::OFFICIAL : ExtensionSource::USER));
-    auto transaction = context->getTransaction();
-    if (transaction->shouldLogToWAL()) {
-        transaction->getLocalWAL().logLoadExtension(path);
+    if (context->getTransaction()->shouldLogToWAL()) {
+        context->getWAL()->logLoadExtension(path);
     }
 }
 

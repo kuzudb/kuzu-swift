@@ -28,7 +28,7 @@ class VirtualFileSystem;
 }
 
 namespace storage {
-// FileHandle serves several purposes:
+// FileHandle seves several purposes:
 // 1) holds basic state information of a file, including FileInfo, flags, pageSize,
 // numPages, and pageCapacity.
 // 2) provides utility methods to read/write pages from/to the file.

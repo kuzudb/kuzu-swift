@@ -60,8 +60,7 @@ QueryFTSConfig QueryFTSOptionalParams::getConfig() const {
             ExpressionUtil::evaluateLiteral<bool>(*conjunctive, LogicalType::BOOL());
     }
     if (topK != nullptr) {
-        config.topK =
-            ExpressionUtil::evaluateLiteral<uint64_t>(*topK, LogicalType::UINT64(), TopK::validate);
+        config.topK = ExpressionUtil::evaluateLiteral<uint64_t>(*topK, LogicalType::UINT64());
     }
     return config;
 }

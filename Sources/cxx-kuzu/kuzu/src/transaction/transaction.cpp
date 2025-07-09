@@ -7,7 +7,7 @@
 #include "storage/local_storage/local_storage.h"
 #include "storage/storage_manager.h"
 #include "storage/undo_buffer.h"
-#include "storage/wal/local_wal.h"
+#include "storage/wal/wal.h"
 
 using namespace kuzu::catalog;
 
@@ -38,7 +38,6 @@ Transaction::Transaction(main::ClientContext& clientContext, TransactionType tra
         minUncommittedNodeOffsets[id] =
             clientContext.getStorageManager()->getTable(id)->getNumTotalRows(this);
     }
-    localWAL = std::make_unique<storage::LocalWAL>(*clientContext.getMemoryManager());
 }
 
 Transaction::Transaction(TransactionType transactionType) noexcept
@@ -68,10 +67,8 @@ void Transaction::commit(storage::WAL* wal) {
     localStorage->commit();
     undoBuffer->commit(commitTS);
     if (shouldLogToWAL()) {
-        KU_ASSERT(localWAL && wal);
-        localWAL->logCommit();
-        wal->logCommittedWAL(*localWAL, clientContext);
-        localWAL->clear();
+        KU_ASSERT(wal);
+        wal->logAndFlushCommit();
     }
     if (hasCatalogChanges) {
         clientContext->getCatalog()->incrementVersion();
@@ -79,9 +76,16 @@ void Transaction::commit(storage::WAL* wal) {
     }
 }
 
-void Transaction::rollback(storage::WAL*) {
-    localStorage->rollback();
+void Transaction::rollback(storage::WAL* wal) {
+    // Rolling back the local storage will free + evict all optimistically-allocated pages
+    // Since the undo buffer may do some scanning (e.g. to delete inserted keys from the hash index)
+    // this must be rolled back first
     undoBuffer->rollback(clientContext);
+    localStorage->rollback();
+    if (shouldLogToWAL()) {
+        KU_ASSERT(wal);
+        wal->logRollback();
+    }
     hasCatalogChanges = false;
 }
 
@@ -101,7 +105,8 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
     if (!shouldLogToWAL() || skipLoggingToWAL) {
         return;
     }
-    KU_ASSERT(localWAL);
+    const auto wal = clientContext->getWAL();
+    KU_ASSERT(wal);
     const auto newCatalogEntry = catalogEntry.getNext();
     switch (newCatalogEntry->getType()) {
     case CatalogEntryType::INDEX_ENTRY:
@@ -109,7 +114,7 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
     case CatalogEntryType::REL_GROUP_ENTRY: {
         if (catalogEntry.getType() == CatalogEntryType::DUMMY_ENTRY) {
             KU_ASSERT(catalogEntry.isDeleted());
-            localWAL->logCreateCatalogEntryRecord(newCatalogEntry, isInternal);
+            wal->logCreateCatalogEntryRecord(newCatalogEntry, isInternal);
         } else {
             throw common::RuntimeException("This shouldn't happen. Alter table is not supported.");
         }
@@ -121,13 +126,13 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
             // We don't log SERIAL catalog entry creation as it is implicit
             return;
         }
-        localWAL->logCreateCatalogEntryRecord(newCatalogEntry, isInternal);
+        wal->logCreateCatalogEntryRecord(newCatalogEntry, isInternal);
     } break;
     case CatalogEntryType::SCALAR_MACRO_ENTRY:
     case CatalogEntryType::TYPE_ENTRY: {
         KU_ASSERT(
             catalogEntry.getType() == CatalogEntryType::DUMMY_ENTRY && catalogEntry.isDeleted());
-        localWAL->logCreateCatalogEntryRecord(newCatalogEntry, isInternal);
+        wal->logCreateCatalogEntryRecord(newCatalogEntry, isInternal);
     } break;
     case CatalogEntryType::DUMMY_ENTRY: {
         KU_ASSERT(newCatalogEntry->isDeleted());
@@ -139,7 +144,7 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
         case CatalogEntryType::NODE_TABLE_ENTRY:
         case CatalogEntryType::REL_GROUP_ENTRY:
         case CatalogEntryType::SEQUENCE_ENTRY: {
-            localWAL->logDropCatalogEntryRecord(catalogEntry.getOID(), catalogEntry.getType());
+            wal->logDropCatalogEntryRecord(catalogEntry.getOID(), catalogEntry.getType());
         } break;
         case CatalogEntryType::SCALAR_FUNCTION_ENTRY:
         case CatalogEntryType::TABLE_FUNCTION_ENTRY:
@@ -172,10 +177,12 @@ void Transaction::pushAlterCatalogEntry(CatalogSet& catalogSet, CatalogEntry& ca
     const binder::BoundAlterInfo& alterInfo) {
     undoBuffer->createCatalogEntry(catalogSet, catalogEntry);
     hasCatalogChanges = true;
-    if (shouldLogToWAL()) {
-        KU_ASSERT(localWAL);
-        localWAL->logAlterCatalogEntryRecord(&alterInfo);
+    if (!shouldLogToWAL()) {
+        return;
     }
+    const auto wal = clientContext->getWAL();
+    KU_ASSERT(wal);
+    wal->logAlterCatalogEntryRecord(&alterInfo);
 }
 
 void Transaction::pushSequenceChange(SequenceCatalogEntry* sequenceEntry, int64_t kCount,
@@ -183,8 +190,7 @@ void Transaction::pushSequenceChange(SequenceCatalogEntry* sequenceEntry, int64_
     undoBuffer->createSequenceChange(*sequenceEntry, data);
     hasCatalogChanges = true;
     if (shouldLogToWAL()) {
-        KU_ASSERT(localWAL);
-        localWAL->logUpdateSequenceRecord(sequenceEntry->getOID(), kCount);
+        clientContext->getWAL()->logUpdateSequenceRecord(sequenceEntry->getOID(), kCount);
     }
 }
 
