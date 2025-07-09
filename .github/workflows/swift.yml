@@ -47,7 +47,11 @@ jobs:
           swift build -c release
       - name: Copy example binary
         working-directory: Example
-        run: cp ./.build/arm64-apple-macosx/release/kuzu-swift-example ./data
+        run: |
+          ls ./.build
+          ls ./.build/arm64-apple-macosx
+          ls ./.build/arm64-apple-macosx/release
+          cp ./.build/arm64-apple-macosx/release/kuzu-swift-example ./data
  
       - name: Run example
         working-directory: Example/data
