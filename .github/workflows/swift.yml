@@ -45,14 +45,9 @@ jobs:
           rm Package.swift
           mv Package.swift.tmp Package.swift
           swift build -c release
-      - name: Copy example binary
-        working-directory: Example
-        run: |
-          ls ./.build
-          ls ./.build/arm64-apple-macosx
-          ls ./.build/arm64-apple-macosx/release
-          cp ./.build/arm64-apple-macosx/release/kuzu-swift-example ./data
+          # Copy the built binary to the current directory
+          cp ./.build/arm64-apple-macosx/release/kuzu-swift-example .
  
       - name: Run example
-        working-directory: Example/data
+        working-directory: Example
         run: ./kuzu-swift-example

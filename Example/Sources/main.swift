@@ -9,10 +9,10 @@ let queries = [
     "CREATE NODE TABLE City(name STRING PRIMARY KEY, population INT64)",
     "CREATE REL TABLE Follows(FROM User TO User, since INT64)",
     "CREATE REL TABLE LivesIn(FROM User TO City)",
-    "COPY User FROM \"./data/user.csv\"",
-    "COPY City FROM \"city.csv\"",
-    "COPY Follows FROM \"follows.csv\"",
-    "COPY LivesIn FROM \"lives-in.csv\"",
+    "COPY User FROM 'data/user.csv'",
+    "COPY City FROM 'data/city.csv'",
+    "COPY Follows FROM 'data/follows.csv'",
+    "COPY LivesIn FROM 'data/lives-in.csv'",
 ]
 
 for query in queries {
