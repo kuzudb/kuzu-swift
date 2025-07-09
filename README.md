@@ -18,7 +18,7 @@ Alternatively, you can add the package through Xcode:
 
 ## Docs
 
-[Work in progress. Please refer to the docstring from the source code for now.]
+The API documentation for kuzu-swift is [available here](https://api-docs.kuzudb.com/swift/documentation/kuzu/).
 
 ## Example
 
