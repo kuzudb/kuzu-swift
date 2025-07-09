@@ -1,5 +1,6 @@
 .DS_Store
 /.build
+/Example/.build
 /Packages
 xcuserdata/
 DerivedData/
@@ -8,3 +9,4 @@ DerivedData/
 .netrc
 docs
 Package.resolved
+Example/kuzu-swift-example
