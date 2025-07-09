@@ -20,11 +20,11 @@ Alternatively, you can add the package through Xcode:
 
 The API documentation for kuzu-swift is [available here](https://api-docs.kuzudb.com/swift/documentation/kuzu/).
 
-## Example
+## Examples
 
 A simple CLI example is provided in the [Example](Example) directory.
 
-A demo iOS application is [provided here](https://github.com/kuzudb/kuzu-swift-demo)
+A demo iOS application is [provided here](https://github.com/kuzudb/kuzu-swift-demo).
 
 ## System requirements
 

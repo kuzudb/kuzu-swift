@@ -33,6 +33,7 @@ jobs:
         run: swift test -c ${{ matrix.config }}
 
   example:
+    name: Build and Run Example
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +49,6 @@ jobs:
         working-directory: Example
         run: cp ./.build/arm64-apple-macosx/release/kuzu-swift-example ./data
  
-      - name: Run Example Tests
+      - name: Run example
         working-directory: Example/data
         run: ./kuzu-swift-example
