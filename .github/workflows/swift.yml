@@ -31,3 +31,23 @@ jobs:
         run: swift build -c ${{ matrix.config }}
       - name: Run tests (${{ matrix.config }} mode)
         run: swift test -c ${{ matrix.config }}
+
+  example:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build example project
+        working-directory: Example
+        run: |
+          # Replace version with the current commit hash
+          sed 's/main/${{ github.sha }}/' Package.swift > Package.swift.tmp 
+          rm Package.swift
+          mv Package.swift.tmp Package.swift
+          swift build -c release
+      - name: Copy example binary
+        working-directory: Example
+        run: cp ./.build/arm64-apple-macosx/release/kuzu-swift-example ./data
+ 
+      - name: Run Example Tests
+        working-directory: Example/data
+        run: ./kuzu-swift-example

@@ -22,6 +22,8 @@ The API documentation for kuzu-swift is [available here](https://api-docs.kuzudb
 
 ## Example
 
+A simple CLI example is provided in the [Example](Example) directory.
+
 A demo iOS application is [provided here](https://github.com/kuzudb/kuzu-swift-demo)
 
 ## System requirements
