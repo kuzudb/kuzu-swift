@@ -18,3 +18,42 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kuzu-swift-docs
+          paths: docs
+  update-docs:
+    runs-on: ubuntu-22.04
+    name: Update Documentation Repository
+    needs: generate-docs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: kuzudb/api-docs
+          token: ${{ secrets.DOC_PUSH_TOKEN }}
+          path: api-docs
+      - name: Remove old documentations
+        run: |
+          rm -rf api-docs/swift
+      - name: Download Swift docs
+        uses: actions/download-artifact@v4
+        with:
+          name: kuzu-swift-docs
+          path: api-docs/swift
+      - name: Push changes
+        working-directory: api-docs
+        run: |
+          git checkout -b "swift-documentation-update-${{ github.sha }}"
+          git config --global user.name "CI User"
+          git config --global user.email "ci@kuzudb.com"
+          git add .
+          git commit -m "Update Swift API documentations"
+          git push -u origin "swift-documentation-update-${{ github.sha }}"
+      - name: Create pull request
+        working-directory: api-docs
+        run: |
+          echo "${{ secrets.DOC_PUSH_TOKEN }}" > token.txt
+          gh auth login --with-token < token.txt
+          rm -rf token.txt
+          gh pr create \
+            --body "Action triggered by CI workflow." \
+            --title "Update Swift API documentations" \
+            --head "swift-documentation-update-${{ github.sha }}" \
+            --base "main"
