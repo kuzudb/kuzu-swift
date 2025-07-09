@@ -1,0 +1,20 @@
+name: Generate Documentation
+on:
+  workflow_dispatch:
+jobs:
+  generate-docs:
+    runs-on: macos-15
+    name: Generate Documentation
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate documentation
+        run: |
+          swift package --allow-writing-to-directory ./docs \
+              generate-documentation --target Kuzu --disable-indexing \
+              --output-path ./docs \
+              --transform-for-static-hosting \
+              --hosting-base-path swift
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: kuzu-swift-docs
