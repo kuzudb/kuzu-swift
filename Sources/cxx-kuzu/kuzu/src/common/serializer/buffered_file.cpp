@@ -42,11 +42,6 @@ void BufferedFileWriter::write(const uint8_t* data, uint64_t size) {
     }
 }
 
-void BufferedFileWriter::clear() {
-    fileInfo.truncate(0);
-    resetOffsets();
-}
-
 void BufferedFileWriter::flush() {
     if (bufferOffset == 0) {
         return;
@@ -61,7 +56,7 @@ void BufferedFileWriter::sync() {
     fileInfo.syncFile();
 }
 
-uint64_t BufferedFileWriter::getSize() const {
+uint64_t BufferedFileWriter::getFileSize() const {
     return fileInfo.getFileSize() + bufferOffset;
 }
 

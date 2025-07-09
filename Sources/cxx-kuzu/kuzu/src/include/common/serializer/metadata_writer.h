@@ -13,11 +13,10 @@ class PageAllocator;
 
 namespace kuzu {
 namespace common {
-class BufferedFileWriter;
 
-class InMemFileWriter final : public Writer {
+class MetaWriter final : public Writer {
 public:
-    explicit InMemFileWriter(storage::MemoryManager& mm);
+    explicit MetaWriter(storage::MemoryManager* mm);
 
     void write(const uint8_t* data, uint64_t size) override;
 
@@ -34,31 +33,13 @@ public:
     page_idx_t getNumPagesToFlush() const { return pages.size(); }
 
     static uint64_t getPageSize();
-    void flush(BufferedFileWriter& writer) const;
-
-    uint64_t getSize() const override {
-        uint64_t size = pages.size() > 1 ? KUZU_PAGE_SIZE * (pages.size() - 1) : 0;
-        return size + pageOffset;
-    }
-
-    void clear() override {
-        pages.clear();
-        pageOffset = 0;
-    }
-
-    void flush() override {
-        // DO NOTHING: InMemWriter does not need to flush.
-    }
-    void sync() override {
-        // DO NOTHING: InMemWriter does not need to sync.
-    }
 
 private:
     bool needNewBuffer(uint64_t size) const;
 
 private:
     std::vector<std::unique_ptr<storage::MemoryBuffer>> pages;
-    storage::MemoryManager& mm;
+    storage::MemoryManager* mm;
     uint64_t pageOffset;
 };
 

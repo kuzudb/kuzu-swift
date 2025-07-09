@@ -9,6 +9,7 @@
 namespace kuzu {
 namespace common {
 
+// TODO(Ziyi): Move this to constants.h once we have a unified serializer design.
 static constexpr uint64_t SERIALIZER_DEFAULT_SIZE = 1024;
 
 struct BinaryData {
@@ -16,26 +17,22 @@ struct BinaryData {
     uint64_t size = 0;
 };
 
-class KUZU_API BufferWriter : public Writer {
+class KUZU_API BufferedSerializer : public Writer {
 public:
     // Serializes to a buffer allocated by the serializer, will expand when
     // writing past the initial threshold.
-    explicit BufferWriter(uint64_t maximumSize = SERIALIZER_DEFAULT_SIZE);
+    explicit BufferedSerializer(uint64_t maximumSize = SERIALIZER_DEFAULT_SIZE);
+    // Serializes to a provided (owned) data pointer.
+    BufferedSerializer(std::unique_ptr<uint8_t[]> data, uint64_t size);
 
     // Retrieves the data after the writing has been completed.
     BinaryData getData() { return std::move(blob); }
 
-    uint64_t getSize() const override { return blob.size; }
+    uint64_t getSize() const { return blob.size; }
 
     uint8_t* getBlobData() const { return blob.data.get(); }
 
-    void clear() override { blob.size = 0; }
-    void flush() override {
-        // DO NOTHING: BufferedWriter does not need to flush.
-    }
-    void sync() override {
-        // DO NOTHING: BufferedWriter does not need to sync.
-    }
+    void reset() { blob.size = 0; }
 
     template<class T>
     void write(T element) {
