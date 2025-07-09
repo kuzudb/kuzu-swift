@@ -2,16 +2,19 @@
 
 Official Swift language binding for [Kuzu](https://github.com/kuzudb/kuzu). Kuzu an embeddable property graph database management system built for query speed and scalability. For more information, please visit the [Kuzu GitHub repository](https://github.com/kuzudb/kuzu) or the [Kuzu website](https://kuzudb.com).
 
-[This project is work in progress. The development is completed for the initial release with full functionality. But the documentation and examples are not yet available.]
+## Get started
 
-## Installation
+To add kuzu-swift to your Swift project, you can use the Swift Package Manager:
 
 ```bash
 swift package add https://github.com/kuzudb/kuzu-swift
 ```
-## Get started
 
-[Work in progress]
+Alternatively, you can add the package through Xcode:
+1. Open your Xcode project.
+2. Go to `File` > `Add Packages Dependencies...`.
+3. Enter the URL of the kuzu-swift repository: `https://github.com/kuzudb/kuzu-swift`.
+4. Select the version you want to use (e.g., `main` branch or a specific tag).
 
 ## Docs
 
