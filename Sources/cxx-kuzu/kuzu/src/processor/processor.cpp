@@ -10,8 +10,18 @@ using namespace kuzu::storage;
 namespace kuzu {
 namespace processor {
 
-QueryProcessor::QueryProcessor(uint64_t numThreads) {
-    taskScheduler = std::make_unique<TaskScheduler>(numThreads);
+QueryProcessor::QueryProcessor(uint64_t numThreads
+#if defined(__APPLE__)
+    ,
+    uint32_t threadQos
+#endif
+) {
+    taskScheduler = std::make_unique<TaskScheduler>(numThreads
+#if defined(__APPLE__)
+        ,
+        threadQos
+#endif
+    );
 }
 
 std::shared_ptr<FactorizedTable> QueryProcessor::execute(PhysicalPlan* physicalPlan,

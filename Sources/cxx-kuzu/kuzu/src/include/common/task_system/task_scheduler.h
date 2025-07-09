@@ -42,7 +42,12 @@ struct ScheduledTask {
 #ifndef __SINGLE_THREADED__
 class KUZU_API TaskScheduler {
 public:
-    explicit TaskScheduler(uint64_t numWorkerThreads);
+    explicit TaskScheduler(uint64_t numWorkerThreads
+#if defined(__APPLE__)
+        ,
+        uint32_t threadQos
+#endif
+    );
     ~TaskScheduler();
 
     // Schedules the dependencies of the given task and finally the task one after another (so
@@ -71,6 +76,9 @@ private:
     std::mutex taskSchedulerMtx;
     std::condition_variable cv;
     uint64_t nextScheduledTaskID;
+#if defined(__APPLE__)
+    uint32_t threadQos; // Thread quality of service for worker threads.
+#endif
 };
 #else
 // Single-threaded version of TaskScheduler

@@ -18,10 +18,11 @@ public final class SystemConfig: @unchecked Sendable {
     /// Creates a new system configuration with default values.
     ///
     /// The default system configuration is as follows:
-    /// - BufferPoolSize: 80% of the total system memory on macOS and Linux, 2GB on iOS, 1GB on tvOS, and 128MB on watchOS
-    /// - MaxNumThreads: Number of CPU cores available in the system
-    /// - EnableCompression: true
-    /// - ReadOnly: false
+    /// - bufferPoolSize: 80% of the total system memory on macOS and Linux, 2GB on iOS, 1GB on tvOS, and 128MB on watchOS
+    /// - maxNumThreads: Number of CPU cores available in the system
+    /// - enableCompression: true
+    /// - readOnly: false
+    /// - threadQos: QOS_CLASS_DEFAULT (Apple platforms only)
     public init() {
         cSystemConfig = kuzu_default_system_config()
         #if os(iOS)
@@ -44,13 +45,15 @@ public final class SystemConfig: @unchecked Sendable {
     ///   - readOnly: A boolean flag to open the database in read-only mode. Default is false.
     ///   - autoCheckpoint: Whether to automatically create checkpoints. Default is true.
     ///   - checkpointThreshold: The threshold for creating checkpoints. If set to UInt64.max, uses default value.
+    ///   - threadQoS: The thread quality of service (QoS) for the worker threads. This is only available on Apple platforms. The default value is QOS_CLASS_DEFAULT.
     public convenience init(
         bufferPoolSize: UInt64 = 0,
         maxNumThreads: UInt64 = 0,
         enableCompression: Bool = true,
         readOnly: Bool = false,
         autoCheckpoint: Bool = true,
-        checkpointThreshold: UInt64 = UInt64.max
+        checkpointThreshold: UInt64 = UInt64.max,
+        threadQos: qos_class_t = QOS_CLASS_DEFAULT
     ) {
         self.init()
         if bufferPoolSize > 0 {
@@ -65,5 +68,9 @@ public final class SystemConfig: @unchecked Sendable {
         if checkpointThreshold > 0 {
             cSystemConfig.checkpoint_threshold = checkpointThreshold
         }
+#if !os(Linux)
+        
+            cSystemConfig.thread_qos = threadQos.rawValue
+        #endif
     }
 }
