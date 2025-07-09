@@ -18,7 +18,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kuzu-swift-docs
-          paths: docs
+          path: docs
   update-docs:
     runs-on: ubuntu-22.04
     name: Update Documentation Repository
