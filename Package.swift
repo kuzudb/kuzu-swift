@@ -15,6 +15,9 @@ let package = Package(
             name: "Kuzu",
             targets: ["Kuzu"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-docc-plugin", branch: "1.4.5"),
+    ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
@@ -249,10 +252,10 @@ let package = Package(
                 "kuzu/src/common/profiler.cpp",
                 "kuzu/src/common/random_engine.cpp",
                 "kuzu/src/common/roaring_mask.cpp",
+                "kuzu/src/common/serializer/buffer_writer.cpp",
                 "kuzu/src/common/serializer/buffered_file.cpp",
-                "kuzu/src/common/serializer/buffered_serializer.cpp",
                 "kuzu/src/common/serializer/deserializer.cpp",
-                "kuzu/src/common/serializer/metadata_writer.cpp",
+                "kuzu/src/common/serializer/in_mem_file_writer.cpp",
                 "kuzu/src/common/serializer/serializer.cpp",
                 "kuzu/src/common/sha256.cpp",
                 "kuzu/src/common/string_utils.cpp",
@@ -820,6 +823,7 @@ let package = Package(
                 "kuzu/src/storage/table/version_info.cpp",
                 "kuzu/src/storage/table/version_record_handler.cpp",
                 "kuzu/src/storage/undo_buffer.cpp",
+                "kuzu/src/storage/wal/local_wal.cpp",
                 "kuzu/src/storage/wal/wal.cpp",
                 "kuzu/src/storage/wal/wal_record.cpp",
                 "kuzu/src/storage/wal/wal_replayer.cpp",
