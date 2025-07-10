@@ -38,6 +38,25 @@ public final class Database: @unchecked Sendable {
         }
     }
 
+    /// The version of the Kuzu library as a string.
+    ///
+    /// This property returns the version of the underlying Kuzu library.
+    /// Useful for debugging and ensuring compatibility.
+    public static var version: String {
+        let resultCString = kuzu_get_version()
+        defer { kuzu_destroy_string(resultCString) }
+        return String(cString: resultCString!)
+    }
+
+    /// The storage version of the Kuzu library as an unsigned 64-bit integer.
+    ///
+    /// This property returns the storage format version used by the Kuzu library.
+    /// It can be used to check compatibility of database files.
+    public static var storageVersion: UInt64 {
+        let storageVersion = kuzu_get_storage_version()
+        return storageVersion
+    }
+
     deinit {
         kuzu_database_destroy(&self.cDatabase)
     }
