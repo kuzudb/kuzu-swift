@@ -69,7 +69,7 @@ public final class SystemConfig: @unchecked Sendable {
     }
 
     /// Creates a new system configuration with the specified parameters and thread QoS option.
-    /// This initializer is only available on Apple platforms,
+    /// This initializer is only available on Apple platforms.
     ///
     /// - Parameters:
     ///   - bufferPoolSize: The size of the buffer pool in bytes. If 0, uses default (80% of system memory).

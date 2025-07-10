@@ -33,7 +33,7 @@ public final class FlatTuple: CustomStringConvertible, @unchecked Sendable {
         let cString: UnsafeMutablePointer<CChar> = kuzu_flat_tuple_to_string(
             &cFlatTuple
         )
-        defer { free(UnsafeMutableRawPointer(mutating: cString)) }
+        defer { kuzu_destroy_string(cString) }
         return String(cString: cString)
     }
 
