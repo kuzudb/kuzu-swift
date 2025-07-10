@@ -11,18 +11,16 @@ namespace kuzu {
 namespace common {
 
 #ifndef __SINGLE_THREADED__
-TaskScheduler::TaskScheduler(uint64_t numWorkerThreads
+
 #if defined(__APPLE__)
-    ,
-    uint32_t threadQos
+TaskScheduler::TaskScheduler(uint64_t numWorkerThreads, uint32_t threadQos)
+#else
+TaskScheduler::TaskScheduler(uint64_t numWorkerThreads)
 #endif
-    )
-    : stopWorkerThreads{false}, nextScheduledTaskID{0}
+    : stopWorkerThreads{false}, nextScheduledTaskID{0} {
 #if defined(__APPLE__)
-      ,
-      threadQos{threadQos}
+    this->threadQos = threadQos;
 #endif
-{
     for (auto n = 0u; n < numWorkerThreads; ++n) {
         workerThreads.emplace_back([&] { runWorkerThread(); });
     }
@@ -99,8 +97,11 @@ void TaskScheduler::scheduleTaskAndWaitOrError(const std::shared_ptr<Task>& task
 
 void TaskScheduler::runWorkerThread() {
 #if defined(__APPLE__)
-    auto pthreadQosStatus = pthread_set_qos_class_self_np((qos_class_t)threadQos, 0);
-    KU_UNUSED(pthreadQosStatus);
+    qos_class_t qosClass = (qos_class_t)threadQos;
+    if (qosClass != QOS_CLASS_DEFAULT && qosClass != QOS_CLASS_UNSPECIFIED) {
+        auto pthreadQosStatus = pthread_set_qos_class_self_np(qosClass, 0);
+        KU_UNUSED(pthreadQosStatus);
+    }
 #endif
     std::unique_lock<std::mutex> lck{taskSchedulerMtx, std::defer_lock};
     std::exception_ptr exceptionPtr = nullptr;

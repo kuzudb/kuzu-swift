@@ -72,7 +72,7 @@ final class DatabaseTests: XCTestCase {
             readOnly: false,
             autoCheckpoint: true,
             checkpointThreshold: 0,
-            threadQos: QOS_CLASS_BACKGROUND
+            threadQoS: QOS_CLASS_BACKGROUND
         )
         let db = try Database(dbPath, systemConfig)
         let conn = try Connection(db)

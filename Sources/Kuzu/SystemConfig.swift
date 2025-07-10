@@ -45,15 +45,13 @@ public final class SystemConfig: @unchecked Sendable {
     ///   - readOnly: A boolean flag to open the database in read-only mode. Default is false.
     ///   - autoCheckpoint: Whether to automatically create checkpoints. Default is true.
     ///   - checkpointThreshold: The threshold for creating checkpoints. If set to UInt64.max, uses default value.
-    ///   - threadQoS: The thread quality of service (QoS) for the worker threads. This is only available on Apple platforms. The default value is QOS_CLASS_DEFAULT.
     public convenience init(
         bufferPoolSize: UInt64 = 0,
         maxNumThreads: UInt64 = 0,
         enableCompression: Bool = true,
         readOnly: Bool = false,
         autoCheckpoint: Bool = true,
-        checkpointThreshold: UInt64 = UInt64.max,
-        threadQos: qos_class_t = QOS_CLASS_DEFAULT
+        checkpointThreshold: UInt64 = UInt64.max
     ) {
         self.init()
         if bufferPoolSize > 0 {
@@ -68,9 +66,39 @@ public final class SystemConfig: @unchecked Sendable {
         if checkpointThreshold > 0 {
             cSystemConfig.checkpoint_threshold = checkpointThreshold
         }
-#if !os(Linux)
-        
-            cSystemConfig.thread_qos = threadQos.rawValue
-        #endif
     }
+
+    /// Creates a new system configuration with the specified parameters and thread QoS option.
+    /// This initializer is only available on Apple platforms,
+    ///
+    /// - Parameters:
+    ///   - bufferPoolSize: The size of the buffer pool in bytes. If 0, uses default (80% of system memory).
+    ///   - maxNumThreads: The maximum number of threads that can be used by the database system. If 0, uses default (number of CPU cores).
+    ///   - enableCompression: A boolean flag to enable or disable compression. Default is true.
+    ///   - readOnly: A boolean flag to open the database in read-only mode. Default is false.
+    ///   - autoCheckpoint: Whether to automatically create checkpoints. Default is true.
+    ///   - checkpointThreshold: The threshold for creating checkpoints. If set to UInt64.max, uses default value.
+    ///   - threadQoS: The quality of service (QoS) for the worker threads. This is only available on Apple platforms. The default value is QOS_CLASS_DEFAULT.
+    #if !os(Linux)
+        public convenience init(
+            bufferPoolSize: UInt64 = 0,
+            maxNumThreads: UInt64 = 0,
+            enableCompression: Bool = true,
+            readOnly: Bool = false,
+            autoCheckpoint: Bool = true,
+            checkpointThreshold: UInt64 = UInt64.max,
+            threadQoS: qos_class_t = QOS_CLASS_DEFAULT
+
+        ) {
+            self.init(
+                bufferPoolSize: bufferPoolSize,
+                maxNumThreads: maxNumThreads,
+                enableCompression: enableCompression,
+                readOnly: readOnly,
+                autoCheckpoint: autoCheckpoint,
+                checkpointThreshold: checkpointThreshold
+            )
+            self.cSystemConfig.thread_qos = threadQoS.rawValue
+        }
+    #endif
 }
