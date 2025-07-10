@@ -35,8 +35,8 @@ struct KUZU_API NodeTableScanState : TableScanState {
 
     bool scanNext(transaction::Transaction* transaction) override;
 
-    bool scanNext(transaction::Transaction* transaction, common::offset_t startOffset,
-        common::offset_t numNodes);
+    NodeGroupScanResult scanNext(transaction::Transaction* transaction,
+        common::offset_t startOffset, common::offset_t numNodes);
 };
 
 // There is a vtable bug related to the Apple clang v15.0.0+. Adding the `FINAL` specifier to
@@ -117,7 +117,7 @@ public:
     bool lookup(const transaction::Transaction* transaction, const TableScanState& scanState) const;
     // TODO(Guodong): This should be merged together with `lookup`.
     template<bool lock = true>
-    void lookupMultiple(transaction::Transaction* transaction, TableScanState& scanState) const;
+    bool lookupMultiple(transaction::Transaction* transaction, TableScanState& scanState) const;
 
     // Return the max node offset during insertions.
     common::offset_t validateUniquenessConstraint(const transaction::Transaction* transaction,
