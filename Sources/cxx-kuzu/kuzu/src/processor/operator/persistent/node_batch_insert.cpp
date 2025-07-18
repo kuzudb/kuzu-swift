@@ -38,22 +38,31 @@ void NodeBatchInsertSharedState::initPKIndex(const ExecutionContext* context) {
 
 void NodeBatchInsert::initGlobalStateInternal(ExecutionContext* context) {
     auto clientContext = context->clientContext;
-    auto tableEntry = clientContext->getCatalog()->getTableCatalogEntry(
-        clientContext->getTransaction(), tableName);
-    auto nodeTableEntry = tableEntry->ptrCast<NodeTableCatalogEntry>();
+    auto nodeTableEntry =
+        clientContext->getCatalog()
+            ->getTableCatalogEntry(clientContext->getTransaction(), info->tableName)
+            ->ptrCast<NodeTableCatalogEntry>();
     auto nodeTable = clientContext->getStorageManager()->getTable(nodeTableEntry->getTableID());
     const auto& pkDefinition = nodeTableEntry->getPrimaryKeyDefinition();
     auto pkColumnID = nodeTableEntry->getColumnID(pkDefinition.getName());
-
+    // Init info
+    info->compressionEnabled = clientContext->getStorageManager()->compressionEnabled();
+    auto dataColumnIdx = 0u;
+    for (auto& property : nodeTableEntry->getProperties()) {
+        info->columnTypes.push_back(property.getType().copy());
+        info->insertColumnIDs.push_back(nodeTableEntry->getColumnID(property.getName()));
+        info->outputDataColumns.push_back(dataColumnIdx++);
+    }
+    for (auto& type : info->warningColumnTypes) {
+        info->columnTypes.push_back(type.copy());
+        info->warningDataColumns.push_back(dataColumnIdx++);
+    }
+    // Init shared state
     auto nodeSharedState = sharedState->ptrCast<NodeBatchInsertSharedState>();
     nodeSharedState->table = nodeTable;
     nodeSharedState->pkColumnID = pkColumnID;
     nodeSharedState->pkType = pkDefinition.getType().copy();
     nodeSharedState->initPKIndex(context);
-
-    for (auto& property : nodeTableEntry->getProperties()) {
-        info->insertColumnIDs.push_back(nodeTableEntry->getColumnID(property.getName()));
-    }
 }
 
 void NodeBatchInsert::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {
@@ -88,7 +97,6 @@ void NodeBatchInsert::executeInternal(ExecutionContext* context) {
     const auto clientContext = context->clientContext;
     std::optional<ProducerToken> token;
     auto nodeLocalState = localState->ptrCast<NodeBatchInsertLocalState>();
-    const auto nodeInfo = info->ptrCast<NodeBatchInsertInfo>();
     if (nodeLocalState->localIndexBuilder) {
         token = nodeLocalState->localIndexBuilder->getProducerToken();
     }
@@ -114,6 +122,7 @@ void NodeBatchInsert::executeInternal(ExecutionContext* context) {
         nodeLocalState->localIndexBuilder->finishedProducing(nodeLocalState->errorHandler.value());
         nodeLocalState->errorHandler->flushStoredErrors();
     }
+    const auto nodeInfo = info->ptrCast<NodeBatchInsertInfo>();
     sharedState->table->cast<NodeTable>().mergeStats(nodeInfo->insertColumnIDs,
         nodeLocalState->stats);
 }
