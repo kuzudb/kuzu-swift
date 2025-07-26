@@ -383,6 +383,7 @@ final class ValueTests: XCTestCase {
         let rel = map["r"] as! KuzuRelationship
         let src = map["p"] as! KuzuNode
         let dst = map["o"] as! KuzuNode
+        XCTAssertEqual(rel.id, KuzuInternalId(tableId: 7, offset: 1))
         XCTAssertEqual(rel.label, "workAt")
         XCTAssertEqual(rel.sourceId, src.id)
         XCTAssertEqual(rel.targetId, dst.id)

@@ -433,6 +433,15 @@ private func kuzuRelValueToSwiftRelationship(_ cValue: inout kuzu_value) throws
     -> KuzuRelationship
 {
     var idValue = kuzu_value()
+    
+    let idState = kuzu_rel_val_get_id_val(&cValue, &idValue)
+    if idState != KuzuSuccess {
+        throw KuzuError.valueConversionFailed(
+            "Failed to get relationship ID with status: \(idState)"
+        )
+    }
+    let id = try kuzuValueToSwift(&idValue) as! KuzuInternalId
+    kuzu_value_destroy(&idValue)
 
     let srcState = kuzu_rel_val_get_src_id_val(&cValue, &idValue)
     if srcState != KuzuSuccess {
@@ -510,6 +519,7 @@ private func kuzuRelValueToSwiftRelationship(_ cValue: inout kuzu_value) throws
     }
 
     return KuzuRelationship(
+        id: id,
         sourceId: sourceId,
         targetId: targetId,
         label: label,
