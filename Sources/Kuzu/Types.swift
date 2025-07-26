@@ -72,6 +72,8 @@ public struct KuzuNode {
 /// Represents a relationship retrieved from Kuzu.
 /// A relationship has a source ID, a destination ID, a label, and properties.
 public struct KuzuRelationship {
+    /// The internal ID of the relationship
+    public let id: KuzuInternalId
     /// The internal ID of the source node.
     public let sourceId: KuzuInternalId
     /// The internal ID of the target node.
