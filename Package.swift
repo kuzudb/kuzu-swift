@@ -464,6 +464,7 @@ let package = Package(
                 "kuzu/src/main/db_config.cpp",
                 "kuzu/src/main/plan_printer.cpp",
                 "kuzu/src/main/prepared_statement.cpp",
+                "kuzu/src/main/prepared_statement_manager.cpp",
                 "kuzu/src/main/query_result.cpp",
                 "kuzu/src/main/query_summary.cpp",
                 "kuzu/src/main/settings.cpp",
