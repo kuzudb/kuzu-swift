@@ -1131,6 +1131,7 @@ let package = Package(
                 .headerSearchPath("kuzu/third_party/zstd/include"),
                 .define("ANTLR4CPP_STATIC"),
                 .define("BM_MALLOC"),
+                .define("HAS_FULLFSYNC"),
                 .define("KUZU_CMAKE_VERSION", to: "\"0.11.1\""),
                 .define("KUZU_EXPORTS"),
                 .define("KUZU_EXTENSION_VERSION", to: "\"0.11.1\""),
