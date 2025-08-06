@@ -1,6 +1,7 @@
 #include "binder/binder.h"
 
 #include "binder/bound_statement_rewriter.h"
+#include "extension/binder_extension.h"
 #include "catalog/catalog.h"
 #include "common/copier_config/csv_reader_config.h"
 #include "common/exception/binder.h"
