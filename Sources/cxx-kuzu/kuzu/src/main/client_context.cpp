@@ -467,7 +467,7 @@ std::vector<std::shared_ptr<Statement>> ClientContext::parseQuery(std::string_vi
     std::vector<std::shared_ptr<Statement>> statements;
     auto parserTimer = TimeMetric(true /*enable*/);
     parserTimer.start();
-    auto parsedStatements = Parser::parseQuery(query, localDatabase->getTransformerExtensions());
+    auto parsedStatements = Parser::parseQuery(query);
     parserTimer.stop();
     const auto avgParsingTime = parserTimer.getElapsedTimeMS() / parsedStatements.size() / 1.0;
     StandaloneCallRewriter standaloneCallAnalyzer{this, parsedStatements.size() == 1};
@@ -478,8 +478,7 @@ std::vector<std::shared_ptr<Statement>> ClientContext::parseQuery(std::string_vi
             statements.push_back(std::move(parsedStatements[i]));
         } else {
             parserTimer.start();
-            auto rewrittenStatements =
-                Parser::parseQuery(rewriteQuery, localDatabase->getTransformerExtensions());
+            auto rewrittenStatements = Parser::parseQuery(rewriteQuery);
             parserTimer.stop();
             const auto avgRewriteParsingTime =
                 parserTimer.getElapsedTimeMS() / rewrittenStatements.size() / 1.0;
@@ -528,7 +527,7 @@ ClientContext::PrepareResult ClientContext::prepareNoLock(
         TransactionHelper::runFuncInTransaction(
             *transactionContext,
             [&]() -> void {
-                auto binder = Binder(this, localDatabase->getBinderExtensions());
+                auto binder = Binder(this);
                 if (inputParams) {
                     binder.setInputParameters(*inputParams);
                 }

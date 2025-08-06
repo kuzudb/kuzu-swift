@@ -1,6 +1,5 @@
 #pragma once
 
-#include "main/database.h"
 #include "planner/operator/logical_operator.h"
 #include "planner/operator/logical_plan.h"
 #include "processor/execution_context.h"
@@ -16,9 +15,6 @@ class SemiMask;
 } // namespace common
 namespace main {
 class ClientContext;
-}
-namespace extension {
-class MapperExtension;
 }
 
 namespace binder {
@@ -58,8 +54,7 @@ class PlanMapper {
 public:
     explicit PlanMapper(processor::ExecutionContext* executionContext)
         : executionContext{executionContext}, clientContext{executionContext->clientContext},
-          physicalOperatorID{0},
-          mapperExtensions{executionContext->clientContext->getDatabase()->getMapperExtensions()} {}
+          physicalOperatorID{0} {}
 
     std::unique_ptr<PhysicalPlan> mapLogicalPlanToPhysical(const planner::LogicalPlan* logicalPlan,
         const binder::expression_vector& expressionsToCollect);
@@ -164,8 +159,6 @@ public:
     std::unique_ptr<PhysicalOperator> mapUnwind(const planner::LogicalOperator* logicalOperator);
     std::unique_ptr<PhysicalOperator> mapUseDatabase(
         const planner::LogicalOperator* logicalOperator);
-    std::unique_ptr<PhysicalOperator> mapExtensionClause(
-        const planner::LogicalOperator* logicalOperator);
 
     std::unique_ptr<ResultCollector> createResultCollector(common::AccumulateType accumulateType,
         const binder::expression_vector& expressions, planner::Schema* schema,
@@ -248,7 +241,6 @@ public:
 private:
     std::unordered_map<const planner::LogicalOperator*, PhysicalOperator*> logicalOpToPhysicalOpMap;
     physical_op_id physicalOperatorID;
-    std::vector<extension::MapperExtension*> mapperExtensions;
 };
 
 } // namespace processor

@@ -11,9 +11,6 @@
 #include "planner/operator/sip/semi_mask_target_type.h"
 
 namespace kuzu {
-namespace extension {
-class PlannerExtension;
-}
 namespace binder {
 struct BoundTableScanInfo;
 struct BoundCopyFromInfo;
@@ -86,7 +83,6 @@ public:
     LogicalPlan planAttachDatabase(const binder::BoundStatement& statement);
     LogicalPlan planDetachDatabase(const binder::BoundStatement& statement);
     LogicalPlan planUseDatabase(const binder::BoundStatement& statement);
-    LogicalPlan planExtensionClause(const binder::BoundStatement& statement);
 
     // Plan copy.
     LogicalPlan planCopyTo(const binder::BoundStatement& statement);
@@ -344,7 +340,6 @@ private:
     PropertyExprCollection propertyExprCollection;
     CardinalityEstimator cardinalityEstimator;
     JoinOrderEnumeratorContext context;
-    std::vector<extension::PlannerExtension*> plannerExtensions;
 };
 
 } // namespace planner

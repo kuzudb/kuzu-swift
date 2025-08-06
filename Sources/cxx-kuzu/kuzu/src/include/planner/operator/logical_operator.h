@@ -60,7 +60,6 @@ enum class LogicalOperatorType : uint8_t {
     UNION_ALL,
     UNWIND,
     USE_DATABASE,
-    EXTENSION_CLAUSE,
 };
 
 class LogicalOperator;

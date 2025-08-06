@@ -12,7 +12,6 @@
 #include "binder/ddl/bound_create_table.h"
 #include "binder/ddl/bound_create_type.h"
 #include "binder/ddl/bound_drop.h"
-#include "extension/planner_extension.h"
 #include "planner/operator/ddl/logical_alter.h"
 #include "planner/operator/ddl/logical_create_sequence.h"
 #include "planner/operator/ddl/logical_create_table.h"
@@ -154,16 +153,6 @@ LogicalPlan Planner::planUseDatabase(const BoundStatement& statement) {
     auto& boundUseDatabase = statement.constCast<BoundUseDatabase>();
     auto op = std::make_shared<LogicalUseDatabase>(boundUseDatabase.getDBName());
     return getSimplePlan(std::move(op));
-}
-
-LogicalPlan Planner::planExtensionClause(const BoundStatement& statement) {
-    for (auto& plannerExtension : plannerExtensions) {
-        auto op = plannerExtension->plan(statement);
-        if (op) {
-            return getSimplePlan(op);
-        }
-    }
-    KU_UNREACHABLE;
 }
 
 } // namespace planner

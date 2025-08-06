@@ -18,8 +18,7 @@ using namespace antlr4;
 namespace kuzu {
 namespace parser {
 
-std::vector<std::shared_ptr<Statement>> Parser::parseQuery(std::string_view query,
-    std::vector<extension::TransformerExtension*> transformerExtensions) {
+std::vector<std::shared_ptr<Statement>> Parser::parseQuery(std::string_view query) {
     auto queryStr = std::string(query);
     queryStr = common::StringUtils::ltrim(queryStr);
     queryStr = common::StringUtils::ltrimNewlines(queryStr);
@@ -46,7 +45,7 @@ std::vector<std::shared_ptr<Statement>> Parser::parseQuery(std::string_view quer
     kuzuCypherParser.addErrorListener(&parserErrorListener);
     kuzuCypherParser.setErrorHandler(std::make_shared<ParserErrorStrategy>());
 
-    Transformer transformer(*kuzuCypherParser.ku_Statements(), std::move(transformerExtensions));
+    Transformer transformer(*kuzuCypherParser.ku_Statements());
     return transformer.transform();
 }
 

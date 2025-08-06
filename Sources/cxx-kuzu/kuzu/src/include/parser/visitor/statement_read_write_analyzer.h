@@ -33,8 +33,6 @@ private:
         readOnly = false;
     }
 
-    void visitExtensionClause(const Statement& /* statement*/) override { readOnly = false; }
-
     bool isExprReadOnly(const ParsedExpression* expr);
 
 private:

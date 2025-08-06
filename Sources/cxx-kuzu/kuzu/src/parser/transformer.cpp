@@ -1,9 +1,7 @@
 #include "parser/transformer.h"
 
 #include "common/assert.h"
-#include "common/exception/parser.h"
 #include "common/string_utils.h"
-#include "extension/transformer_extension.h"
 #include "parser/explain_statement.h"
 #include "parser/query/regular_query.h" // IWYU pragma: keep (fixes a forward declaration error)
 
@@ -43,8 +41,6 @@ std::unique_ptr<Statement> Transformer::transformStatement(CypherParser::OC_Stat
         return transformCreateSequence(*ctx.kU_CreateSequence());
     } else if (ctx.kU_CreateType()) {
         return transformCreateType(*ctx.kU_CreateType());
-    } else if (ctx.kU_CreateUser()) {
-        return transformExtensionStatement(ctx.kU_CreateUser());
     } else if (ctx.kU_Drop()) {
         return transformDrop(*ctx.kU_Drop());
     } else if (ctx.kU_AlterTable()) {
@@ -84,18 +80,14 @@ std::unique_ptr<ParsedExpression> Transformer::transformWhere(CypherParser::OC_W
     return transformExpression(*ctx.oC_Expression());
 }
 
+std::string Transformer::transformVariable(CypherParser::OC_VariableContext& ctx) {
+    return transformSymbolicName(*ctx.oC_SymbolicName());
+}
+
 std::string Transformer::transformSchemaName(CypherParser::OC_SchemaNameContext& ctx) {
     return transformSymbolicName(*ctx.oC_SymbolicName());
 }
 
-std::string Transformer::transformStringLiteral(antlr4::tree::TerminalNode& stringLiteral) {
-    auto str = stringLiteral.getText();
-    return StringUtils::removeEscapedCharacters(str);
-}
-
-std::string Transformer::transformVariable(CypherParser::OC_VariableContext& ctx) {
-    return transformSymbolicName(*ctx.oC_SymbolicName());
-}
 std::string Transformer::transformSymbolicName(CypherParser::OC_SymbolicNameContext& ctx) {
     if (ctx.EscapedSymbolicName()) {
         std::string escapedSymbolName = ctx.EscapedSymbolicName()->getText();
@@ -108,16 +100,9 @@ std::string Transformer::transformSymbolicName(CypherParser::OC_SymbolicNameCont
     }
 }
 
-std::unique_ptr<Statement> Transformer::transformExtensionStatement(
-    antlr4::ParserRuleContext* ctx) {
-    for (auto& transformerExtension : transformerExtensions) {
-        auto statement = transformerExtension->transform(ctx);
-        if (statement) {
-            return statement;
-        }
-    }
-    throw common::ParserException{
-        "Failed parse the statement. Do you forget to load the extension?"};
+std::string Transformer::transformStringLiteral(antlr4::tree::TerminalNode& stringLiteral) {
+    auto str = stringLiteral.getText();
+    return StringUtils::removeEscapedCharacters(str);
 }
 
 } // namespace parser

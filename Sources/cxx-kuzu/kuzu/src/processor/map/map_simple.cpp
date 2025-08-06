@@ -1,6 +1,5 @@
 #include "common/exception/runtime.h"
 #include "common/file_system/virtual_file_system.h"
-#include "extension/mapper_extension.h"
 #include "main/client_context.h"
 #include "planner/operator/simple/logical_attach_database.h"
 #include "planner/operator/simple/logical_detach_database.h"
@@ -133,17 +132,6 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapExtension(const LogicalOperator
     default:
         KU_UNREACHABLE;
     }
-}
-
-std::unique_ptr<PhysicalOperator> PlanMapper::mapExtensionClause(
-    const LogicalOperator* logicalOperator) {
-    for (auto& mapperExtension : mapperExtensions) {
-        auto physicalOP = mapperExtension->map(logicalOperator, clientContext, getOperatorID());
-        if (physicalOP) {
-            return physicalOP;
-        }
-    }
-    KU_UNREACHABLE;
 }
 
 } // namespace processor
