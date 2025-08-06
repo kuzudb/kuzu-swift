@@ -1085,6 +1085,7 @@ let package = Package(
                 "kuzu/third_party/zstd/decompress/zstd_decompress_block.cpp"
             ],
             cxxSettings: [
+                .headerSearchPath("build/src/include/"),
                 .headerSearchPath("kuzu/build/src"),
                 .headerSearchPath("kuzu/build/src/extension/codegen/include"),
                 .headerSearchPath("kuzu/build/src/include"),
