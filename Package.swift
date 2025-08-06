@@ -186,6 +186,7 @@ let package = Package(
                 "kuzu/src/binder/visitor/confidential_statement_analyzer.cpp",
                 "kuzu/src/binder/visitor/default_type_solver.cpp",
                 "kuzu/src/binder/visitor/property_collector.cpp",
+                "kuzu/src/binder/bind/bind_extension_clause.cpp",
                 "kuzu/src/c_api/connection.cpp",
                 "kuzu/src/c_api/data_type.cpp",
                 "kuzu/src/c_api/database.cpp",
