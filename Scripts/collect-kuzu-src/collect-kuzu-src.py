@@ -35,6 +35,7 @@ MANUAL_INCLUDE_DIRS = [
 ]
 MANUAL_SRC_COPY = [
     "build/src/extension/codegen/",
+    "build/src/include/"
 ]
 
 FILE_TYPES = [
