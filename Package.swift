@@ -122,6 +122,7 @@ let package = Package(
                 "kuzu/src/binder/bind/bind_explain.cpp",
                 "kuzu/src/binder/bind/bind_export_database.cpp",
                 "kuzu/src/binder/bind/bind_extension.cpp",
+                "kuzu/src/binder/bind/bind_extension_clause.cpp",
                 "kuzu/src/binder/bind/bind_file_scan.cpp",
                 "kuzu/src/binder/bind/bind_graph_pattern.cpp",
                 "kuzu/src/binder/bind/bind_import_database.cpp",
