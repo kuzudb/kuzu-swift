@@ -144,7 +144,11 @@ CreateFTSConfig::CreateFTSConfig(main::ClientContext& context, common::table_id_
         } else if (IgnorePattern::NAME == lowerCaseName) {
             value.validateType(IgnorePattern::TYPE);
             ignorePattern = common::StringUtils::getLower(value.getValue<std::string>());
+            ignorePatternQuery = ignorePattern;
+            common::StringUtils::replaceAll(ignorePatternQuery, "*", "");
+            common::StringUtils::replaceAll(ignorePatternQuery, "?", "");
             IgnorePattern::validate(ignorePattern);
+            IgnorePattern::validate(ignorePatternQuery);
         } else {
             throw common::BinderException{"Unrecognized optional parameter: " + name};
         }
@@ -153,7 +157,7 @@ CreateFTSConfig::CreateFTSConfig(main::ClientContext& context, common::table_id_
 
 FTSConfig CreateFTSConfig::getFTSConfig() const {
     return FTSConfig{stemmer, stopWordsTableInfo.tableName, stopWordsTableInfo.stopWords,
-        ignorePattern};
+        ignorePattern, ignorePatternQuery};
 }
 
 void FTSConfig::serialize(common::Serializer& serializer) const {
@@ -161,6 +165,7 @@ void FTSConfig::serialize(common::Serializer& serializer) const {
     serializer.serializeValue(stopWordsTableName);
     serializer.serializeValue(stopWordsSource);
     serializer.serializeValue(ignorePattern);
+    serializer.serializeValue(ignorePatternQuery);
 }
 
 FTSConfig FTSConfig::deserialize(common::Deserializer& deserializer) {
@@ -169,6 +174,7 @@ FTSConfig FTSConfig::deserialize(common::Deserializer& deserializer) {
     deserializer.deserializeValue(config.stopWordsTableName);
     deserializer.deserializeValue(config.stopWordsSource);
     deserializer.deserializeValue(config.ignorePattern);
+    deserializer.deserializeValue(config.ignorePatternQuery);
     return config;
 }
 
@@ -191,29 +197,6 @@ void TopK::validate(uint64_t value) {
     if (value == 0) {
         throw common::BinderException{
             "QUERY_FTS_INDEX requires a positive non-zero value for the 'top' parameter."};
-    }
-}
-
-QueryFTSConfig::QueryFTSConfig(const function::optional_params_t& optionalParams) {
-    for (auto& [name, value] : optionalParams) {
-        auto lowerCaseName = common::StringUtils::getLower(name);
-        if (K::NAME == lowerCaseName) {
-            value.validateType(K::TYPE);
-            k = value.getValue<double>();
-            K::validate(k);
-        } else if (B::NAME == lowerCaseName) {
-            value.validateType(B::TYPE);
-            b = value.getValue<double>();
-            B::validate(b);
-        } else if (Conjunctive::NAME == lowerCaseName) {
-            value.validateType(Conjunctive::TYPE);
-            isConjunctive = value.getValue<bool>();
-        } else if (TopK::NAME == lowerCaseName) {
-            value.validateType(TopK::TYPE);
-            topK = value.getValue<uint64_t>();
-        } else {
-            throw common::BinderException{"Unrecognized optional parameter: " + name};
-        }
     }
 }
 
