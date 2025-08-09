@@ -32,7 +32,7 @@ let package = Package(
                 "kuzu/extension/algo/src/common/in_mem_gds_utils.cpp",
                 "kuzu/extension/algo/src/common/in_mem_graph.cpp",
                 "kuzu/extension/algo/src/function/component_ids.cpp",
-                "kuzu/extension/algo/src/function/config/connected_components_config.cpp",
+                "kuzu/extension/algo/src/function/config/max_iterations_config.cpp",
                 "kuzu/extension/algo/src/function/k_core_decomposition.cpp",
                 "kuzu/extension/algo/src/function/louvain.cpp",
                 "kuzu/extension/algo/src/function/page_rank.cpp",
