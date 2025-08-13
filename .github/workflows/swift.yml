@@ -33,7 +33,7 @@ jobs:
         run: swift test -c ${{ matrix.config }}
 
   ios-simulator-test:
-    name: Test on iOS Simulator
+    name: Build and Test on iOS Simulator
     runs-on: macos-14
     strategy:
       matrix:
@@ -51,6 +51,7 @@ jobs:
             -scheme kuzu-swift \
             -destination "${{ matrix.destination }}" \
             -configuration ${{ matrix.config }} \
+            -quiet \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
 
