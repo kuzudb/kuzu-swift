@@ -51,6 +51,7 @@ jobs:
             -scheme kuzu-swift \
             -destination "${{ matrix.destination }}" \
             -configuration ${{ matrix.config }} \
+            ENABLE_TESTABILITY=YES \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
       - name: Test on iOS Simulator
@@ -59,6 +60,7 @@ jobs:
             -scheme kuzu-swift \
             -destination "${{ matrix.destination }}" \
             -configuration ${{ matrix.config }} \
+            ENABLE_TESTABILITY=YES \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
 

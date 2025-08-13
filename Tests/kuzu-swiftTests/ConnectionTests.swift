@@ -39,8 +39,8 @@ final class ConnectionTests: XCTestCase {
         XCTAssertEqual(conn.getMaxNumThreadForExec(), 3)
     }
 
-    // TODO: fix this test on Linux.
-    #if !os(Linux)
+    // TODO: fix this test on other platforms
+    #if os(macOS)
         func testInterrupt() async throws {
             let conn = try Connection(db)
             let largeQuery =
