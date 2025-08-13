@@ -20,6 +20,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Set Kuzu branch
+        run: |
+          if [ -z "${{ env.KUZU_BRANCH }}" ]; then
+            echo "KUZU_BRANCH=master" >> $GITHUB_ENV
+          fi
       - name: Configure Git
         run: |
           git config --global user.name "${GITHUB_ACTOR}"
@@ -37,4 +42,4 @@ jobs:
           draft: false
           commit-message: "Update Kuzu from branch ${{env.KUZU_BRANCH}}"
           branch-suffix: timestamp
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DOC_PUSH_TOKEN }}
