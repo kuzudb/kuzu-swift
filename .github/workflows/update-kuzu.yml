@@ -33,6 +33,7 @@ jobs:
         working-directory: Scripts/update-kuzu
         run: python3 update-kuzu.py
       - name: Create Pull Request
+        id: create-pr
         uses: peter-evans/create-pull-request@v7
         with:
           title: "Update Kuzu from branch ${{env.KUZU_BRANCH}}"
@@ -43,3 +44,11 @@ jobs:
           commit-message: "Update Kuzu from branch ${{env.KUZU_BRANCH}}"
           branch-suffix: timestamp
           token: ${{ secrets.DOC_PUSH_TOKEN }}
+      - name: Approve Pull Request
+        if: steps.create-pr.outputs.pull-request-number
+        run: |
+          gh pr review ${{ steps.create-pr.outputs.pull-request-number }} \
+            --approve \
+            --body "Auto-approved by workflow"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
