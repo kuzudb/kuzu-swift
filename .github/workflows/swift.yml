@@ -45,13 +45,20 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
-      - name: Build and Test for iOS Simulator
+      - name: Build for iOS Simulator
         run: |
-          xcodebuild test \
+          xcodebuild build-for-testing \
             -scheme kuzu-swift \
             -destination "${{ matrix.destination }}" \
             -configuration ${{ matrix.config }} \
-            -quiet \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+      - name: Test on iOS Simulator
+        run: |
+          xcodebuild test-without-building \
+            -scheme kuzu-swift \
+            -destination "${{ matrix.destination }}" \
+            -configuration ${{ matrix.config }} \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
 
