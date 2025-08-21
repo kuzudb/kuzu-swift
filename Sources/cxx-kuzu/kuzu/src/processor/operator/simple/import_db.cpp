@@ -1,7 +1,6 @@
 #include "processor/operator/simple/import_db.h"
 
 #include "common/exception/runtime.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::common;

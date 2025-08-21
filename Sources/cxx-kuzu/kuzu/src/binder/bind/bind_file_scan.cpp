@@ -11,7 +11,6 @@
 #include "common/string_utils.h"
 #include "extension/extension_manager.h"
 #include "function/table/bind_input.h"
-#include "main/client_context.h"
 #include "main/database_manager.h"
 #include "parser/expression/parsed_function_expression.h"
 #include "parser/scan_source.h"
@@ -183,9 +182,9 @@ std::unique_ptr<BoundBaseScanSource> Binder::bindQueryScanSource(const BaseScanS
 }
 
 static TableFunction getObjectScanFunc(const std::string& dbName, const std::string& tableName,
-    main::ClientContext* clientContext) {
+    const main::ClientContext* clientContext) {
     // Bind external database table
-    auto attachedDB = main::DatabaseManager::Get(*clientContext)->getAttachedDatabase(dbName);
+    auto attachedDB = clientContext->getDatabaseManager()->getAttachedDatabase(dbName);
     auto attachedCatalog = attachedDB->getCatalog();
     auto entry = attachedCatalog->getTableCatalogEntry(clientContext->getTransaction(), tableName);
     return entry->ptrCast<TableCatalogEntry>()->getScanFunction();
@@ -263,8 +262,8 @@ std::unique_ptr<BoundBaseScanSource> Binder::bindObjectScanSource(const BaseScan
             replacementData->bindInput.extraInput = std::move(replaceExtraInput);
             replacementData->bindInput.binder = this;
             bindData = func.bindFunc(clientContext, &replacementData->bindInput);
-        } else if (main::DatabaseManager::Get(*clientContext)->hasDefaultDatabase()) {
-            auto dbName = main::DatabaseManager::Get(*clientContext)->getDefaultDatabase();
+        } else if (clientContext->getDatabaseManager()->hasDefaultDatabase()) {
+            auto dbName = clientContext->getDatabaseManager()->getDefaultDatabase();
             func = getObjectScanFunc(dbName, objectSource->objectNames[0], clientContext);
             bindData = func.bindFunc(clientContext, &bindInput);
         } else {

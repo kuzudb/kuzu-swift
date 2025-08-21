@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "common/api.h"
-#include "common/types/value/value.h"
 #include "query_summary.h"
 
 namespace kuzu {
@@ -15,12 +14,6 @@ class LogicalType;
 }
 namespace parser {
 class Statement;
-}
-namespace binder {
-class Expression;
-}
-namespace planner {
-class LogicalPlan;
 }
 
 namespace main {
@@ -46,6 +39,8 @@ struct CachedPreparedStatement {
 class PreparedStatement {
     friend class Connection;
     friend class ClientContext;
+    friend class testing::TestHelper;
+    friend class testing::TestRunner;
 
 public:
     KUZU_API ~PreparedStatement();

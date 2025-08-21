@@ -199,7 +199,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
     } else {
         auto dbName = name[0];
         auto tableName = name[1];
-        auto db = main::DatabaseManager::Get(*context)->getAttachedDatabase(dbName);
+        auto db = context->getDatabaseManager()->getAttachedDatabase(dbName);
         auto entry = db->getCatalog()->getTableCatalogEntry(transaction, tableName);
         infos = getForeignPropertyInfos(entry);
         type = CatalogEntryType::FOREIGN_TABLE_ENTRY;

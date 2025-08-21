@@ -4,7 +4,6 @@
 #include "common/file_system/virtual_file_system.h"
 #include "common/string_format.h"
 #include "extension/extension.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 namespace kuzu {

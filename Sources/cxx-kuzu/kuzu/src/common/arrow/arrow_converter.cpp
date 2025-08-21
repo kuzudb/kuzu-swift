@@ -28,41 +28,6 @@ static const char* copyName(ArrowSchemaHolder& rootHolder, const std::string& na
     return rootHolder.ownedTypeNames.back().get();
 }
 
-// The resulting byte array follows the format described here:
-// https://arrow.apache.org/docs/format/CDataInterface.html#c.ArrowSchema.metadata
-static std::unique_ptr<char[]> serializeMetadata(
-    const std::map<std::string, std::string>& metadata) {
-    // Calculate size of byte array
-    auto numEntries = metadata.size();
-    auto size = (2 * numEntries + 1) * sizeof(int32_t);
-    for (const auto& [k, v] : metadata) {
-        size += k.size() + v.size();
-    }
-    std::unique_ptr<char[]> bytes(new char[size]);
-    // Copy data into byte array
-    char* ptr = bytes.get();
-    memcpy(ptr, &numEntries, sizeof(int32_t));
-    ptr += sizeof(int32_t);
-    for (const auto& [k, v] : metadata) {
-        auto ksz = k.size(), vsz = v.size();
-        memcpy(ptr, &ksz, sizeof(int32_t));
-        ptr += sizeof(int32_t);
-        memcpy(ptr, k.c_str(), ksz);
-        ptr += ksz;
-        memcpy(ptr, &vsz, sizeof(int32_t));
-        ptr += sizeof(int32_t);
-        memcpy(ptr, v.c_str(), vsz);
-        ptr += vsz;
-    }
-    return bytes;
-}
-
-static const char* copyMetadata(ArrowSchemaHolder& rootHolder,
-    const std::map<std::string, std::string>& metadata) {
-    rootHolder.ownedMetadatas.push_back(serializeMetadata(metadata));
-    return rootHolder.ownedMetadatas.back().get();
-}
-
 void ArrowConverter::initializeChild(ArrowSchema& child, const std::string& name) {
     //! Child is cleaned up by parent
     child.private_data = nullptr;
@@ -78,7 +43,7 @@ void ArrowConverter::initializeChild(ArrowSchema& child, const std::string& name
 }
 
 void ArrowConverter::setArrowFormatForStruct(ArrowSchemaHolder& rootHolder, ArrowSchema& child,
-    const LogicalType& dataType, bool fallbackExtensionTypes) {
+    const LogicalType& dataType) {
     child.format = "+s";
     // name is set by parent.
     child.n_children = (std::int64_t)StructType::getNumFields(dataType);
@@ -94,13 +59,12 @@ void ArrowConverter::setArrowFormatForStruct(ArrowSchemaHolder& rootHolder, Arro
         initializeChild(*child.children[i]);
         const auto& structField = StructType::getField(dataType, i);
         child.children[i]->name = copyName(rootHolder, structField.getName());
-        setArrowFormat(rootHolder, *child.children[i], structField.getType(),
-            fallbackExtensionTypes);
+        setArrowFormat(rootHolder, *child.children[i], structField.getType());
     }
 }
 
 void ArrowConverter::setArrowFormatForUnion(ArrowSchemaHolder& rootHolder, ArrowSchema& child,
-    const LogicalType& dataType, bool fallbackExtensionTypes) {
+    const LogicalType& dataType) {
     std::string formatStr = "+ud";
     child.n_children = (std::int64_t)UnionType::getNumFields(dataType);
     rootHolder.nestedChildren.emplace_back();
@@ -116,14 +80,14 @@ void ArrowConverter::setArrowFormatForUnion(ArrowSchemaHolder& rootHolder, Arrow
         const auto& unionFieldType = UnionType::getFieldType(dataType, i);
         auto unionFieldName = UnionType::getFieldName(dataType, i);
         child.children[i]->name = copyName(rootHolder, unionFieldName);
-        setArrowFormat(rootHolder, *child.children[i], unionFieldType, fallbackExtensionTypes);
+        setArrowFormat(rootHolder, *child.children[i], unionFieldType);
         formatStr += (i == 0u ? ":" : ",") + std::to_string(i);
     }
     child.format = copyName(rootHolder, formatStr);
 }
 
 void ArrowConverter::setArrowFormatForInternalID(ArrowSchemaHolder& rootHolder, ArrowSchema& child,
-    const LogicalType& /*dataType*/, bool fallbackExtensionTypes) {
+    const LogicalType& /*dataType*/) {
     child.format = "+s";
     // name is set by parent.
     child.n_children = 2;
@@ -137,14 +101,14 @@ void ArrowConverter::setArrowFormatForInternalID(ArrowSchemaHolder& rootHolder, 
     child.children = &rootHolder.nestedChildrenPtr.back()[0];
     initializeChild(*child.children[0]);
     child.children[0]->name = copyName(rootHolder, "offset");
-    setArrowFormat(rootHolder, *child.children[0], LogicalType::INT64(), fallbackExtensionTypes);
+    setArrowFormat(rootHolder, *child.children[0], LogicalType::INT64());
     initializeChild(*child.children[1]);
     child.children[1]->name = copyName(rootHolder, "table");
-    setArrowFormat(rootHolder, *child.children[1], LogicalType::INT64(), fallbackExtensionTypes);
+    setArrowFormat(rootHolder, *child.children[1], LogicalType::INT64());
 }
 
 void ArrowConverter::setArrowFormat(ArrowSchemaHolder& rootHolder, ArrowSchema& child,
-    const LogicalType& dataType, bool fallbackExtensionTypes) {
+    const LogicalType& dataType) {
     switch (dataType.getLogicalTypeID()) {
     case LogicalTypeID::BOOL: {
         child.format = "b";
@@ -210,15 +174,7 @@ void ArrowConverter::setArrowFormat(ArrowSchemaHolder& rootHolder, ArrowSchema& 
     case LogicalTypeID::INTERVAL: {
         child.format = "tDu";
     } break;
-    case LogicalTypeID::UUID: {
-        if (!fallbackExtensionTypes) {
-            child.format = "w:16";
-            child.metadata = copyMetadata(rootHolder,
-                {{"ARROW:extension:name", "arrow.uuid"}, {"ARROW:extension:metadata", ""}});
-            break;
-        }
-        [[fallthrough]];
-    }
+    case LogicalTypeID::UUID:
     case LogicalTypeID::STRING: {
         child.format = "u";
     } break;
@@ -235,8 +191,7 @@ void ArrowConverter::setArrowFormat(ArrowSchemaHolder& rootHolder, ArrowSchema& 
         initializeChild(rootHolder.nestedChildren.back()[0]);
         child.children = &rootHolder.nestedChildrenPtr.back()[0];
         child.children[0]->name = "l";
-        setArrowFormat(rootHolder, **child.children, ListType::getChildType(dataType),
-            fallbackExtensionTypes);
+        setArrowFormat(rootHolder, **child.children, ListType::getChildType(dataType));
     } break;
     case LogicalTypeID::ARRAY: {
         auto numValuesPerArray = "+w:" + std::to_string(ArrayType::getNumElements(dataType));
@@ -249,8 +204,7 @@ void ArrowConverter::setArrowFormat(ArrowSchemaHolder& rootHolder, ArrowSchema& 
         initializeChild(rootHolder.nestedChildren.back()[0]);
         child.children = &rootHolder.nestedChildrenPtr.back()[0];
         child.children[0]->name = "l";
-        setArrowFormat(rootHolder, **child.children, ArrayType::getChildType(dataType),
-            fallbackExtensionTypes);
+        setArrowFormat(rootHolder, **child.children, ArrayType::getChildType(dataType));
     } break;
     case LogicalTypeID::MAP: {
         child.format = "+m";
@@ -261,23 +215,20 @@ void ArrowConverter::setArrowFormat(ArrowSchemaHolder& rootHolder, ArrowSchema& 
         rootHolder.nestedChildrenPtr.back().push_back(&rootHolder.nestedChildren.back()[0]);
         initializeChild(rootHolder.nestedChildren.back()[0]);
         child.children = &rootHolder.nestedChildrenPtr.back()[0];
-        child.children[0]->name = "entries";
-        setArrowFormat(rootHolder, **child.children, ListType::getChildType(dataType),
-            fallbackExtensionTypes);
-        child.children[0]->children[0]->flags &=
-            ~ARROW_FLAG_NULLABLE; // Map's keys must be non-nullable
+        child.children[0]->name = "l";
+        setArrowFormat(rootHolder, **child.children, ListType::getChildType(dataType));
     } break;
     case LogicalTypeID::STRUCT:
     case LogicalTypeID::NODE:
     case LogicalTypeID::REL:
     case LogicalTypeID::RECURSIVE_REL:
-        setArrowFormatForStruct(rootHolder, child, dataType, fallbackExtensionTypes);
+        setArrowFormatForStruct(rootHolder, child, dataType);
         break;
     case LogicalTypeID::INTERNAL_ID:
-        setArrowFormatForInternalID(rootHolder, child, dataType, fallbackExtensionTypes);
+        setArrowFormatForInternalID(rootHolder, child, dataType);
         break;
     case LogicalTypeID::UNION:
-        setArrowFormatForUnion(rootHolder, child, dataType, fallbackExtensionTypes);
+        setArrowFormatForUnion(rootHolder, child, dataType);
         break;
     default:
         throw RuntimeException(
@@ -286,8 +237,7 @@ void ArrowConverter::setArrowFormat(ArrowSchemaHolder& rootHolder, ArrowSchema& 
 }
 
 std::unique_ptr<ArrowSchema> ArrowConverter::toArrowSchema(
-    const std::vector<LogicalType>& dataTypes, const std::vector<std::string>& columnNames,
-    bool fallbackExtensionTypes) {
+    const std::vector<LogicalType>& dataTypes, const std::vector<std::string>& columnNames) {
     auto outSchema = std::make_unique<ArrowSchema>();
     auto rootHolder = std::make_unique<ArrowSchemaHolder>();
 
@@ -310,12 +260,22 @@ std::unique_ptr<ArrowSchema> ArrowConverter::toArrowSchema(
         auto& child = rootHolder->children[i];
         initializeChild(child);
         child.name = copyName(*rootHolder, columnNames[i]);
-        setArrowFormat(*rootHolder, child, dataTypes[i], fallbackExtensionTypes);
+        setArrowFormat(*rootHolder, child, dataTypes[i]);
     }
 
     outSchema->private_data = rootHolder.release();
     outSchema->release = releaseArrowSchema;
     return outSchema;
+}
+
+void ArrowConverter::toArrowArray(main::QueryResult& queryResult, ArrowArray* outArray,
+    std::int64_t chunkSize) {
+    std::vector<LogicalType> types;
+    for (const auto& type : queryResult.getColumnDataTypes()) {
+        types.push_back(type.copy());
+    }
+    auto rowBatch = make_unique<ArrowRowBatch>(std::move(types), chunkSize);
+    *outArray = rowBatch->append(queryResult, chunkSize);
 }
 
 } // namespace common

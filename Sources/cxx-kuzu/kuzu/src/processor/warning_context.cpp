@@ -2,7 +2,6 @@
 
 #include "common/assert.h"
 #include "common/uniq_lock.h"
-#include "main/client_config.h"
 
 using namespace kuzu::common;
 

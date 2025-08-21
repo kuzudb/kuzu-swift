@@ -17,32 +17,33 @@
 #include "transaction/transaction_context.h"
 
 namespace kuzu {
+namespace parser {
+class StandaloneCallRewriter;
+} // namespace parser
+
+namespace binder {
+class Binder;
+class ExpressionBinder;
+} // namespace binder
+
 namespace common {
 class RandomEngine;
 class TaskScheduler;
 class ProgressBar;
-class VirtualFileSystem;
 } // namespace common
-
-namespace catalog {
-class Catalog;
-}
 
 namespace extension {
 class ExtensionManager;
 } // namespace extension
 
+namespace processor {
+class ImportDB;
+class TableFunctionCall;
+} // namespace processor
+
 namespace graph {
 class GraphEntrySet;
 }
-
-namespace storage {
-class StorageManager;
-}
-
-namespace processor {
-class ImportDB;
-} // namespace processor
 
 namespace main {
 struct DBConfig;
@@ -67,9 +68,14 @@ struct ActiveQuery {
  */
 class KUZU_API ClientContext {
     friend class Connection;
-    friend class EmbeddedShell;
-    friend struct SpillToDiskSetting;
+    friend class binder::Binder;
+    friend class binder::ExpressionBinder;
     friend class processor::ImportDB;
+    friend class processor::TableFunctionCall;
+    friend class parser::StandaloneCallRewriter;
+    friend struct SpillToDiskSetting;
+    friend class EmbeddedShell;
+    friend class extension::ExtensionManager;
 
 public:
     explicit ClientContext(Database* database);
@@ -119,15 +125,15 @@ public:
 
     // Getters.
     std::string getDatabasePath() const;
-    Database* getDatabase() const;
-    AttachedKuzuDatabase* getAttachedDatabase() const;
-
+    Database* getDatabase() const { return localDatabase; }
     common::TaskScheduler* getTaskScheduler() const;
+    DatabaseManager* getDatabaseManager() const;
     storage::StorageManager* getStorageManager() const;
     storage::MemoryManager* getMemoryManager() const;
     extension::ExtensionManager* getExtensionManager() const;
     storage::WAL* getWAL() const;
     catalog::Catalog* getCatalog() const;
+    transaction::TransactionManager* getTransactionManagerUnsafe() const;
     common::VirtualFileSystem* getVFSUnsafe() const;
     common::RandomEngine* getRandomEngine() const;
     const CachedPreparedStatementManager& getCachedPreparedStatementManager() const {
@@ -160,20 +166,16 @@ public:
 
     void cleanUp();
 
-    struct ArrowInfo {
-        bool asArrow = false;
-        int64_t chunkSize = 1000;
-
-        ArrowInfo(bool asArrow, int64_t chunkSize) : asArrow(asArrow), chunkSize(chunkSize) {}
-    };
-    std::unique_ptr<QueryResult> query(std::string_view queryStatement,
-        std::optional<uint64_t> queryID = std::nullopt, ArrowInfo arrowInfo = {false, 1000});
+    // Query.
     std::unique_ptr<PreparedStatement> prepareWithParams(std::string_view query,
         std::unordered_map<std::string, std::unique_ptr<common::Value>> inputParams = {});
     std::unique_ptr<QueryResult> executeWithParams(PreparedStatement* preparedStatement,
         std::unordered_map<std::string, std::unique_ptr<common::Value>> inputParams,
         std::optional<uint64_t> queryID = std::nullopt);
+    std::unique_ptr<QueryResult> query(std::string_view queryStatement,
+        std::optional<uint64_t> queryID = std::nullopt);
 
+private:
     struct TransactionHelper {
         enum class TransactionCommitAction : uint8_t {
             COMMIT_IF_NEW,
@@ -194,8 +196,6 @@ public:
             const std::function<void()>& fun, bool readOnlyStatement, bool isTransactionStatement,
             TransactionCommitAction action);
     };
-
-private:
     void validateTransaction(bool readOnly, bool requireTransaction) const;
 
     std::vector<std::shared_ptr<parser::Statement>> parseQuery(std::string_view query);
@@ -222,9 +222,10 @@ private:
 
     std::unique_ptr<QueryResult> executeNoLock(PreparedStatement* preparedStatement,
         CachedPreparedStatement* cachedPreparedStatement,
-        std::optional<uint64_t> queryID = std::nullopt, ArrowInfo arrowInfo = {false, 1000});
+        std::optional<uint64_t> queryID = std::nullopt);
+
     std::unique_ptr<QueryResult> queryNoLock(std::string_view query,
-        std::optional<uint64_t> queryID = std::nullopt, ArrowInfo arrowInfo = {false, 1000});
+        std::optional<uint64_t> queryID = std::nullopt);
 
     bool canExecuteWriteQuery() const;
 

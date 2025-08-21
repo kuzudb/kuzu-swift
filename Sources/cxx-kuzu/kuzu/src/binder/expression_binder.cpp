@@ -9,6 +9,7 @@
 #include "common/string_format.h"
 #include "expression_evaluator/expression_evaluator_utils.h"
 #include "function/cast/vector_cast_functions.h"
+#include "main/client_context.h"
 #include "parser/expression/parsed_expression_visitor.h"
 #include "parser/expression/parsed_parameter_expression.h"
 
@@ -109,14 +110,21 @@ static std::string unsupportedImplicitCastException(const Expression& expression
         expression.toString(), expression.dataType.toString(), targetTypeStr);
 }
 
+static bool checkUDTCast(const LogicalType& type, const LogicalType& target) {
+    if (type.isInternalType() && target.isInternalType()) {
+        return false;
+    }
+    return type.getLogicalTypeID() == target.getLogicalTypeID();
+}
+
 std::shared_ptr<Expression> ExpressionBinder::implicitCastIfNecessary(
     const std::shared_ptr<Expression>& expression, const LogicalType& targetType) {
     auto& type = expression->dataType;
-    if (type == targetType || targetType.containsAny()) { // No need to cast.
+    if (checkUDTCast(type, targetType)) {
         return expression;
     }
-    if (!type.isInternalType() || !targetType.isInternalType()) {
-        return implicitCast(expression, targetType);
+    if (type == targetType || targetType.containsAny()) { // No need to cast.
+        return expression;
     }
     if (ExpressionUtil::canCastStatically(*expression, targetType)) {
         expression->cast(targetType);

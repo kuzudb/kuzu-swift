@@ -3,7 +3,6 @@
 #include "common/exception/runtime.h"
 #include "common/string_utils.h"
 #include "main/attached_database.h"
-#include "main/client_context.h"
 #include "main/database.h"
 #include "main/database_manager.h"
 #include "processor/execution_context.h"
@@ -29,7 +28,7 @@ static std::string attachMessage() {
 
 void AttachDatabase::executeInternal(ExecutionContext* context) {
     auto client = context->clientContext;
-    auto databaseManager = main::DatabaseManager::Get(*client);
+    auto databaseManager = client->getDatabaseManager();
     auto memoryManager = client->getMemoryManager();
     if (common::StringUtils::getUpper(attachInfo.dbType) == common::ATTACHED_KUZU_DB_TYPE) {
         auto db = std::make_unique<main::AttachedKuzuDatabase>(attachInfo.dbPath,
