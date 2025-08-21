@@ -8,6 +8,7 @@
 #include "common/serializer/deserializer.h"
 #include "common/serializer/in_mem_file_writer.h"
 #include "extension/extension_manager.h"
+#include "main/client_context.h"
 #include "main/db_config.h"
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/shadow_utils.h"
@@ -60,7 +61,7 @@ Checkpointer::~Checkpointer() = default;
 PageRange Checkpointer::serializeCatalog(const catalog::Catalog& catalog,
     StorageManager& storageManager) {
     auto catalogWriter =
-        std::make_shared<common::InMemFileWriter>(*clientContext.getMemoryManager());
+        std::make_shared<common::InMemFileWriter>(*MemoryManager::Get(clientContext));
     common::Serializer catalogSerializer(catalogWriter);
     catalog.serialize(catalogSerializer);
     auto pageAllocator = storageManager.getDataFH()->getPageManager();
@@ -70,7 +71,7 @@ PageRange Checkpointer::serializeCatalog(const catalog::Catalog& catalog,
 PageRange Checkpointer::serializeMetadata(const catalog::Catalog& catalog,
     StorageManager& storageManager) {
     auto metadataWriter =
-        std::make_shared<common::InMemFileWriter>(*clientContext.getMemoryManager());
+        std::make_shared<common::InMemFileWriter>(*MemoryManager::Get(clientContext));
     common::Serializer metadataSerializer(metadataWriter);
     storageManager.serialize(catalog, metadataSerializer);
 
@@ -117,7 +118,7 @@ void Checkpointer::writeCheckpoint() {
     // then reused over and over, it can be appended to the eviction queue multiple times. To
     // prevent multiple entries of the same page from existing in the eviction queue, at the end of
     // each checkpoint we remove any already-evicted pages.
-    auto bufferManager = clientContext.getMemoryManager()->getBufferManager();
+    auto bufferManager = MemoryManager::Get(clientContext)->getBufferManager();
     bufferManager->removeEvictedCandidates();
 
     clientContext.getCatalog()->resetVersion();
@@ -158,7 +159,7 @@ void Checkpointer::serializeCatalogAndMetadata(DatabaseHeader& databaseHeader,
 
 void Checkpointer::writeDatabaseHeader(const DatabaseHeader& header) {
     auto headerWriter =
-        std::make_shared<common::InMemFileWriter>(*clientContext.getMemoryManager());
+        std::make_shared<common::InMemFileWriter>(*MemoryManager::Get(clientContext));
     common::Serializer headerSerializer(headerWriter);
     header.serialize(headerSerializer);
     auto headerPage = headerWriter->getPage(0);
@@ -187,7 +188,7 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
     wal->logAndFlushCheckpoint(&clientContext);
     shadowFile.applyShadowPages(clientContext);
     // Clear the wal and also shadowing files.
-    auto bufferManager = clientContext.getMemoryManager()->getBufferManager();
+    auto bufferManager = MemoryManager::Get(clientContext)->getBufferManager();
     wal->clear();
     shadowFile.clear(*bufferManager);
 }

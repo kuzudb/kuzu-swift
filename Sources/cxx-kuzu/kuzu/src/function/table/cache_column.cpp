@@ -3,7 +3,9 @@
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "common/exception/binder.h"
 #include "function/table/bind_data.h"
+#include "function/table/bind_input.h"
 #include "function/table/simple_table_function.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "storage/local_cached_column.h"
 #include "storage/storage_manager.h"
@@ -155,9 +157,10 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto& scanState = *localState->scanState;
     for (auto i = morsel.startOffset; i < morsel.endOffset; i++) {
         auto numRows = table.getNumTuplesInNodeGroup(i);
-        auto data = storage::ColumnChunkFactory::createColumnChunkData(*context->getMemoryManager(),
-            columnType.copy(), false /*enableCompression*/, numRows,
-            storage::ResidencyState::IN_MEMORY, true /*hasNullData*/, false /*initializeToZero*/);
+        auto data = storage::ColumnChunkFactory::createColumnChunkData(
+            *storage::MemoryManager::Get(*context), columnType.copy(), false /*enableCompression*/,
+            numRows, storage::ResidencyState::IN_MEMORY, true /*hasNullData*/,
+            false /*initializeToZero*/);
         if (columnType.getLogicalTypeID() == LogicalTypeID::ARRAY) {
             auto arrayTypeInfo = columnType.getExtraTypeInfo()->constPtrCast<ArrayTypeInfo>();
             data->cast<storage::ListChunkData>().getDataColumnChunk()->resize(

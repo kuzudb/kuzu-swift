@@ -1,6 +1,7 @@
 #include "processor/operator/partitioner.h"
 
 #include "binder/expression/expression_util.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
@@ -142,7 +143,7 @@ void Partitioner::executeInternal(ExecutionContext* context) {
             partitionIdxes->state = keyVector->state;
             partitionInfo.partitionerFunc(keyVector.get(), partitionIdxes.get());
             auto chunkToCopyFrom = constructDataChunk(keyVector->state);
-            copyDataToPartitions(*context->clientContext->getMemoryManager(), partitioningIdx,
+            copyDataToPartitions(*MemoryManager::Get(*context->clientContext), partitioningIdx,
                 chunkToCopyFrom);
         }
     }

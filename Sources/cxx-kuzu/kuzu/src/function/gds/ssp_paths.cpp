@@ -2,6 +2,7 @@
 #include "function/gds/auxiliary_state/path_auxiliary_state.h"
 #include "function/gds/gds_function_collection.h"
 #include "function/gds/rec_joins.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::binder;
@@ -77,7 +78,7 @@ private:
         auto frontierPair = std::make_unique<SPFrontierPair>(std::move(frontier));
         auto bfsGraph = std::make_unique<BFSGraphManager>(
             sharedState->graph->getMaxOffsetMap(clientContext->getTransaction()),
-            clientContext->getMemoryManager());
+            storage::MemoryManager::Get(*clientContext));
         auto edgeCompute =
             std::make_unique<SSPPathsEdgeCompute>(frontierPair.get(), bfsGraph.get());
         auto auxiliaryState = std::make_unique<PathAuxiliaryState>(std::move(bfsGraph));

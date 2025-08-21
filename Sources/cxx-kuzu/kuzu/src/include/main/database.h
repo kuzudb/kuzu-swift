@@ -12,22 +12,13 @@
 #include "common/database_lifecycle_manager.h"
 #include "kuzu_fwd.h"
 #include "main/db_config.h"
+
 namespace kuzu {
 namespace common {
 class FileSystem;
-enum class LogicalTypeID : uint8_t;
 } // namespace common
 
-namespace catalog {
-class CatalogEntry;
-} // namespace catalog
-
-namespace function {
-struct Function;
-} // namespace function
-
 namespace extension {
-struct ExtensionUtils;
 class ExtensionManager;
 class TransformerExtension;
 class BinderExtension;
@@ -40,9 +31,7 @@ class StorageExtension;
 } // namespace storage
 
 namespace main {
-struct ExtensionOption;
 class DatabaseManager;
-
 /**
  * @brief Stores runtime configuration for creating or opening a Database
  */
@@ -99,11 +88,7 @@ class Database {
     friend class EmbeddedShell;
     friend class ClientContext;
     friend class Connection;
-    friend class StorageDriver;
     friend class testing::BaseGraphTest;
-    friend class testing::PrivateGraphTest;
-    friend class transaction::TransactionContext;
-    friend struct extension::ExtensionUtils;
 
 public:
     /**
@@ -153,6 +138,14 @@ public:
     std::vector<storage::StorageExtension*> getStorageExtensions();
 
     uint64_t getNextQueryID();
+
+    storage::StorageManager* getStorageManager() { return storageManager.get(); }
+
+    transaction::TransactionManager* getTransactionManager() { return transactionManager.get(); }
+
+    DatabaseManager* getDatabaseManager() { return databaseManager.get(); }
+
+    storage::MemoryManager* getMemoryManager() { return memoryManager.get(); }
 
 private:
     using construct_bm_func_t =

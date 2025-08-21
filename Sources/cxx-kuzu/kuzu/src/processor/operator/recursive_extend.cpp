@@ -6,6 +6,7 @@
 #include "function/gds/compute.h"
 #include "function/gds/gds_function_collection.h"
 #include "function/gds/gds_utils.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::common;
@@ -123,7 +124,7 @@ void RecursiveExtend::executeInternal(ExecutionContext* context) {
             auto writer = function->getOutputWriter(context, bindData, *computeState, sourceNodeID,
                 sharedState.get());
             auto vertexCompute = std::make_unique<RJVertexCompute>(
-                clientContext->getMemoryManager(), sharedState.get(), writer->copy(),
+                storage::MemoryManager::Get(*clientContext), sharedState.get(), writer->copy(),
                 bindData.nodeOutput->constCast<NodeExpression>().getTableIDsSet());
             GDSUtils::runVertexCompute(context, computeState->frontierPair->getState(), graph,
                 *vertexCompute);

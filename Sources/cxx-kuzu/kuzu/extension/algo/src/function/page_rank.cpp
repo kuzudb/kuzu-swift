@@ -8,6 +8,7 @@
 #include "function/degrees.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::processor;
@@ -69,7 +70,7 @@ struct PageRankBindData final : public GDSBindData {
     PageRankBindData(expression_vector columns, graph::NativeGraphEntry graphEntry,
         std::shared_ptr<Expression> nodeOutput,
         std::unique_ptr<PageRankOptionalParams> optionalParams)
-        : GDSBindData{std::move(columns), std::move(graphEntry), std::move(nodeOutput)} {
+        : GDSBindData{std::move(columns), std::move(graphEntry), expression_vector{nodeOutput}} {
         this->optionalParams = std::move(optionalParams);
     }
 
@@ -272,8 +273,9 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto pageRankBindData = input.bindData->constPtrCast<PageRankBindData>();
     auto& config = pageRankBindData->optionalParams->constCast<PageRankOptionalParams>();
     auto initialValue = config.normalize.getParamVal() ? (double)1 / numNodes : (double)1;
-    auto p1 = PValues(maxOffsetMap, clientContext->getMemoryManager(), initialValue);
-    auto p2 = PValues(maxOffsetMap, clientContext->getMemoryManager(), 0);
+    auto mm = MemoryManager::Get(*clientContext);
+    auto p1 = PValues(maxOffsetMap, mm, initialValue);
+    auto p2 = PValues(maxOffsetMap, mm, 0);
     PValues* pCurrent = &p1;
     PValues* pNext = &p2;
     auto currentIter = 1u;
@@ -281,7 +283,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         DenseFrontier::getVisitedFrontier(input.context, graph, sharedState->getGraphNodeMaskMap());
     auto nextFrontier =
         DenseFrontier::getVisitedFrontier(input.context, graph, sharedState->getGraphNodeMaskMap());
-    auto degrees = Degrees(maxOffsetMap, clientContext->getMemoryManager());
+    auto degrees = Degrees(maxOffsetMap, mm);
     DegreesUtils::computeDegree(input.context, graph, sharedState->getGraphNodeMaskMap(), &degrees,
         ExtendDirection::FWD);
     auto frontierPair =
@@ -313,8 +315,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         clientContext->getProgressBar()->updateProgress(input.context->queryID, progress);
         currentIter++;
     }
-    auto outputVC = std::make_unique<PageRankResultVertexCompute>(clientContext->getMemoryManager(),
-        sharedState, *pCurrent);
+    auto outputVC = std::make_unique<PageRankResultVertexCompute>(mm, sharedState, *pCurrent);
     GDSUtils::runVertexCompute(input.context, GDSDensityState::DENSE, graph, *outputVC);
     sharedState->factorizedTablePool.mergeLocalTables();
     return 0;

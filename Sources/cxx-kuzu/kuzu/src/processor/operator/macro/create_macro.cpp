@@ -1,7 +1,9 @@
 #include "processor/operator/macro/create_macro.h"
 
 #include "common/string_format.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
+#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 
@@ -18,7 +20,7 @@ void CreateMacro::executeInternal(ExecutionContext* context) {
     auto transaction = clientContext->getTransaction();
     catalog->addScalarMacroFunction(transaction, info.macroName, info.macro->copy());
     appendMessage(stringFormat("Macro: {} has been created.", info.macroName),
-        clientContext->getMemoryManager());
+        storage::MemoryManager::Get(*clientContext));
 }
 
 } // namespace processor
