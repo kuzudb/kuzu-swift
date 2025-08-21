@@ -8,7 +8,6 @@
 #include "function/degrees.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::processor;
@@ -70,7 +69,7 @@ struct PageRankBindData final : public GDSBindData {
     PageRankBindData(expression_vector columns, graph::NativeGraphEntry graphEntry,
         std::shared_ptr<Expression> nodeOutput,
         std::unique_ptr<PageRankOptionalParams> optionalParams)
-        : GDSBindData{std::move(columns), std::move(graphEntry), expression_vector{nodeOutput}} {
+        : GDSBindData{std::move(columns), std::move(graphEntry), std::move(nodeOutput)} {
         this->optionalParams = std::move(optionalParams);
     }
 

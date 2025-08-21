@@ -19,8 +19,6 @@ public:
     std::vector<AttachedDatabase*> getAttachedDatabases() const;
     KUZU_API void invalidateCache();
 
-    KUZU_API static DatabaseManager* Get(const ClientContext& context);
-
 private:
     std::vector<std::unique_ptr<AttachedDatabase>> attachedDatabases;
     std::string defaultDatabase;

@@ -15,7 +15,6 @@
 #include "main/database.h"
 #include "main/database_manager.h"
 #include "main/db_config.h"
-#include "main/query_result/arrow_query_result.h"
 #include "optimizer/optimizer.h"
 #include "parser/parser.h"
 #include "parser/visitor/standalone_call_rewriter.h"
@@ -202,16 +201,12 @@ std::string ClientContext::getDatabasePath() const {
     return localDatabase->databasePath;
 }
 
-Database* ClientContext::getDatabase() const {
-    return localDatabase;
-}
-
-AttachedKuzuDatabase* ClientContext::getAttachedDatabase() const {
-    return remoteDatabase;
-}
-
 TaskScheduler* ClientContext::getTaskScheduler() const {
     return localDatabase->queryProcessor->getTaskScheduler();
+}
+
+DatabaseManager* ClientContext::getDatabaseManager() const {
+    return localDatabase->databaseManager.get();
 }
 
 storage::StorageManager* ClientContext::getStorageManager() const {
@@ -240,6 +235,14 @@ Catalog* ClientContext::getCatalog() const {
         return localDatabase->catalog.get();
     } else {
         return remoteDatabase->getCatalog();
+    }
+}
+
+TransactionManager* ClientContext::getTransactionManagerUnsafe() const {
+    if (remoteDatabase == nullptr) {
+        return localDatabase->transactionManager.get();
+    } else {
+        return remoteDatabase->getTransactionManager();
     }
 }
 
@@ -405,13 +408,13 @@ std::unique_ptr<QueryResult> ClientContext::executeWithParams(PreparedStatement*
 }
 
 std::unique_ptr<QueryResult> ClientContext::query(std::string_view query,
-    std::optional<uint64_t> queryID, ArrowInfo arrowInfo) {
+    std::optional<uint64_t> queryID) {
     lock_t lck{mtx};
-    return queryNoLock(query, queryID, arrowInfo);
+    return queryNoLock(query, queryID);
 }
 
 std::unique_ptr<QueryResult> ClientContext::queryNoLock(std::string_view query,
-    std::optional<uint64_t> queryID, ArrowInfo arrowInfo) {
+    std::optional<uint64_t> queryID) {
     auto parsedStatements = std::vector<std::shared_ptr<Statement>>();
     try {
         parsedStatements = parseQuery(query);
@@ -425,12 +428,12 @@ std::unique_ptr<QueryResult> ClientContext::queryNoLock(std::string_view query,
         auto [preparedStatement, cachedStatement] =
             prepareNoLock(statement, false /*shouldCommitNewTransaction*/);
         auto currentQueryResult =
-            executeNoLock(preparedStatement.get(), cachedStatement.get(), queryID, arrowInfo);
+            executeNoLock(preparedStatement.get(), cachedStatement.get(), queryID);
         if (!currentQueryResult->isSuccess()) {
             if (!lastResult) {
                 queryResult = std::move(currentQueryResult);
             } else {
-                queryResult->addNextResult(std::move(currentQueryResult));
+                queryResult->nextQueryResult = std::move(currentQueryResult);
             }
             break;
         }
@@ -449,9 +452,8 @@ std::unique_ptr<QueryResult> ClientContext::queryNoLock(std::string_view query,
             queryResult = std::move(currentQueryResult);
             lastResult = queryResult.get();
         } else {
-            auto current = currentQueryResult.get();
-            lastResult->addNextResult(std::move(currentQueryResult));
-            lastResult = current;
+            lastResult->nextQueryResult = std::move(currentQueryResult);
+            lastResult = lastResult->nextQueryResult.get();
         }
     }
     useInternalCatalogEntry_ = false;
@@ -554,8 +556,7 @@ ClientContext::PrepareResult ClientContext::prepareNoLock(
 }
 
 std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* preparedStatement,
-    CachedPreparedStatement* cachedStatement, std::optional<uint64_t> queryID,
-    ArrowInfo arrowInfo) {
+    CachedPreparedStatement* cachedStatement, std::optional<uint64_t> queryID) {
     if (!preparedStatement->isSuccess()) {
         return QueryResult::getQueryResultWithError(preparedStatement->errMsg);
     }
@@ -565,6 +566,7 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
     auto executingTimer = TimeMetric(true /* enable */);
     executingTimer.start();
     std::shared_ptr<FactorizedTable> resultFT;
+    std::unique_ptr<QueryResult> queryResult;
     try {
         bool isTransactionStatement =
             preparedStatement->getStatementType() == StatementType::TRANSACTION;
@@ -581,6 +583,7 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
                 auto mapper = PlanMapper(executionContext.get());
                 const auto physicalPlan = mapper.mapLogicalPlanToPhysical(
                     cachedStatement->logicalPlan.get(), cachedStatement->columns);
+                queryResult = std::make_unique<QueryResult>(preparedStatement->preparedSummary);
                 if (isTransactionStatement) {
                     resultFT = localDatabase->queryProcessor->execute(physicalPlan.get(),
                         executionContext.get());
@@ -603,20 +606,11 @@ std::unique_ptr<QueryResult> ClientContext::executeNoLock(PreparedStatement* pre
     getMemoryManager()->getBufferManager()->getSpillerOrSkip(
         [](auto& spiller) { spiller.clearFile(); });
     executingTimer.stop();
-    auto columnNames = cachedStatement->getColumnNames();
-    auto columnTypes = cachedStatement->getColumnTypes();
-    std::unique_ptr<QueryResult> result;
-    if (arrowInfo.asArrow) {
-        result = std::make_unique<ArrowQueryResult>(std::move(columnNames), std::move(columnTypes),
-            *resultFT, arrowInfo.chunkSize);
-    } else {
-        result = std::make_unique<MaterializedQueryResult>(std::move(columnNames),
-            std::move(columnTypes), resultFT);
-    }
-    auto summary = std::make_unique<QuerySummary>(preparedStatement->preparedSummary);
-    summary->setExecutionTime(executingTimer.getElapsedTimeMS());
-    result->setQuerySummary(std::move(summary));
-    return result;
+    queryResult->querySummary->executionTime = executingTimer.getElapsedTimeMS();
+    queryResult->setColumnHeader(cachedStatement->getColumnNames(),
+        cachedStatement->getColumnTypes());
+    queryResult->initResultTableAndIterator(std::move(resultFT));
+    return queryResult;
 }
 
 std::unique_ptr<QueryResult> ClientContext::handleFailedExecution(std::optional<uint64_t> queryID,
@@ -675,7 +669,7 @@ bool ClientContext::canExecuteWriteQuery() const {
     }
     // Note: we can only attach a remote kuzu database in read-only mode and only one
     // remote kuzu database can be attached.
-    const auto dbManager = DatabaseManager::Get(*this);
+    const auto dbManager = getDatabaseManager();
     for (const auto& attachedDB : dbManager->getAttachedDatabases()) {
         if (attachedDB->getDBType() == ATTACHED_KUZU_DB_TYPE) {
             return false;

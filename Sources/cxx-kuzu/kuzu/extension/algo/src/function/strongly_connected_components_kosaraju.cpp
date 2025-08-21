@@ -1,5 +1,4 @@
 #include "binder/binder.h"
-#include "binder/expression/expression.h"
 #include "common/exception/interrupt.h"
 #include "common/exception/runtime.h"
 #include "common/task_system/progress_bar.h"
@@ -7,7 +6,6 @@
 #include "function/config/connected_components_config.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace std;
@@ -257,8 +255,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     auto nodeOutput = GDSFunction::bindNodeOutput(*input, graphEntry.getNodeEntries());
     columns.push_back(nodeOutput->constPtrCast<NodeExpression>()->getInternalID());
     columns.push_back(input->binder->createVariable(GROUP_ID_COLUMN_NAME, LogicalType::INT64()));
-    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry),
-        expression_vector{nodeOutput});
+    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry), nodeOutput);
 }
 
 function_set SCCKosarajuFunction::getFunctionSet() {

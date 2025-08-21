@@ -98,7 +98,7 @@ OnDiskGraphNbrScanState::OnDiskGraphNbrScanState(ClientContext* context,
     srcNodeIDVector = getValueVector(LogicalType::INTERNAL_ID(), mm, state);
     srcNodeIDVector->state = DataChunkState::getSingleValueDataChunkState();
     dstNodeIDVector = getValueVector(LogicalType::INTERNAL_ID(), mm, state);
-    propertyVectors.valueVectors.resize(relProperties.size());
+    propertyVectors.resize(relProperties.size());
     // TODO(bmwinger): If there are both a predicate and a custom edgePropertyIndex, they will
     // currently be scanned twice. The propertyVector could simply be one of the vectors used
     // for the predicate.
@@ -109,7 +109,7 @@ OnDiskGraphNbrScanState::OnDiskGraphNbrScanState(ClientContext* context,
         auto& property = entry.getProperty(propertyName);
         relPropertyColumnIDs[i] = entry.getColumnID(propertyName);
         KU_ASSERT(relPropertyColumnIDs[i] != INVALID_COLUMN_ID);
-        propertyVectors.valueVectors[i] = getValueVector(property.getType(), mm, state);
+        propertyVectors[i] = getValueVector(property.getType(), mm, state);
     }
     if (predicate != nullptr) {
         auto mapper = ExpressionMapper(&schema);
@@ -120,8 +120,8 @@ OnDiskGraphNbrScanState::OnDiskGraphNbrScanState(ClientContext* context,
     for (auto dataDirection : entry.constCast<RelGroupCatalogEntry>().getRelDataDirections()) {
         auto columnIDs = getColumnIDs(predicateProps, entry, relPropertyColumnIDs);
         std::vector outVectors{dstNodeIDVector.get()};
-        for (auto i = 0u; i < propertyVectors.getNumValueVectors(); i++) {
-            outVectors.push_back(&propertyVectors.getValueVectorMutable(i));
+        for (auto& propertyVector : propertyVectors) {
+            outVectors.push_back(propertyVector.get());
         }
         for (auto& property : predicateProps) {
             auto pos = DataPos(schema.getExpressionPos(*property));
@@ -195,11 +195,10 @@ std::vector<GraphRelInfo> OnDiskGraph::getRelInfos(table_id_t srcTableID) {
 // TODO(Xiyang): since now we need to provide nbr info at prepare stage. It no longer make sense to
 // have scanFwd&scanBwd. The direction has already been decided in this function.
 std::unique_ptr<NbrScanState> OnDiskGraph::prepareRelScan(const TableCatalogEntry& entry,
-    oid_t relTableID, table_id_t nbrTableID, std::vector<std::string> relProperties,
-    bool randomLookup) {
+    oid_t relTableID, table_id_t nbrTableID, std::vector<std::string> relProperties) {
     auto& info = graphEntry.getRelInfo(entry.getTableID());
     auto state = std::make_unique<OnDiskGraphNbrScanState>(context, entry, relTableID,
-        info.predicate, relProperties, randomLookup);
+        info.predicate, relProperties, true /*randomLookup*/);
     if (nodeOffsetMaskMap != nullptr && nodeOffsetMaskMap->containsTableID(nbrTableID)) {
         state->nbrNodeMask = nodeOffsetMaskMap->getOffsetMask(nbrTableID);
     }

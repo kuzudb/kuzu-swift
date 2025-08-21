@@ -3,7 +3,6 @@
 #include "function/hnsw_index_functions.h"
 #include "function/table/bind_data.h"
 #include "index/hnsw_index_utils.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::function;

@@ -3,6 +3,7 @@
 #include "binder/expression_binder.h"
 #include "common/exception/binder.h"
 #include "common/exception/message.h"
+#include "main/client_context.h"
 #include "parser/expression/parsed_variable_expression.h"
 
 using namespace kuzu::common;

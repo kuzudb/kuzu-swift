@@ -1,7 +1,6 @@
 #include "processor/operator/partitioner.h"
 
 #include "binder/expression/expression_util.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"

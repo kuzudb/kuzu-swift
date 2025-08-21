@@ -4,7 +4,6 @@
 #include "function/degrees.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::binder;
@@ -233,8 +232,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     expression_vector columns;
     columns.push_back(nodeOutput->constCast<NodeExpression>().getInternalID());
     columns.push_back(input->binder->createVariable(GROUP_ID_COLUMN_NAME, LogicalType::INT64()));
-    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry),
-        expression_vector{nodeOutput});
+    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry), nodeOutput);
 }
 
 function_set KCoreDecompositionFunction::getFunctionSet() {

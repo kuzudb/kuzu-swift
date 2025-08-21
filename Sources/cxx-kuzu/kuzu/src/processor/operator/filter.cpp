@@ -1,6 +1,5 @@
 #include "processor/operator/filter.h"
 
-#include "binder/expression/expression.h" // IWYU pragma: keep
 #include "processor/execution_context.h"
 
 using namespace kuzu::common;

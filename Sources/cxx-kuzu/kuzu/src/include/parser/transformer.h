@@ -6,7 +6,6 @@
 #include "cypher_parser.h"
 #pragma GCC diagnostic pop
 
-#include "common/enums/conflict_action.h"
 #include "extension/transformer_extension.h"
 #include "parser/ddl/parsed_property_definition.h"
 #include "statement.h"
@@ -53,7 +52,6 @@ public:
     std::string transformSchemaName(CypherParser::OC_SchemaNameContext& ctx);
     static std::string transformSymbolicName(CypherParser::OC_SymbolicNameContext& ctx);
     static std::string transformStringLiteral(antlr4::tree::TerminalNode& stringLiteral);
-    static common::ConflictAction transformConflictAction(CypherParser::KU_IfNotExistsContext* ctx);
 
     // Transform copy statement.
     std::unique_ptr<Statement> transformCopyTo(CypherParser::KU_CopyTOContext& ctx);
