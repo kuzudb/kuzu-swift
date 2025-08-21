@@ -1,5 +1,6 @@
 #include "processor/operator/scan/scan_multi_rel_tables.h"
 
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "storage/local_storage/local_storage.h"
 
@@ -54,7 +55,7 @@ void ScanMultiRelTable::initLocalStateInternal(ResultSet* resultSet, ExecutionCo
     auto clientContext = context->clientContext;
     boundNodeIDVector = resultSet->getValueVector(opInfo.nodeIDPos).get();
     auto nbrNodeIDVector = outVectors[0];
-    scanState = std::make_unique<RelTableScanState>(*clientContext->getMemoryManager(),
+    scanState = std::make_unique<RelTableScanState>(*MemoryManager::Get(*clientContext),
         boundNodeIDVector, outVectors, nbrNodeIDVector->state);
     for (auto& [_, scanner] : scanners) {
         for (auto& relInfo : scanner.relInfos) {

@@ -4,6 +4,7 @@
 #include "function/degrees.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::binder;
@@ -166,7 +167,7 @@ private:
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto clientContext = input.context->clientContext;
-    auto mm = clientContext->getMemoryManager();
+    auto mm = MemoryManager::Get(*clientContext);
     auto sharedState = input.sharedState->ptrCast<GDSFuncSharedState>();
     auto graph = sharedState->graph.get();
     auto transaction = clientContext->getTransaction();
@@ -215,8 +216,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         coreValue++;
     }
     // Write output
-    auto vertexCompute =
-        KCoreResultVertexCompute(clientContext->getMemoryManager(), sharedState, coreValues);
+    auto vertexCompute = KCoreResultVertexCompute(mm, sharedState, coreValues);
     GDSUtils::runVertexCompute(input.context, GDSDensityState::DENSE, graph, vertexCompute);
     sharedState->factorizedTablePool.mergeLocalTables();
     return 0;
@@ -232,7 +232,8 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     expression_vector columns;
     columns.push_back(nodeOutput->constCast<NodeExpression>().getInternalID());
     columns.push_back(input->binder->createVariable(GROUP_ID_COLUMN_NAME, LogicalType::INT64()));
-    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry), nodeOutput);
+    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry),
+        expression_vector{nodeOutput});
 }
 
 function_set KCoreDecompositionFunction::getFunctionSet() {

@@ -1,6 +1,7 @@
 #include "binder/expression/node_expression.h"
 #include "function/gds/gds_function_collection.h"
 #include "function/gds/rec_joins.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::processor;
@@ -132,7 +133,7 @@ public:
         KU_ASSERT(densityState == GDSDensityState::SPARSE);
         densityState = GDSDensityState::DENSE;
         for (auto& [tableID, maxOffset] : maxOffsetMap) {
-            denseObjects.allocate(tableID, maxOffset, context->clientContext->getMemoryManager());
+            denseObjects.allocate(tableID, maxOffset, MemoryManager::Get(*context->clientContext));
             auto data = denseObjects.getData(tableID);
             for (auto i = 0u; i < maxOffset; i++) {
                 data[i].store(0);

@@ -1,6 +1,7 @@
 #include "processor/operator/scan/scan_node_table.h"
 
 #include "binder/expression/expression_util.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "storage/local_storage/local_node_table.h"
 #include "storage/local_storage/local_storage.h"
@@ -76,7 +77,7 @@ void ScanNodeTableInfo::initScanState(TableScanState& scanState,
     const std::vector<ValueVector*>& outVectors, main::ClientContext* context) {
     auto transaction = context->getTransaction();
     scanState.setToTable(transaction, table, columnIDs, copyVector(columnPredicates));
-    initScanStateVectors(scanState, outVectors, context->getMemoryManager());
+    initScanStateVectors(scanState, outVectors, MemoryManager::Get(*context));
 }
 
 void ScanNodeTable::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {

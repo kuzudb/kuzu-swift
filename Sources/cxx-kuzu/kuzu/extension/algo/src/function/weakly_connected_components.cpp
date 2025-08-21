@@ -2,7 +2,9 @@
 #include "function/algo_function.h"
 #include "function/component_ids.h"
 #include "function/config/connected_components_config.h"
+#include "function/config/max_iterations_config.h"
 #include "function/gds/gds_utils.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::binder;
@@ -68,13 +70,13 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     frontierPair->setActiveNodesForNextIter();
     auto maxOffsetMap = graph->getMaxOffsetMap(clientContext->getTransaction());
     auto offsetManager = OffsetManager(maxOffsetMap);
-    auto componentIDs = ComponentIDs::getSequenceComponentIDs(maxOffsetMap, offsetManager,
-        clientContext->getMemoryManager());
+    auto mm = MemoryManager::Get(*clientContext);
+    auto componentIDs = ComponentIDs::getSequenceComponentIDs(maxOffsetMap, offsetManager, mm);
     auto componentIDsPair = ComponentIDsPair(componentIDs);
     auto auxiliaryState = std::make_unique<WCCAuxiliaryState>(componentIDsPair);
     auto edgeCompute = std::make_unique<WCCEdgeCompute>(componentIDsPair);
-    auto vertexCompute = std::make_unique<ComponentIDsOutputVertexCompute>(
-        clientContext->getMemoryManager(), sharedState, componentIDs);
+    auto vertexCompute =
+        std::make_unique<ComponentIDsOutputVertexCompute>(mm, sharedState, componentIDs);
     auto computeState =
         GDSComputeState(std::move(frontierPair), std::move(edgeCompute), std::move(auxiliaryState));
     auto maxIterations = input.bindData->optionalParams->constCast<MaxIterationOptionalParams>()
@@ -94,8 +96,8 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     expression_vector columns;
     columns.push_back(nodeOutput->constCast<NodeExpression>().getInternalID());
     columns.push_back(input->binder->createVariable(GROUP_ID_COLUMN_NAME, LogicalType::INT64()));
-    auto bindData =
-        std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry), nodeOutput);
+    auto bindData = std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry),
+        expression_vector{nodeOutput});
     bindData->optionalParams =
         std::make_unique<MaxIterationOptionalParams>(input->optionalParamsLegacy);
     return bindData;

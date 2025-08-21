@@ -5,6 +5,7 @@
 #include "common/exception/message.h"
 #include "common/string_format.h"
 #include "common/task_system/progress_bar.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "processor/result/factorized_table_util.h"
 #include "storage/local_storage/local_storage.h"
@@ -30,7 +31,7 @@ void RelBatchInsert::initLocalStateInternal(ResultSet*, ExecutionContext* contex
     localState = std::make_unique<RelBatchInsertLocalState>();
     const auto relInfo = info->ptrCast<RelBatchInsertInfo>();
     localState->chunkedGroup =
-        std::make_unique<ChunkedCSRNodeGroup>(*context->clientContext->getMemoryManager(),
+        std::make_unique<ChunkedCSRNodeGroup>(*MemoryManager::Get(*context->clientContext),
             relInfo->columnTypes, relInfo->compressionEnabled, 0, 0, ResidencyState::IN_MEMORY);
     localState->optimisticAllocator =
         context->clientContext->getTransaction()->getLocalStorage()->addOptimisticAllocator();
@@ -51,7 +52,7 @@ void RelBatchInsert::initLocalStateInternal(ResultSet*, ExecutionContext* contex
     relLocalState->dummyAllNullDataChunk = std::make_unique<DataChunk>(relInfo->columnTypes.size());
     for (auto i = 0u; i < relInfo->columnTypes.size(); i++) {
         auto valueVector = std::make_shared<ValueVector>(relInfo->columnTypes[i].copy(),
-            context->clientContext->getMemoryManager());
+            MemoryManager::Get(*context->clientContext));
         valueVector->setAllNull();
         relLocalState->dummyAllNullDataChunk->insert(i, std::move(valueVector));
     }
@@ -115,7 +116,7 @@ void RelBatchInsert::executeInternal(ExecutionContext* context) {
                               ->getOrCreateNodeGroup(context->clientContext->getTransaction(),
                                   relLocalState->nodeGroupIdx, relInfo->direction)
                               ->cast<CSRNodeGroup>();
-        appendNodeGroup(relGroupEntry, *clientContext->getMemoryManager(),
+        appendNodeGroup(relGroupEntry, *MemoryManager::Get(*clientContext),
             clientContext->getTransaction(), nodeGroup, *relInfo, *relLocalState);
         updateProgress(context);
     }
@@ -244,7 +245,7 @@ void RelBatchInsert::finalizeInternal(ExecutionContext* context) {
         auto outputMsg = stringFormat("{} tuples have been copied to the {} table.",
             sharedState->getNumRows(), relInfo->tableName);
         FactorizedTableUtils::appendStringToTable(sharedState->fTable.get(), outputMsg,
-            context->clientContext->getMemoryManager());
+            MemoryManager::Get(*context->clientContext));
 
         const auto warningCount =
             context->clientContext->getWarningContextUnsafe().getWarningCount(context->queryID);
@@ -254,7 +255,7 @@ void RelBatchInsert::finalizeInternal(ExecutionContext* context) {
                              "show_warnings() RETURN *' to view the actual warnings. Query ID: {}",
                     warningCount, context->queryID);
             FactorizedTableUtils::appendStringToTable(sharedState->fTable.get(), warningMsg,
-                context->clientContext->getMemoryManager());
+                MemoryManager::Get(*context->clientContext));
             context->clientContext->getWarningContextUnsafe().defaultPopulateAllWarnings(
                 context->queryID);
         }

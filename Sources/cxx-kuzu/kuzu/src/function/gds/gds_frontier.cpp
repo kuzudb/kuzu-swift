@@ -1,6 +1,7 @@
 #include "function/gds/gds_frontier.h"
 
 #include "function/gds/gds_utils.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::common;
@@ -102,8 +103,9 @@ private:
 };
 
 void DenseFrontier::init(ExecutionContext* context, Graph* graph, iteration_t val) {
+    auto mm = storage::MemoryManager::Get(*context->clientContext);
     for (const auto& [tableID, maxOffset] : nodeMaxOffsetMap) {
-        denseObjects.allocate(tableID, maxOffset, context->clientContext->getMemoryManager());
+        denseObjects.allocate(tableID, maxOffset, mm);
     }
     resetValue(context, graph, val);
 }

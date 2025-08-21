@@ -1,7 +1,9 @@
 #include "processor/operator/simple/load_extension.h"
 
 #include "extension/extension_manager.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
+#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 
@@ -18,7 +20,7 @@ void LoadExtension::executeInternal(ExecutionContext* context) {
     auto clientContext = context->clientContext;
     clientContext->getExtensionManager()->loadExtension(path, clientContext);
     appendMessage(stringFormat("Extension: {} has been loaded.", path),
-        clientContext->getMemoryManager());
+        storage::MemoryManager::Get(*clientContext));
 }
 
 } // namespace processor

@@ -6,6 +6,7 @@
 #include "common/enums/alter_type.h"
 #include "common/exception/binder.h"
 #include "common/exception/runtime.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/table.h"
@@ -214,7 +215,7 @@ void Alter::alterTable(main::ClientContext* clientContext, const TableCatalogEnt
     const BoundAlterInfo& alterInfo) {
     auto catalog = clientContext->getCatalog();
     auto transaction = clientContext->getTransaction();
-    auto memoryManager = clientContext->getMemoryManager();
+    auto memoryManager = storage::MemoryManager::Get(*clientContext);
     auto tableName = entry.getName();
     switch (info.alterType) {
     case AlterType::ADD_PROPERTY: {

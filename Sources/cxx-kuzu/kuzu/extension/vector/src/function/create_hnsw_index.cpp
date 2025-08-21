@@ -1,4 +1,3 @@
-#include "binder/copy/bound_copy_from.h"
 #include "catalog/catalog_entry/function_catalog_entry.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/hnsw_index_catalog_entry.h"
@@ -7,6 +6,7 @@
 #include "function/table/bind_data.h"
 #include "index/hnsw_index_utils.h"
 #include "index/hnsw_rel_batch_insert.h"
+#include "main/client_context.h"
 #include "planner/operator/logical_operator.h"
 #include "planner/operator/logical_table_function_call.h"
 #include "processor/execution_context.h"
@@ -171,8 +171,8 @@ static std::unique_ptr<PhysicalOperator> getPhysicalPlan(PlanMapper* planMapper,
     callColumnTypes.push_back(LogicalType::INTERNAL_ID());
     finalizeFuncSharedState->partitionerSharedState->initialize(callColumnTypes, clientContext);
     // Initialize fTable for BatchInsert.
-    auto fTable =
-        FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
+    auto fTable = FactorizedTableUtils::getSingleStringColumnFTable(
+        storage::MemoryManager::Get(*clientContext));
     // Create RelBatchInsert and dummy sink operators.
     const auto upperBatchInsertSharedState = std::make_shared<BatchInsertSharedState>(fTable);
     auto upperInsertInfo = std::make_unique<RelBatchInsertInfo>(upperRelTableEntry->getName(),

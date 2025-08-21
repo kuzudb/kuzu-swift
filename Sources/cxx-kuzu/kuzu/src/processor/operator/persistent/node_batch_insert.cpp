@@ -4,6 +4,7 @@
 #include "common/cast.h"
 #include "common/finally_wrapper.h"
 #include "common/string_format.h"
+#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "processor/operator/persistent/index_builder.h"
 #include "processor/result/factorized_table_util.h"
@@ -87,7 +88,7 @@ void NodeBatchInsert::initLocalStateInternal(ResultSet* resultSet, ExecutionCont
         nodeLocalState->columnVectors[i] = evaluator->resultVector.get();
     }
     nodeLocalState->chunkedGroup = std::make_unique<ChunkedNodeGroup>(
-        *context->clientContext->getMemoryManager(), nodeInfo->columnTypes,
+        *MemoryManager::Get(*context->clientContext), nodeInfo->columnTypes,
         info->compressionEnabled, StorageConfig::NODE_GROUP_SIZE, 0, ResidencyState::IN_MEMORY);
     KU_ASSERT(resultSet->dataChunks[0]);
     nodeLocalState->columnState = resultSet->dataChunks[0]->state;
@@ -106,13 +107,13 @@ void NodeBatchInsert::executeInternal(ExecutionContext* context) {
         // Evaluate expressions if needed.
         const auto numTuples = nodeLocalState->columnState->getSelVector().getSelSize();
         evaluateExpressions(numTuples);
-        copyToNodeGroup(clientContext->getTransaction(), clientContext->getMemoryManager());
-        nodeLocalState->columnState->setSelVector(originalSelVector);
+        copyToNodeGroup(clientContext->getTransaction(), MemoryManager::Get(*clientContext)),
+            nodeLocalState->columnState->setSelVector(originalSelVector);
     }
     if (nodeLocalState->chunkedGroup->getNumRows() > 0) {
         appendIncompleteNodeGroup(clientContext->getTransaction(),
             std::move(nodeLocalState->chunkedGroup), nodeLocalState->localIndexBuilder,
-            context->clientContext->getMemoryManager());
+            MemoryManager::Get(*context->clientContext));
     }
     if (nodeLocalState->localIndexBuilder) {
         KU_ASSERT(token);
@@ -264,7 +265,7 @@ void NodeBatchInsert::finalize(ExecutionContext* context) {
         while (nodeSharedState->sharedNodeGroup->getNumRows() > 0) {
             writeAndResetNodeGroup(context->clientContext->getTransaction(),
                 nodeSharedState->sharedNodeGroup, nodeSharedState->globalIndexBuilder,
-                context->clientContext->getMemoryManager(), errorHandler, pageAllocator);
+                MemoryManager::Get(*context->clientContext), errorHandler, pageAllocator);
         }
     }
     if (nodeSharedState->globalIndexBuilder) {
@@ -292,7 +293,7 @@ void NodeBatchInsert::finalizeInternal(ExecutionContext* context) {
     auto outputMsg = stringFormat("{} tuples have been copied to the {} table.",
         sharedState->getNumRows() - sharedState->getNumErroredRows(), info->tableName);
     FactorizedTableUtils::appendStringToTable(sharedState->fTable.get(), outputMsg,
-        context->clientContext->getMemoryManager());
+        MemoryManager::Get(*context->clientContext));
 
     const auto warningCount =
         context->clientContext->getWarningContextUnsafe().getWarningCount(context->queryID);
@@ -302,7 +303,7 @@ void NodeBatchInsert::finalizeInternal(ExecutionContext* context) {
                          "show_warnings() RETURN *' to view the actual warnings. Query ID: {}",
                 warningCount, context->queryID);
         FactorizedTableUtils::appendStringToTable(sharedState->fTable.get(), warningMsg,
-            context->clientContext->getMemoryManager());
+            MemoryManager::Get(*context->clientContext));
     }
 }
 
