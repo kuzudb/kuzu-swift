@@ -214,21 +214,8 @@ TaskScheduler* ClientContext::getTaskScheduler() const {
     return localDatabase->queryProcessor->getTaskScheduler();
 }
 
-storage::StorageManager* ClientContext::getStorageManager() const {
-    if (remoteDatabase == nullptr) {
-        return localDatabase->storageManager.get();
-    } else {
-        return remoteDatabase->getStorageManager();
-    }
-}
-
 extension::ExtensionManager* ClientContext::getExtensionManager() const {
     return localDatabase->extensionManager.get();
-}
-
-storage::WAL* ClientContext::getWAL() const {
-    KU_ASSERT(localDatabase && localDatabase->storageManager);
-    return &localDatabase->storageManager->getWAL();
 }
 
 Catalog* ClientContext::getCatalog() const {
