@@ -44,7 +44,7 @@ std::string ExportDBPrintInfo::toString() const {
 
 static void writeStringStreamToFile(ClientContext* context, const std::string& ssString,
     const std::string& path) {
-    const auto fileInfo = context->getVFSUnsafe()->openFile(path,
+    const auto fileInfo = VirtualFileSystem::GetUnsafe(*context)->openFile(path,
         FileOpenFlags(FileFlags::WRITE | FileFlags::CREATE_IF_NOT_EXISTS), context);
     fileInfo->writeFile(reinterpret_cast<const uint8_t*>(ssString.c_str()), ssString.size(),
         0 /* offset */);
@@ -92,7 +92,7 @@ static void writeCopyRelStatement(stringstream& ss, const ClientContext* context
     const auto csvConfig = CSVReaderConfig::construct(info->options);
     std::string columns = getTablePropertyDefinitions(entry);
     auto transaction = context->getTransaction();
-    const auto catalog = context->getCatalog();
+    const auto catalog = Catalog::Get(*context);
     for (auto& entryInfo : entry->constCast<RelGroupCatalogEntry>().getRelEntryInfos()) {
         auto fromTableName =
             catalog->getTableCatalogEntry(transaction, entryInfo.nodePair.srcTableID)->getName();
@@ -120,7 +120,7 @@ static void writeCopyRelStatement(stringstream& ss, const ClientContext* context
 }
 
 static void exportLoadedExtensions(stringstream& ss, const ClientContext* clientContext) {
-    auto extensionCypher = clientContext->getExtensionManager()->toCypher();
+    auto extensionCypher = extension::ExtensionManager::Get(*clientContext)->toCypher();
     if (!extensionCypher.empty()) {
         ss << extensionCypher << std::endl;
     }
@@ -129,7 +129,7 @@ static void exportLoadedExtensions(stringstream& ss, const ClientContext* client
 std::string getSchemaCypher(ClientContext* clientContext) {
     stringstream ss;
     exportLoadedExtensions(ss, clientContext);
-    const auto catalog = clientContext->getCatalog();
+    const auto catalog = Catalog::Get(*clientContext);
     auto transaction = clientContext->getTransaction();
     ToCypherInfo toCypherInfo;
     for (const auto& nodeTableEntry :
@@ -155,7 +155,7 @@ std::string getCopyCypher(const ClientContext* context, const FileScanInfo* boun
     const std::unordered_map<std::string, const std::atomic<bool>*>& canUseParallelReader) {
     stringstream ss;
     auto transaction = context->getTransaction();
-    const auto catalog = context->getCatalog();
+    const auto catalog = Catalog::Get(*context);
     for (const auto& nodeTableEntry :
         catalog->getNodeTableEntries(transaction, false /* useInternal */)) {
         writeCopyNodeStatement(ss, nodeTableEntry, boundFileInfo, canUseParallelReader);
@@ -170,7 +170,7 @@ std::string getIndexCypher(ClientContext* clientContext, const FileScanInfo& exp
     stringstream ss;
     IndexToCypherInfo info{clientContext, exportFileInfo};
     for (auto entry :
-        clientContext->getCatalog()->getIndexEntries(clientContext->getTransaction())) {
+        Catalog::Get(*clientContext)->getIndexEntries(clientContext->getTransaction())) {
         auto indexCypher = entry->toCypher(info);
         if (!indexCypher.empty()) {
             ss << indexCypher << std::endl;

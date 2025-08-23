@@ -214,22 +214,6 @@ TaskScheduler* ClientContext::getTaskScheduler() const {
     return localDatabase->queryProcessor->getTaskScheduler();
 }
 
-extension::ExtensionManager* ClientContext::getExtensionManager() const {
-    return localDatabase->extensionManager.get();
-}
-
-Catalog* ClientContext::getCatalog() const {
-    if (remoteDatabase == nullptr) {
-        return localDatabase->catalog.get();
-    } else {
-        return remoteDatabase->getCatalog();
-    }
-}
-
-VirtualFileSystem* ClientContext::getVFSUnsafe() const {
-    return localDatabase->vfs.get();
-}
-
 RandomEngine* ClientContext::getRandomEngine() const {
     return randomEngine.get();
 }
@@ -311,7 +295,7 @@ const graph::GraphEntrySet& ClientContext::getGraphEntrySet() const {
 }
 
 void ClientContext::cleanUp() {
-    getVFSUnsafe()->cleanUP(this);
+    VirtualFileSystem::GetUnsafe(*this)->cleanUP(this);
 }
 
 std::unique_ptr<PreparedStatement> ClientContext::prepareWithParams(std::string_view query,

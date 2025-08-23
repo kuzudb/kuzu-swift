@@ -12,6 +12,7 @@
 #include "extension/extension_manager.h"
 #include "main/client_context.h"
 #include "processor/expression_mapper.h"
+#include "storage/file_db_id_utils.h"
 #include "storage/local_storage/local_rel_table.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
@@ -34,7 +35,7 @@ WALReplayer::WALReplayer(main::ClientContext& clientContext) : clientContext{cli
 }
 
 void WALReplayer::replay() const {
-    auto vfs = clientContext.getVFSUnsafe();
+    auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
     Checkpointer checkpointer(clientContext);
     // First, check if the WAL file exists. If it does not, we can safely remove the shadow file.
     if (!vfs->fileOrPathExists(walPath, &clientContext)) {
@@ -55,6 +56,7 @@ void WALReplayer::replay() const {
     // A previous unclean exit may have left non-durable contents in the WAL, so before we start
     // replaying the WAL records, make a best-effort attempt at ensuring the WAL is fully durable.
     syncWALFile(*fileInfo);
+
     // Start replaying the WAL records.
     try {
         // First, we dry run the replay to find out the offset of the last record that was
@@ -73,6 +75,14 @@ void WALReplayer::replay() const {
             checkpointer.readCheckpoint();
             // Resume by replaying the WAL file from the beginning until the last COMMIT record.
             Deserializer deserializer(std::make_unique<BufferedFileReader>(*fileInfo));
+
+            // Make sure the WAL file is for the current database
+            ku_uuid_t walDatabaseID{};
+            deserializer.deserializeValue(walDatabaseID);
+            FileDBIDUtils::verifyDatabaseID(*fileInfo,
+                StorageManager::Get(clientContext)->getOrInitDatabaseID(clientContext),
+                walDatabaseID);
+
             while (deserializer.getReader()->cast<BufferedFileReader>()->getReadOffset() <
                    offsetDeserialized) {
                 KU_ASSERT(!deserializer.finished());
@@ -100,6 +110,10 @@ WALReplayer::WALReplayInfo WALReplayer::dryReplay(FileInfo& fileInfo) const {
     bool isLastRecordCheckpoint = false;
     try {
         Deserializer deserializer(std::make_unique<BufferedFileReader>(fileInfo));
+
+        ku_uuid_t walDatabaseID{};
+        deserializer.deserializeValue(walDatabaseID);
+
         bool finishedDeserializing = deserializer.finished();
         while (!finishedDeserializing) {
             auto walRecord = WALRecord::deserialize(deserializer, clientContext);
@@ -185,7 +199,7 @@ void WALReplayer::replayWALRecord(WALRecord& walRecord) const {
 }
 
 void WALReplayer::replayCreateCatalogEntryRecord(WALRecord& walRecord) const {
-    auto catalog = clientContext.getCatalog();
+    auto catalog = Catalog::Get(clientContext);
     auto transaction = clientContext.getTransaction();
     auto storageManager = StorageManager::Get(clientContext);
     auto& record = walRecord.cast<CreateCatalogEntryRecord>();
@@ -222,13 +236,13 @@ void WALReplayer::replayCreateCatalogEntryRecord(WALRecord& walRecord) const {
 
 void WALReplayer::replayDropCatalogEntryRecord(const WALRecord& walRecord) const {
     auto& dropEntryRecord = walRecord.constCast<DropCatalogEntryRecord>();
-    auto catalog = clientContext.getCatalog();
+    auto catalog = Catalog::Get(clientContext);
     auto transaction = clientContext.getTransaction();
     const auto entryID = dropEntryRecord.entryID;
     switch (dropEntryRecord.entryType) {
     case CatalogEntryType::NODE_TABLE_ENTRY:
     case CatalogEntryType::REL_GROUP_ENTRY: {
-        KU_ASSERT(clientContext.getCatalog());
+        KU_ASSERT(Catalog::Get(clientContext));
         catalog->dropTableEntry(transaction, entryID);
     } break;
     case CatalogEntryType::SEQUENCE_ENTRY: {
@@ -246,7 +260,7 @@ void WALReplayer::replayDropCatalogEntryRecord(const WALRecord& walRecord) const
 void WALReplayer::replayAlterTableEntryRecord(const WALRecord& walRecord) const {
     auto binder = Binder(&clientContext);
     auto& alterEntryRecord = walRecord.constCast<AlterTableEntryRecord>();
-    auto catalog = clientContext.getCatalog();
+    auto catalog = Catalog::Get(clientContext);
     auto transaction = clientContext.getTransaction();
     auto storageManager = StorageManager::Get(clientContext);
     auto ownedAlterInfo = alterEntryRecord.ownedAlterInfo.get();
@@ -456,13 +470,14 @@ void WALReplayer::replayUpdateSequenceRecord(const WALRecord& walRecord) const {
     auto& sequenceEntryRecord = walRecord.constCast<UpdateSequenceRecord>();
     const auto sequenceID = sequenceEntryRecord.sequenceID;
     const auto entry =
-        clientContext.getCatalog()->getSequenceEntry(clientContext.getTransaction(), sequenceID);
+        Catalog::Get(clientContext)->getSequenceEntry(clientContext.getTransaction(), sequenceID);
     entry->nextKVal(clientContext.getTransaction(), sequenceEntryRecord.kCount);
 }
 
 void WALReplayer::replayLoadExtensionRecord(const WALRecord& walRecord) const {
     const auto& loadExtensionRecord = walRecord.constCast<LoadExtensionRecord>();
-    clientContext.getExtensionManager()->loadExtension(loadExtensionRecord.path, &clientContext);
+    extension::ExtensionManager::Get(clientContext)
+        ->loadExtension(loadExtensionRecord.path, &clientContext);
 }
 
 void WALReplayer::removeWALAndShadowFiles() const {
@@ -474,7 +489,7 @@ void WALReplayer::removeFileIfExists(const std::string& path) const {
     if (StorageManager::Get(clientContext)->isReadOnly()) {
         return;
     }
-    auto vfs = clientContext.getVFSUnsafe();
+    auto vfs = VirtualFileSystem::GetUnsafe(clientContext);
     if (vfs->fileOrPathExists(path, &clientContext)) {
         vfs->removeFileIfExists(path);
     }
@@ -486,7 +501,7 @@ std::unique_ptr<FileInfo> WALReplayer::openWALFile() const {
         flag |= FileFlags::WRITE; // The write flag here is to ensure the file is opened with O_RDWR
                                   // so that we can sync it.
     }
-    return clientContext.getVFSUnsafe()->openFile(walPath, FileOpenFlags(flag));
+    return VirtualFileSystem::GetUnsafe(clientContext)->openFile(walPath, FileOpenFlags(flag));
 }
 
 void WALReplayer::syncWALFile(const FileInfo& fileInfo) const {
