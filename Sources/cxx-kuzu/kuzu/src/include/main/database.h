@@ -147,6 +147,10 @@ public:
 
     storage::MemoryManager* getMemoryManager() { return memoryManager.get(); }
 
+    extension::ExtensionManager* getExtensionManager() { return extensionManager.get(); }
+
+    common::VirtualFileSystem* getVFS() { return vfs.get(); }
+
 private:
     using construct_bm_func_t =
         std::function<std::unique_ptr<storage::BufferManager>(const Database&)>;
@@ -157,7 +161,7 @@ private:
     };
 
     static std::unique_ptr<storage::BufferManager> initBufferManager(const Database& db);
-    void initMembers(std::string_view dbPath, construct_bm_func_t initBmFunc = initBufferManager);
+    void initMembers(std::string_view dbPath, construct_bm_func_t initBmFunc);
 
     // factory method only to be used for tests
     Database(std::string_view databasePath, SystemConfig systemConfig,

@@ -221,7 +221,7 @@ TableFunction Binder::getScanFunction(const FileTypeInfo& typeInfo,
     Function* func = nullptr;
     std::vector<LogicalType> inputTypes;
     inputTypes.push_back(LogicalType::STRING());
-    auto catalog = clientContext->getCatalog();
+    auto catalog = catalog::Catalog::Get(*clientContext);
     auto transaction = clientContext->getTransaction();
     switch (typeInfo.fileType) {
     case FileType::PARQUET: {
@@ -237,7 +237,7 @@ TableFunction Binder::getScanFunction(const FileTypeInfo& typeInfo,
     case FileType::CSV: {
         bool containCompressedCSV = std::any_of(fileScanInfo.filePaths.begin(),
             fileScanInfo.filePaths.end(), [&](const auto& file) {
-                return clientContext->getVFSUnsafe()->isCompressedFile(file);
+                return VirtualFileSystem::GetUnsafe(*clientContext)->isCompressedFile(file);
             });
         auto csvConfig = CSVReaderConfig::construct(fileScanInfo.options);
         // Parallel CSV scanning is only allowed:
