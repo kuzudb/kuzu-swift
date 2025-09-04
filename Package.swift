@@ -318,6 +318,8 @@ let package = Package(
                 "kuzu/src/function/arithmetic/modulo.cpp",
                 "kuzu/src/function/arithmetic/multiply.cpp",
                 "kuzu/src/function/arithmetic/negate.cpp",
+                "kuzu/src/function/arithmetic/rand_function.cpp",
+                "kuzu/src/function/arithmetic/set_seed.cpp",
                 "kuzu/src/function/arithmetic/subtract.cpp",
                 "kuzu/src/function/array/array_functions.cpp",
                 "kuzu/src/function/array/array_value.cpp",
