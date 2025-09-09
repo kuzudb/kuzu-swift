@@ -424,6 +424,7 @@ let package = Package(
                 "kuzu/src/function/table/show_functions.cpp",
                 "kuzu/src/function/table/show_indexes.cpp",
                 "kuzu/src/function/table/show_loaded_extensions.cpp",
+                "kuzu/src/function/table/show_macros.cpp",
                 "kuzu/src/function/table/show_official_extensions.cpp",
                 "kuzu/src/function/table/show_projected_graphs.cpp",
                 "kuzu/src/function/table/show_sequences.cpp",
