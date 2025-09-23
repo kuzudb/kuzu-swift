@@ -152,7 +152,7 @@ final class ConnectionTests: XCTestCase {
             #endif
             XCTFail("Expected error")
         } catch let error as KuzuError {
-            XCTAssertTrue(error.message.contains("Parameter b not found"))
+            XCTAssertTrue(error.message.contains("Parameter a not found"))
         } catch {
             XCTFail("Unexpected error type")
         }
