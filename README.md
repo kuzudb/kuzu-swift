@@ -40,7 +40,7 @@ kuzu-swift requires Swift 5.9 or later. It supports the following platforms:
 
 Windows platform is not supported and there is no future plan to support it. 
 
-The CI pipeline tests the package on macOS v14, Ubuntu 24.04, and iOS 17 Simulator.
+The CI pipeline tests the package on macOS v15, Ubuntu 24.04, and iOS 17 Simulator.
 
 ## Build
 

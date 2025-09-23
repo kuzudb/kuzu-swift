@@ -9,9 +9,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             config: debug
-          - runner: macos-14
+          - runner: macos-15
             config: release
           - runner: ubuntu-24.04
             config: debug
@@ -34,7 +34,7 @@ jobs:
 
   ios-simulator-test:
     name: Build and Test on iOS Simulator
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       matrix:
         include:
