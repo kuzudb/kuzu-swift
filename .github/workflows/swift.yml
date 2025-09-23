@@ -38,9 +38,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - destination: "platform=iOS Simulator,name=iPhone 15,OS=17.5"
+          - destination: "platform=iOS Simulator,name=iPhone 16,OS=18.6"
             config: debug
-          - destination: "platform=iOS Simulator,name=iPhone 15,OS=17.5"
+          - destination: "platform=iOS Simulator,name=iPhone 16,OS=18.6"
             config: release
       fail-fast: false
     steps:
