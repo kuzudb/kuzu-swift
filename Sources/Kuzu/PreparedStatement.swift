@@ -5,7 +5,7 @@
 //  Copyright © 2023 - 2025 Kùzu Inc.
 //  This code is licensed under MIT license (see LICENSE for details)
 
-@_implementationOnly import cxx_kuzu
+import cxx_kuzu
 
 /// A class representing a prepared statement in Kuzu.
 /// PreparedStatement can be used to execute a query with parameters.

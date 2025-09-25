@@ -5,8 +5,12 @@
 //  Copyright © 2023 - 2025 Kùzu Inc.
 //  This code is licensed under MIT license (see LICENSE for details)
 
+import cxx_kuzu
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
-@_implementationOnly import cxx_kuzu
+#endif
 
 /// A class representing the result of a query, which can be used to iterate over the result set.
 /// QueryResult is returned by the `query` and `execute` methods of Connection.

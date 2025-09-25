@@ -5,8 +5,12 @@
 //  Copyright © 2023 - 2025 Kùzu Inc.
 //  This code is licensed under MIT license (see LICENSE for details)
 
+import cxx_kuzu
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
-@_implementationOnly import cxx_kuzu
+#endif
 
 /// Constants for time unit conversions
 private let MILLISECONDS_IN_A_SECOND: Double = 1_000

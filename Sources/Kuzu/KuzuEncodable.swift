@@ -1,0 +1,13 @@
+//
+//  kuzu-swift
+//  https://github.com/kuzudb/kuzu-swift
+//
+//  Copyright © 2023 - 2025 Kùzu Inc.
+//  This code is licensed under MIT license (see LICENSE for details)
+
+import cxx_kuzu
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
