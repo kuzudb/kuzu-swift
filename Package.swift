@@ -1,13 +1,7 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 5.9
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
-
-let swiftSettings: [SwiftSetting] = [
-    /// https://github.com/apple/swift-evolution/blob/main/proposals/0335-existential-any.md
-    /// Require `any` for existential types.
-    .enableUpcomingFeature("ExistentialAny"),
-]
 
 let package = Package(
     name: "kuzu-swift",
@@ -29,8 +23,7 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "Kuzu",
-            dependencies: ["cxx-kuzu"],
-            swiftSettings: swiftSettings
+            dependencies: ["cxx-kuzu"]
         ),
         .target(
             name: "cxx-kuzu",
