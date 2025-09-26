@@ -157,7 +157,6 @@ public struct KuzuDataType: Equatable, Sendable {
         switch self {
         case .bool: try Bool.kuzuDecode(from: container)
         case .serial, .int64: try Int64.kuzuDecode(from: container)
-        case .int64: try Int64.kuzuDecode(from: container)
         case .uint64: try UInt64.kuzuDecode(from: container)
         case .int32: try Int32.kuzuDecode(from: container)
         case .uint32: try UInt32.kuzuDecode(from: container)
@@ -176,7 +175,7 @@ public struct KuzuDataType: Equatable, Sendable {
         case .blob: try Data.kuzuDecode(from: container)
         case .list, .array: try Array<KuzuAnyDecodable>.kuzuDecode(from: container)
         case .map: try Dictionary<String, KuzuAnyDecodable>.kuzuDecode(from: container)
-        case .struct:try Dictionary<String, KuzuAnyDecodable>.kuzuDecode(from: container)
+        case .struct: try Dictionary<String, KuzuAnyDecodable>.kuzuDecode(from: container)
         case .node: try KuzuNode_.kuzuDecode(from: container)
         case .rel: try KuzuRelationship_.kuzuDecode(from: container)
         case .recursiveRel: try KuzuRecursiveRelationship_.kuzuDecode(from: container)

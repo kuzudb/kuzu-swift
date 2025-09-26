@@ -655,7 +655,7 @@ extension KuzuNode_: KuzuDecodable {
 
 @_spi(Typed)
 extension KuzuRelationship_: KuzuDecodable {
-public static let kuzuDataTypes: [KuzuDataType] = [.rel]
+    public static let kuzuDataTypes: [KuzuDataType] = [.rel]
     public static func kuzuDecode(from container: consuming KuzuValue) throws -> Self {
         try container.nullCheck()
         try container.typeCheck(Self.kuzuDataTypes)
@@ -681,7 +681,7 @@ public static let kuzuDataTypes: [KuzuDataType] = [.rel]
         let sourceId = try KuzuInternalId.kuzuDecode(from: sourceKuzu)
 
         var targetValue = kuzu_value()
-        let targetState = kuzu_rel_val_get_dst_id_val(container.ptr, &idValue)
+        let targetState = kuzu_rel_val_get_dst_id_val(container.ptr, &targetValue)
         let targetKuzu = KuzuValue(ptr: &targetValue)
         guard targetState == KuzuSuccess else {
             throw KuzuError.valueConversionFailed(
@@ -723,7 +723,7 @@ public static let kuzuDataTypes: [KuzuDataType] = [.rel]
 
 @_spi(Typed)
 extension KuzuRecursiveRelationship_: KuzuDecodable {
-public static let kuzuDataTypes: [KuzuDataType] = [.recursiveRel]
+    public static let kuzuDataTypes: [KuzuDataType] = [.recursiveRel]
     public static func kuzuDecode(from container: consuming KuzuValue) throws -> Self {
         try container.nullCheck()
         try container.typeCheck(Self.kuzuDataTypes)
@@ -882,7 +882,7 @@ extension KuzuValue {
         defer { kuzu_destroy_string(currentKey) }
         guard keyState == KuzuSuccess, let currentKey else {
             throw KuzuError.valueConversionFailed(
-                "Failed to get node propery name with status: \(keyState)"
+                "Failed to get node property name with status: \(keyState)"
             )
         }
         return String(cString: currentKey)
@@ -894,7 +894,7 @@ extension KuzuValue {
         defer { kuzu_destroy_string(currentKey) }
         guard keyState == KuzuSuccess, let currentKey else {
             throw KuzuError.valueConversionFailed(
-                "Failed to get rel propery name with status: \(keyState)"
+                "Failed to get rel property name with status: \(keyState)"
             )
         }
         return String(cString: currentKey)
