@@ -76,6 +76,30 @@ public struct KuzuNode_ {
     public let properties: [String: any KuzuDecodable]
 }
 
+@_spi(Typed)
+public struct KuzuRelationship_ {
+    /// The internal ID of the relationship
+    public let id: KuzuInternalId
+    /// The internal ID of the source node.
+    public let sourceId: KuzuInternalId
+    /// The internal ID of the target node.
+    public let targetId: KuzuInternalId
+    /// The label of the relationship.
+    public let label: String
+    /// The properties of the relationship, where keys are property names and values are property values.
+    public let properties: [String: any KuzuDecodable]
+}
+
+/// Represents a recursive relationship retrieved from a path query in Kuzu.
+/// A recursive relationship has a list of nodes and a list of relationships.
+@_spi(Typed)
+public struct KuzuRecursiveRelationship_ {
+    /// The list of nodes in the recursive relationship.
+    public let nodes: [KuzuNode_]
+    /// The list of relationships in the recursive relationship.
+    public let relationships: [KuzuRelationship_]
+}
+
 // Tuples cannot conform to protocols so we need this wrapper
 @_spi(Typed)
 public struct KuzuMap<Key, Value> {
@@ -124,6 +148,9 @@ public struct KuzuDataType: Equatable, Sendable {
     public static let map = KuzuDataType(id: KUZU_MAP)
     public static let `struct` = KuzuDataType(id: KUZU_STRUCT)
     public static let node = KuzuDataType(id: KUZU_NODE)
+    public static let rel = KuzuDataType(id: KUZU_REL)
+    public static let recursiveRel = KuzuDataType(id: KUZU_RECURSIVE_REL)
+    public static let union = KuzuDataType(id: KUZU_UNION)
     public static let any = KuzuDataType(id: KUZU_ANY)
     
     func decode(from container: consuming KuzuValue) throws -> any KuzuDecodable {
@@ -151,6 +178,9 @@ public struct KuzuDataType: Equatable, Sendable {
         case .map: try Dictionary<String, KuzuAnyDecodable>.kuzuDecode(from: container)
         case .struct:try Dictionary<String, KuzuAnyDecodable>.kuzuDecode(from: container)
         case .node: try KuzuNode_.kuzuDecode(from: container)
+        case .rel: try KuzuRelationship_.kuzuDecode(from: container)
+        case .recursiveRel: try KuzuRecursiveRelationship_.kuzuDecode(from: container)
+        case .union: try KuzuAnyDecodable.kuzuUnion(from: container)
         default:
             throw KuzuError.valueConversionFailed("Unsupported type: \(self)")
         }

@@ -654,6 +654,115 @@ extension KuzuNode_: KuzuDecodable {
 }
 
 @_spi(Typed)
+extension KuzuRelationship_: KuzuDecodable {
+public static let kuzuDataTypes: [KuzuDataType] = [.rel]
+    public static func kuzuDecode(from container: consuming KuzuValue) throws -> Self {
+        try container.nullCheck()
+        try container.typeCheck(Self.kuzuDataTypes)
+
+        var idValue = kuzu_value()
+        let idState = kuzu_rel_val_get_id_val(container.ptr, &idValue)
+        let idKuzu = KuzuValue(ptr: &idValue)
+        guard idState == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get node ID with status: \(idState)"
+            )
+        }
+        let id = try KuzuInternalId.kuzuDecode(from: idKuzu)
+
+        var sourceValue = kuzu_value()
+        let sourceState = kuzu_rel_val_get_src_id_val(container.ptr, &sourceValue)
+        let sourceKuzu = KuzuValue(ptr: &sourceValue)
+        guard sourceState == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get relationship source ID with status: \(sourceState)"
+            )
+        }
+        let sourceId = try KuzuInternalId.kuzuDecode(from: sourceKuzu)
+
+        var targetValue = kuzu_value()
+        let targetState = kuzu_rel_val_get_dst_id_val(container.ptr, &idValue)
+        let targetKuzu = KuzuValue(ptr: &targetValue)
+        guard targetState == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get relationship target ID with status: \(targetState)"
+            )
+        }
+        let targetId = try KuzuInternalId.kuzuDecode(from: targetKuzu)
+
+        var labelValue = kuzu_value()
+        let labelState = kuzu_rel_val_get_label_val(container.ptr, &labelValue)
+        let labelKuzu = KuzuValue(ptr: &labelValue)
+        guard labelState == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get relationship label with status: \(labelState)"
+            )
+        }
+        let label = try String.kuzuDecode(from: labelKuzu)
+
+        let propertySize = try container.kuzuRelElementCount()
+        var properties: [String: any KuzuDecodable] = [:]
+
+        for i in UInt64(0)..<propertySize {
+            let key = try container.getRelName(index: i)
+
+            var currentValue = kuzu_value()
+            let value = try container.getRelValue(index: i, into: &currentValue)
+            properties[key] = try LogicalType(from: value).id.decode(from: value)
+        }
+
+        return KuzuRelationship_(
+            id: id,
+            sourceId: sourceId,
+            targetId: targetId,
+            label: label,
+            properties: properties
+        )
+    }
+}
+
+@_spi(Typed)
+extension KuzuRecursiveRelationship_: KuzuDecodable {
+public static let kuzuDataTypes: [KuzuDataType] = [.recursiveRel]
+    public static func kuzuDecode(from container: consuming KuzuValue) throws -> Self {
+        try container.nullCheck()
+        try container.typeCheck(Self.kuzuDataTypes)
+
+        var nodesValue = kuzu_value()
+        let nodesState = kuzu_value_get_recursive_rel_node_list(
+            container.ptr,
+            &nodesValue
+        )
+        let nodesKuzu = KuzuValue(ptr: &nodesValue)
+        guard nodesState == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get recursive relationship nodes with status: \(nodesState)"
+            )
+        }
+
+        var relsValue = kuzu_value()
+        let relsState = kuzu_value_get_recursive_rel_rel_list(
+            container.ptr, 
+            &relsValue
+        )
+        let relsKuzu = KuzuValue(ptr: &relsValue)
+        guard relsState == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get recursive relationship relationships with status: \(relsState)"
+            )
+        }
+
+        let nodes = try Array<KuzuNode_>.kuzuDecode(from: nodesKuzu)
+        let rels = try Array<KuzuRelationship_>.kuzuDecode(from: relsKuzu)
+
+        return KuzuRecursiveRelationship_(
+            nodes: nodes, 
+            relationships: rels
+        )
+    }
+}
+
+@_spi(Typed)
 public struct KuzuAnyDecodable: KuzuDecodable {
     public let value: any KuzuDecodable
     
@@ -663,6 +772,22 @@ public struct KuzuAnyDecodable: KuzuDecodable {
         let type = LogicalType(from: container)
         let decoded = try type.id.decode(from: container)
         return .init(value: decoded)
+    }
+
+    public static func kuzuUnion(from container: consuming KuzuValue) throws -> Self {
+        try container.nullCheck()
+        try container.typeCheck([.union])
+
+        var unionValue = kuzu_value()
+        let state = kuzu_value_get_struct_field_value(container.ptr, 0, &unionValue)
+        let kuzu = KuzuValue(ptr: &unionValue)
+        guard state == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get union value with status: \(state)"
+            )
+        }
+
+        return try Self.kuzuDecode(from: kuzu)
     }
 }
 
@@ -762,6 +887,32 @@ extension KuzuValue {
         }
         return String(cString: currentKey)
     }
+
+    fileprivate func getRelName(index: UInt64) throws -> String {
+        var currentKey: UnsafeMutablePointer<CChar>?
+        let keyState = kuzu_rel_val_get_property_name_at(ptr, index, &currentKey)
+        defer { kuzu_destroy_string(currentKey) }
+        guard keyState == KuzuSuccess, let currentKey else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get rel propery name with status: \(keyState)"
+            )
+        }
+        return String(cString: currentKey)
+    }
+
+        fileprivate func getRelValue(
+        index: UInt64,
+        into cValue: inout kuzu_value
+    ) throws -> KuzuValue {
+        let state = kuzu_rel_val_get_property_value_at(ptr, index, &cValue)
+        let kuzu = KuzuValue(ptr: &cValue)
+        guard state == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get node property value with status: \(state)"
+            )
+        }
+        return kuzu
+    }
     
     fileprivate func kuzuListElementCount() throws -> UInt64 {
         var numElements: UInt64 = 0
@@ -813,6 +964,19 @@ extension KuzuValue {
         
         return propertySize
     }
+
+    fileprivate func kuzuRelElementCount() throws -> UInt64 {
+        var propertySize: UInt64 = 0
+        
+        let state = kuzu_rel_val_get_property_size(ptr, &propertySize)
+        guard state == KuzuSuccess else {
+            throw KuzuError.valueConversionFailed(
+                "Failed to get number of elements in relationship with status: \(state)"
+            )
+        }
+        
+        return propertySize
+    }
 }
 
 extension LogicalType {
@@ -832,16 +996,3 @@ extension LogicalType {
         return numElements
     }
 }
-
-#warning("Implement me")
-//    switch logicalTypeId {
-//    case KUZU_UNION:
-//        return try kuzuUnionValueToSwiftValue(&cValue)
-//    case KUZU_NODE:
-//        return try kuzuNodeValueToSwiftNode(&cValue)
-//    case KUZU_REL:
-//        return try kuzuRelValueToSwiftRelationship(&cValue)
-//    case KUZU_RECURSIVE_REL:
-//        return try kuzuRecursiveRelValueToSwiftRecursiveRelationship(&cValue)
-//        )
-//    }
