@@ -6,25 +6,25 @@
 //  This code is licensed under MIT license (see LICENSE for details)
 
 import cxx_kuzu
-#if canImport(FoundationEssentials)
-import FoundationEssentials
-#else
+// #if canImport(FoundationEssentials)
+// import FoundationEssentials
+// #else
 import Foundation
-#endif
+// #endif
 
 /// Constants for time unit conversions
-private let MILLISECONDS_IN_A_SECOND: Double = 1_000
-private let MICROSECONDS_IN_A_MILLISECOND: Double = 1_000
-private let MICROSECONDS_IN_A_SECOND: Double =
+let MILLISECONDS_IN_A_SECOND: Double = 1_000
+let MICROSECONDS_IN_A_MILLISECOND: Double = 1_000
+let MICROSECONDS_IN_A_SECOND: Double =
     MILLISECONDS_IN_A_SECOND * MICROSECONDS_IN_A_MILLISECOND
 private let NANOSECONDS_IN_A_MICROSECOND: Double = 1_000
-private let NANOSECONDS_IN_A_SECOND: Double =
+let NANOSECONDS_IN_A_SECOND: Double =
     MICROSECONDS_IN_A_SECOND * NANOSECONDS_IN_A_MICROSECOND
 private let SECONDS_IN_A_MINUTE: Double = 60
 private let MINUTES_IN_AN_HOUR: Double = 60
 private let HOURS_IN_A_DAY: Double = 24
 private let DAYS_IN_A_MONTH: Double = 30
-private let SECONDS_IN_A_DAY =
+let SECONDS_IN_A_DAY =
     HOURS_IN_A_DAY * MINUTES_IN_AN_HOUR * SECONDS_IN_A_MINUTE
 private let SECONDS_IN_A_MONTH = DAYS_IN_A_MONTH * SECONDS_IN_A_DAY
 

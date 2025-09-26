@@ -12,6 +12,18 @@ import FoundationEssentials
 import Foundation
 #endif
 
+#if os(macOS) || os(iOS)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#elseif os(Windows)
+import ucrt
+#else
+#error("Unknown platform")
+#endif
+
 /// A class representing the result of a query, which can be used to iterate over the result set.
 /// QueryResult is returned by the `query` and `execute` methods of Connection.
 /// It conforms to `CustomStringConvertible` and `Sequence` protocols for easy string representation and iteration.
