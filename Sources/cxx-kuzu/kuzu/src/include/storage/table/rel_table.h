@@ -239,7 +239,8 @@ private:
 
     void detachDeleteForCSRRels(transaction::Transaction* transaction, RelTableData* tableData,
         RelTableData* reverseTableData, RelTableScanState* relDataReadState,
-        RelTableDeleteState* deleteState, LocalTable* localTable);
+        RelTableDeleteState* deleteState, LocalTable* localTable,
+        std::vector<common::offset_t>& localDeletions);
 
     void checkRelMultiplicityConstraintSafe(transaction::Transaction* transaction,
         const TableInsertState& state, LocalTable* localTable) const;

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <map>
+#include <shared_mutex>
+#include <unordered_map>
 
 #include "common/enums/rel_direction.h"
 #include "storage/local_storage/local_table.h"
@@ -51,26 +53,27 @@ public:
 
     void clear(MemoryManager&) override {
         localNodeGroup.reset();
-        for (auto& index : directedIndices) {
+        for (auto& [_, index] : directedIndices) {
             index.clear();
         }
     }
     bool isEmpty() const {
-        KU_ASSERT(directedIndices.size() >= 1);
-        RUNTIME_CHECK(for (const auto& index
-                           : directedIndices) {
-            KU_ASSERT(index.index.empty() == directedIndices[0].index.empty());
-        });
-        return directedIndices[0].isEmpty();
+        KU_ASSERT(!directedIndices.empty());
+        // Check if all indices are empty (should be consistent)
+        for (const auto& [_, index] : directedIndices) {
+            if (!index.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     common::column_id_t getNumColumns() const { return localNodeGroup->getDataTypes().size(); }
     common::row_idx_t getNumTotalRows() override { return localNodeGroup->getNumRows(); }
 
     DirectedCSRIndex::index_t& getCSRIndex(common::RelDataDirection direction) {
-        const auto directionIdx = common::RelDirectionUtils::relDirectionToKeyIdx(direction);
-        KU_ASSERT(directionIdx < directedIndices.size());
-        return directedIndices[directionIdx].index;
+        KU_ASSERT(directedIndices.contains(direction));
+        return directedIndices.at(direction).index;
     }
     NodeGroup& getLocalNodeGroup() const { return *localNodeGroup; }
 
@@ -89,7 +92,8 @@ private:
     // [srcNodeID, dstNodeID, relID, property1, property2, ...]
     // All local rel tuples are stored in a single node group, and they are indexed by src/dst
     // NodeID.
-    std::vector<DirectedCSRIndex> directedIndices;
+    mutable std::shared_mutex mutex;  // Protects directedIndices and localNodeGroup
+    std::unordered_map<common::RelDataDirection, DirectedCSRIndex> directedIndices;
     std::unique_ptr<NodeGroup> localNodeGroup;
 };
 

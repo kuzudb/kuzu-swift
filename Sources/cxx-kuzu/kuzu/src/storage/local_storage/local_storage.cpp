@@ -15,10 +15,24 @@ namespace storage {
 
 LocalTable* LocalStorage::getOrCreateLocalTable(Table& table) {
     const auto tableID = table.getTableID();
-    auto catalog = catalog::Catalog::Get(clientContext);
-    auto transaction = transaction::Transaction::Get(clientContext);
-    auto& mm = *MemoryManager::Get(clientContext);
+
+    // Fast path: Check if table exists with shared lock
+    {
+        std::shared_lock lock(storageMutex);
+        if (tables.contains(tableID)) {
+            return tables.at(tableID).get();
+        }
+    }  // Release shared lock
+
+    // Slow path: Create new table with unique lock
+    std::unique_lock lock(storageMutex);
+
+    // Double-check: Another thread might have created the table
     if (!tables.contains(tableID)) {
+        auto catalog = catalog::Catalog::Get(clientContext);
+        auto transaction = transaction::Transaction::Get(clientContext);
+        auto& mm = *MemoryManager::Get(clientContext);
+
         switch (table.getTableType()) {
         case TableType::NODE: {
             auto tableEntry = catalog->getTableCatalogEntry(transaction, table.getTableID());
@@ -38,6 +52,7 @@ LocalTable* LocalStorage::getOrCreateLocalTable(Table& table) {
 }
 
 LocalTable* LocalStorage::getLocalTable(table_id_t tableID) const {
+    std::shared_lock lock(storageMutex);  // Read-only access to tables map
     if (tables.contains(tableID)) {
         return tables.at(tableID).get();
     }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <shared_mutex>
 #include <unordered_map>
 
 #include "common/copy_constructors.h"
@@ -11,10 +12,9 @@ namespace main {
 class ClientContext;
 } // namespace main
 namespace storage {
-// Data structures in LocalStorage are not thread-safe.
-// For now, we only support single thread insertions and updates. Once we optimize them with
-// multiple threads, LocalStorage and its related data structures should be reworked to be
-// thread-safe.
+// LocalStorage is now thread-safe for concurrent access during transaction commit.
+// Multiple TaskScheduler worker threads can safely access LocalStorage simultaneously.
+// All data structures are protected by appropriate synchronization primitives.
 class LocalStorage {
 public:
     explicit LocalStorage(main::ClientContext& clientContext) : clientContext{clientContext} {}
@@ -32,9 +32,10 @@ public:
 
 private:
     main::ClientContext& clientContext;
+    mutable std::shared_mutex storageMutex;  // Protects tables map
     std::unordered_map<common::table_id_t, std::unique_ptr<LocalTable>> tables;
 
-    // The mutex is only needed when working with the optimistic allocators
+    // The mtx mutex is only needed when working with the optimistic allocators
     std::mutex mtx;
     std::vector<std::unique_ptr<OptimisticAllocator>> optimisticAllocators;
 };
