@@ -822,6 +822,7 @@ let package = Package(
                 "kuzu/src/storage/table/dictionary_column.cpp",
                 "kuzu/src/storage/table/in_mem_chunked_node_group_collection.cpp",
                 "kuzu/src/storage/table/in_memory_exception_chunk.cpp",
+                "kuzu/src/storage/table/lazy_segment_scanner.cpp",
                 "kuzu/src/storage/table/list_chunk_data.cpp",
                 "kuzu/src/storage/table/list_column.cpp",
                 "kuzu/src/storage/table/node_group.cpp",
