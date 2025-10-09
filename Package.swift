@@ -278,6 +278,7 @@ let package = Package(
                 "kuzu/src/common/types/ku_string.cpp",
                 "kuzu/src/common/types/timestamp_t.cpp",
                 "kuzu/src/common/types/types.cpp",
+                "kuzu/src/common/types/uint128_t.cpp",
                 "kuzu/src/common/types/uuid.cpp",
                 "kuzu/src/common/types/value/nested.cpp",
                 "kuzu/src/common/types/value/node.cpp",
