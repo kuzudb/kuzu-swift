@@ -1,10 +1,11 @@
 #pragma once
 
 #include "loaded_extension.h"
+#include "main/client_context.h"
+#include "main/db_config.h"
 #include "storage/storage_extension.h"
 
 namespace kuzu {
-namespace main {}
 namespace extension {
 
 struct ExtensionEntry {
@@ -38,7 +39,7 @@ public:
 
     void autoLoadLinkedExtensions(main::ClientContext* context);
 
-    KUZU_API static ExtensionManager* Get(const main::ClientContext& context);
+    bool isStaticLinkedExtension(const std::string& extensionName);
 
 private:
     std::vector<LoadedExtension> loadedExtensions;

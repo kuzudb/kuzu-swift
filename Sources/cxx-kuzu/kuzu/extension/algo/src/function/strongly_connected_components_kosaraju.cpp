@@ -1,5 +1,4 @@
 #include "binder/binder.h"
-#include "binder/expression/expression.h"
 #include "common/exception/interrupt.h"
 #include "common/exception/runtime.h"
 #include "common/task_system/progress_bar.h"
@@ -7,9 +6,7 @@
 #include "function/config/connected_components_config.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
-#include "transaction/transaction.h"
 
 using namespace std;
 using namespace kuzu::binder;
@@ -100,7 +97,7 @@ public:
     }
 
     void compute(const offset_t maxOffset, NodeOffsetMaskMap* map, ExecutionContext* context) {
-        auto progressBar = ProgressBar::Get(*context->clientContext);
+        auto progressBar = context->clientContext->getProgressBar();
         std::vector<offset_t> toProcess;
         for (auto i = 0u; i < maxOffset; ++i) {
             if (context->clientContext->interrupted()) {
@@ -224,7 +221,7 @@ private:
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto clientContext = input.context->clientContext;
     auto sharedState = input.sharedState->ptrCast<GDSFuncSharedState>();
-    auto mm = MemoryManager::Get(*clientContext);
+    auto mm = clientContext->getMemoryManager();
     auto graph = sharedState->graph.get();
     KU_ASSERT(graph->getNodeTableIDs().size() == 1);
     auto tableID = graph->getNodeTableIDs()[0];
@@ -232,7 +229,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     if (nodeMask) {
         nodeMask->pin(tableID);
     }
-    auto maxOffset = graph->getMaxOffset(transaction::Transaction::Get(*clientContext), tableID);
+    auto maxOffset = graph->getMaxOffset(clientContext->getTransaction(), tableID);
     auto visitedState = KosarajuVisitedState(tableID, maxOffset, mm);
     auto visitedOrder = KosarajuVisitedOrder(tableID, maxOffset, mm);
     auto kosaraju = Kosaraju(graph, visitedState, visitedOrder);
@@ -258,8 +255,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     auto nodeOutput = GDSFunction::bindNodeOutput(*input, graphEntry.getNodeEntries());
     columns.push_back(nodeOutput->constPtrCast<NodeExpression>()->getInternalID());
     columns.push_back(input->binder->createVariable(GROUP_ID_COLUMN_NAME, LogicalType::INT64()));
-    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry),
-        expression_vector{nodeOutput});
+    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry), nodeOutput);
 }
 
 function_set SCCKosarajuFunction::getFunctionSet() {

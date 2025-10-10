@@ -17,12 +17,10 @@ LogicalPlan Planner::planQuery(const BoundStatement& boundStatement) {
     for (auto i = 0u; i < regularQuery.getNumSingleQueries(); i++) {
         childrenPlans.push_back(planSingleQuery(*regularQuery.getSingleQuery(i)));
     }
-    auto exprs = regularQuery.getStatementResult()->getColumns();
-    return createUnionPlan(childrenPlans, exprs, regularQuery.getIsUnionAll(0));
+    return createUnionPlan(childrenPlans, regularQuery.getIsUnionAll(0));
 }
 
-LogicalPlan Planner::createUnionPlan(std::vector<LogicalPlan>& childrenPlans,
-    const expression_vector& expressions, bool isUnionAll) {
+LogicalPlan Planner::createUnionPlan(std::vector<LogicalPlan>& childrenPlans, bool isUnionAll) {
     KU_ASSERT(!childrenPlans.empty());
     auto plan = LogicalPlan();
     std::vector<std::shared_ptr<LogicalOperator>> children;
@@ -31,15 +29,16 @@ LogicalPlan Planner::createUnionPlan(std::vector<LogicalPlan>& childrenPlans,
         children.push_back(childPlan.getLastOperator());
     }
     // we compute the schema based on first child
-    auto union_ = std::make_shared<LogicalUnion>(expressions, std::move(children));
+    auto union_ = std::make_shared<LogicalUnion>(
+        childrenPlans[0].getSchema()->getExpressionsInScope(), std::move(children));
     for (auto i = 0u; i < childrenPlans.size(); ++i) {
         appendFlattens(union_->getGroupsPosToFlatten(i), childrenPlans[i]);
         union_->setChild(i, childrenPlans[i].getLastOperator());
     }
     union_->computeFactorizedSchema();
     plan.setLastOperator(union_);
-    if (!isUnionAll && !expressions.empty()) {
-        appendDistinct(expressions, plan);
+    if (!isUnionAll) {
+        appendDistinct(union_->getExpressionsToUnion(), plan);
     }
     return plan;
 }

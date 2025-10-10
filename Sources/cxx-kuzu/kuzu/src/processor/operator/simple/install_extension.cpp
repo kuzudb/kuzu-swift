@@ -1,8 +1,8 @@
 #include "processor/operator/simple/install_extension.h"
 
 #include "common/string_format.h"
+#include "extension/extension_manager.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 namespace kuzu {
 namespace processor {
@@ -31,10 +31,17 @@ void InstallExtension::setOutputMessage(bool installed, storage::MemoryManager* 
 }
 
 void InstallExtension::executeInternal(ExecutionContext* context) {
+    if (context->clientContext->getExtensionManager()->isStaticLinkedExtension(info.name)) {
+        appendMessage(stringFormat("Extension {} is already statically linked with the kuzu core. "
+                                   "No need to INSTALL.",
+                          info.name),
+            context->clientContext->getMemoryManager());
+        return;
+    }
     auto clientContext = context->clientContext;
     ExtensionInstaller installer{info, *clientContext};
     bool installResult = installer.install();
-    setOutputMessage(installResult, storage::MemoryManager::Get(*clientContext));
+    setOutputMessage(installResult, clientContext->getMemoryManager());
     if (info.forceInstall) {
         KU_ASSERT(installResult);
     }

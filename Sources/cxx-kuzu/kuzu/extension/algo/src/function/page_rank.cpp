@@ -8,9 +8,7 @@
 #include "function/degrees.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
-#include "function/table/bind_input.h"
 #include "processor/execution_context.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::processor;
 using namespace kuzu::common;
@@ -71,7 +69,7 @@ struct PageRankBindData final : public GDSBindData {
     PageRankBindData(expression_vector columns, graph::NativeGraphEntry graphEntry,
         std::shared_ptr<Expression> nodeOutput,
         std::unique_ptr<PageRankOptionalParams> optionalParams)
-        : GDSBindData{std::move(columns), std::move(graphEntry), expression_vector{nodeOutput}} {
+        : GDSBindData{std::move(columns), std::move(graphEntry), std::move(nodeOutput)} {
         this->optionalParams = std::move(optionalParams);
     }
 
@@ -266,7 +264,7 @@ private:
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto clientContext = input.context->clientContext;
-    auto transaction = transaction::Transaction::Get(*clientContext);
+    auto transaction = clientContext->getTransaction();
     auto sharedState = input.sharedState->ptrCast<GDSFuncSharedState>();
     auto graph = sharedState->graph.get();
     auto maxOffsetMap = graph->getMaxOffsetMap(transaction);
@@ -274,9 +272,8 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto pageRankBindData = input.bindData->constPtrCast<PageRankBindData>();
     auto& config = pageRankBindData->optionalParams->constCast<PageRankOptionalParams>();
     auto initialValue = config.normalize.getParamVal() ? (double)1 / numNodes : (double)1;
-    auto mm = MemoryManager::Get(*clientContext);
-    auto p1 = PValues(maxOffsetMap, mm, initialValue);
-    auto p2 = PValues(maxOffsetMap, mm, 0);
+    auto p1 = PValues(maxOffsetMap, clientContext->getMemoryManager(), initialValue);
+    auto p2 = PValues(maxOffsetMap, clientContext->getMemoryManager(), 0);
     PValues* pCurrent = &p1;
     PValues* pNext = &p2;
     auto currentIter = 1u;
@@ -284,7 +281,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         DenseFrontier::getVisitedFrontier(input.context, graph, sharedState->getGraphNodeMaskMap());
     auto nextFrontier =
         DenseFrontier::getVisitedFrontier(input.context, graph, sharedState->getGraphNodeMaskMap());
-    auto degrees = Degrees(maxOffsetMap, mm);
+    auto degrees = Degrees(maxOffsetMap, clientContext->getMemoryManager());
     DegreesUtils::computeDegree(input.context, graph, sharedState->getGraphNodeMaskMap(), &degrees,
         ExtendDirection::FWD);
     auto frontierPair =
@@ -313,10 +310,11 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
             break;
         }
         auto progress = static_cast<double>(currentIter) / numNodes;
-        ProgressBar::Get(*clientContext)->updateProgress(input.context->queryID, progress);
+        clientContext->getProgressBar()->updateProgress(input.context->queryID, progress);
         currentIter++;
     }
-    auto outputVC = std::make_unique<PageRankResultVertexCompute>(mm, sharedState, *pCurrent);
+    auto outputVC = std::make_unique<PageRankResultVertexCompute>(clientContext->getMemoryManager(),
+        sharedState, *pCurrent);
     GDSUtils::runVertexCompute(input.context, GDSDensityState::DENSE, graph, *outputVC);
     sharedState->factorizedTablePool.mergeLocalTables();
     return 0;

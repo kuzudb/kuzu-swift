@@ -11,7 +11,7 @@
 #include "function/cast/functions/cast_decimal.h"
 #include "function/cast/functions/cast_from_string_functions.h"
 #include "function/cast/functions/cast_functions.h"
-#include "transaction/transaction.h"
+#include "main/client_context.h"
 
 using namespace kuzu::common;
 using namespace kuzu::binder;
@@ -73,10 +73,9 @@ static void resolveNestedVector(std::shared_ptr<ValueVector> inputVector, ValueV
             auto resultTypeNames = StructType::getFieldNames(*resultType);
 
             for (auto i = 0u; i < inputTypeNames.size(); i++) {
-                if (StringUtils::caseInsensitiveEquals(inputTypeNames[i], resultTypeNames[i])) {
-                    continue;
+                if (inputTypeNames[i] != resultTypeNames[i]) {
+                    throw ConversionException{errorMsg};
                 }
-                throw ConversionException{errorMsg};
             }
 
             // copy data and nullmask from input
@@ -379,10 +378,6 @@ static std::unique_ptr<ScalarFunction> bindCastFromStringFunction(const std::str
         execFunc = ScalarFunction::UnaryCastStringExecFunction<ku_string_t, int128_t, CastString,
             EXECUTOR>;
     } break;
-    case LogicalTypeID::UINT128: {
-        execFunc = ScalarFunction::UnaryCastStringExecFunction<ku_string_t, uint128_t, CastString,
-            EXECUTOR>;
-    } break;
     case LogicalTypeID::SERIAL:
     case LogicalTypeID::INT64: {
         execFunc =
@@ -473,10 +468,6 @@ static std::unique_ptr<ScalarFunction> bindCastToStringFunction(const std::strin
     } break;
     case LogicalTypeID::INT128: {
         func = ScalarFunction::UnaryCastExecFunction<int128_t, ku_string_t, CastToString, EXECUTOR>;
-    } break;
-    case LogicalTypeID::UINT128: {
-        func =
-            ScalarFunction::UnaryCastExecFunction<uint128_t, ku_string_t, CastToString, EXECUTOR>;
     } break;
     case LogicalTypeID::UINT8: {
         func = ScalarFunction::UnaryCastExecFunction<uint8_t, ku_string_t, CastToString, EXECUTOR>;
@@ -634,9 +625,6 @@ static std::unique_ptr<ScalarFunction> bindCastToNumericFunction(const std::stri
     } break;
     case LogicalTypeID::INT128: {
         func = ScalarFunction::UnaryExecFunction<int128_t, DST_TYPE, OP, EXECUTOR>;
-    } break;
-    case LogicalTypeID::UINT128: {
-        func = ScalarFunction::UnaryExecFunction<uint128_t, DST_TYPE, OP, EXECUTOR>;
     } break;
     case LogicalTypeID::FLOAT: {
         func = ScalarFunction::UnaryExecFunction<float, DST_TYPE, OP, EXECUTOR>;
@@ -864,10 +852,6 @@ std::unique_ptr<ScalarFunction> CastFunction::bindCastFunction(const std::string
         return bindCastToNumericFunction<int128_t, CastToInt128, EXECUTOR>(functionName, sourceType,
             targetType);
     }
-    case LogicalTypeID::UINT128: {
-        return bindCastToNumericFunction<uint128_t, CastToUInt128, EXECUTOR>(functionName,
-            sourceType, targetType);
-    }
     case LogicalTypeID::SERIAL: {
         return bindCastToNumericFunction<int64_t, CastToSerial, EXECUTOR>(functionName, sourceType,
             targetType);
@@ -1089,17 +1073,6 @@ function_set CastToInt8Function::getFunctionSet() {
     return result;
 }
 
-function_set CastToUInt128Function::getFunctionSet() {
-    function_set result;
-    for (auto typeID : LogicalTypeUtils::getNumericalLogicalTypeIDs()) {
-        result.push_back(
-            CastFunction::bindCastFunction(name, LogicalType(typeID), LogicalType::UINT128()));
-    }
-    result.push_back(
-        CastFunction::bindCastFunction(name, LogicalType::STRING(), LogicalType::UINT128()));
-    return result;
-}
-
 function_set CastToUInt64Function::getFunctionSet() {
     function_set result;
     for (auto typeID : LogicalTypeUtils::getNumericalLogicalTypeIDs()) {
@@ -1159,9 +1132,8 @@ static std::unique_ptr<FunctionBindData> castBindFunc(ScalarBindFuncInput input)
         std::vector<LogicalType> typeVec;
         typeVec.push_back(input.arguments[0]->getDataType().copy());
         try {
-            auto entry =
-                catalog::Catalog::Get(*input.context)
-                    ->getFunctionEntry(transaction::Transaction::Get(*input.context), func->name);
+            auto entry = input.context->getCatalog()->getFunctionEntry(
+                input.context->getTransaction(), func->name);
             auto match = BuiltInFunctionsUtils::matchFunction(func->name, typeVec,
                 entry->ptrCast<catalog::FunctionCatalogEntry>());
             func->execFunc = match->constPtrCast<ScalarFunction>()->execFunc;

@@ -1,9 +1,7 @@
 #include "processor/operator/result_collector.h"
 
 #include "binder/expression/expression_util.h"
-#include "main/query_result/materialized_query_result.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 using namespace kuzu::storage;
@@ -30,7 +28,7 @@ void ResultCollector::initNecessaryLocalState(ResultSet* resultSet, ExecutionCon
     }
     if (info.accumulateType == AccumulateType::OPTIONAL_) {
         markVector = std::make_unique<ValueVector>(LogicalType::BOOL(),
-            MemoryManager::Get(*context->clientContext));
+            context->clientContext->getMemoryManager());
         markVector->state = DataChunkState::getSingleValueDataChunkState();
         markVector->setValue<bool>(0, true);
         payloadAndMarkVectors.push_back(markVector.get());
@@ -39,7 +37,7 @@ void ResultCollector::initNecessaryLocalState(ResultSet* resultSet, ExecutionCon
 
 void ResultCollector::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {
     initNecessaryLocalState(resultSet, context);
-    localTable = std::make_unique<FactorizedTable>(MemoryManager::Get(*context->clientContext),
+    localTable = std::make_unique<FactorizedTable>(context->clientContext->getMemoryManager(),
         info.tableSchema.copy());
 }
 
@@ -60,7 +58,7 @@ void ResultCollector::executeInternal(ExecutionContext* context) {
 void ResultCollector::finalizeInternal(ExecutionContext* context) {
     switch (info.accumulateType) {
     case AccumulateType::OPTIONAL_: {
-        auto localResultSet = getResultSet(MemoryManager::Get(*context->clientContext));
+        auto localResultSet = getResultSet(context->clientContext->getMemoryManager());
         initNecessaryLocalState(localResultSet.get(), context);
         // We should remove currIdx completely as some of the code still relies on currIdx = -1 to
         // check if the state if unFlat or not. This should no longer be necessary.
@@ -84,10 +82,6 @@ void ResultCollector::finalizeInternal(ExecutionContext* context) {
     default:
         break;
     }
-}
-
-std::unique_ptr<main::QueryResult> ResultCollector::getQueryResult() const {
-    return std::make_unique<main::MaterializedQueryResult>(sharedState->getTable());
 }
 
 } // namespace processor

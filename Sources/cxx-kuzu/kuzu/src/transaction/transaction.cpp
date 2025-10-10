@@ -8,7 +8,6 @@
 #include "storage/storage_manager.h"
 #include "storage/undo_buffer.h"
 #include "storage/wal/local_wal.h"
-#include "transaction/transaction_context.h"
 
 using namespace kuzu::catalog;
 
@@ -31,10 +30,9 @@ Transaction::Transaction(main::ClientContext& clientContext, TransactionType tra
       commitTS{common::INVALID_TRANSACTION}, forceCheckpoint{false}, hasCatalogChanges{false} {
     this->clientContext = &clientContext;
     localStorage = std::make_unique<storage::LocalStorage>(clientContext);
-    undoBuffer = std::make_unique<storage::UndoBuffer>(storage::MemoryManager::Get(clientContext));
+    undoBuffer = std::make_unique<storage::UndoBuffer>(clientContext.getMemoryManager());
     currentTS = common::Timestamp::getCurrentTimestamp().value;
-    localWAL = std::make_unique<storage::LocalWAL>(*storage::MemoryManager::Get(clientContext),
-        clientContext.getDBConfig()->enableChecksums);
+    localWAL = std::make_unique<storage::LocalWAL>(*clientContext.getMemoryManager());
 }
 
 Transaction::Transaction(TransactionType transactionType) noexcept
@@ -70,17 +68,14 @@ void Transaction::commit(storage::WAL* wal) {
         localWAL->clear();
     }
     if (hasCatalogChanges) {
-        Catalog::Get(*clientContext)->incrementVersion();
+        clientContext->getCatalog()->incrementVersion();
         hasCatalogChanges = false;
     }
 }
 
 void Transaction::rollback(storage::WAL*) {
-    // Rolling back the local storage will free + evict all optimistically-allocated pages
-    // Since the undo buffer may do some scanning (e.g. to delete inserted keys from the hash index)
-    // this must be rolled back first
-    undoBuffer->rollback(clientContext);
     localStorage->rollback();
+    undoBuffer->rollback(clientContext);
     hasCatalogChanges = false;
 }
 
@@ -131,7 +126,6 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
         }
         switch (catalogEntry.getType()) {
         case CatalogEntryType::INDEX_ENTRY:
-        case CatalogEntryType::SCALAR_MACRO_ENTRY:
         case CatalogEntryType::NODE_TABLE_ENTRY:
         case CatalogEntryType::REL_GROUP_ENTRY:
         case CatalogEntryType::SEQUENCE_ENTRY: {
@@ -142,6 +136,7 @@ void Transaction::pushCreateDropCatalogEntry(CatalogSet& catalogSet, CatalogEntr
         case CatalogEntryType::STANDALONE_TABLE_FUNCTION_ENTRY: {
             // DO NOTHING. We don't persist function entries.
         } break;
+        case CatalogEntryType::SCALAR_MACRO_ENTRY:
         case CatalogEntryType::TYPE_ENTRY:
         default: {
             throw common::RuntimeException(
@@ -194,9 +189,8 @@ void Transaction::pushDeleteInfo(common::node_group_idx_t nodeGroupIdx, common::
 }
 
 void Transaction::pushVectorUpdateInfo(storage::UpdateInfo& updateInfo,
-    const common::idx_t vectorIdx, storage::VectorUpdateInfo& vectorUpdateInfo,
-    common::transaction_t version) const {
-    undoBuffer->createVectorUpdateInfo(&updateInfo, vectorIdx, &vectorUpdateInfo, version);
+    const common::idx_t vectorIdx, storage::VectorUpdateInfo& vectorUpdateInfo) const {
+    undoBuffer->createVectorUpdateInfo(&updateInfo, vectorIdx, &vectorUpdateInfo);
 }
 
 Transaction::~Transaction() = default;
@@ -208,10 +202,6 @@ common::offset_t Transaction::getMinUncommittedNodeOffset(common::table_id_t tab
             .getStartOffset();
     }
     return 0;
-}
-
-Transaction* Transaction::Get(const main::ClientContext& context) {
-    return TransactionContext::Get(context)->getActiveTransaction();
 }
 
 Transaction DUMMY_TRANSACTION = Transaction(TransactionType::DUMMY);

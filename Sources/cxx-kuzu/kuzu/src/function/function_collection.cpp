@@ -76,8 +76,7 @@ FunctionCollection* FunctionCollection::getFunctions() {
         SCALAR_FUNCTION(NegateFunction), SCALAR_FUNCTION(PiFunction),
         SCALAR_FUNCTION_ALIAS(PowFunction), SCALAR_FUNCTION(RadiansFunction),
         SCALAR_FUNCTION(RoundFunction), SCALAR_FUNCTION(SinFunction), SCALAR_FUNCTION(SignFunction),
-        SCALAR_FUNCTION(SqrtFunction), SCALAR_FUNCTION(TanFunction), SCALAR_FUNCTION(RandFunction),
-        SCALAR_FUNCTION(SetSeedFunction),
+        SCALAR_FUNCTION(SqrtFunction), SCALAR_FUNCTION(TanFunction),
 
         // String Functions
         SCALAR_FUNCTION(ArrayExtractFunction), SCALAR_FUNCTION(ConcatFunction),
@@ -142,8 +141,7 @@ FunctionCollection* FunctionCollection::getFunctions() {
         SCALAR_FUNCTION(CastToInt8Function), SCALAR_FUNCTION(CastToUInt64Function),
         SCALAR_FUNCTION(CastToUInt32Function), SCALAR_FUNCTION(CastToUInt16Function),
         SCALAR_FUNCTION(CastToUInt8Function), SCALAR_FUNCTION(CastToInt128Function),
-        SCALAR_FUNCTION(CastToUInt128Function), SCALAR_FUNCTION(CastToBoolFunction),
-        SCALAR_FUNCTION(CastAnyFunction),
+        SCALAR_FUNCTION(CastToBoolFunction), SCALAR_FUNCTION(CastAnyFunction),
 
         // Comparison functions
         SCALAR_FUNCTION(EqualsFunction), SCALAR_FUNCTION(NotEqualsFunction),
@@ -231,7 +229,6 @@ FunctionCollection* FunctionCollection::getFunctions() {
         TABLE_FUNCTION(FileInfoFunction), TABLE_FUNCTION(ShowLoadedExtensionsFunction),
         TABLE_FUNCTION(ShowOfficialExtensionsFunction), TABLE_FUNCTION(ShowIndexesFunction),
         TABLE_FUNCTION(ShowProjectedGraphsFunction), TABLE_FUNCTION(ProjectedGraphInfoFunction),
-        TABLE_FUNCTION(ShowMacrosFunction),
 
         // Standalone Table functions
         STANDALONE_TABLE_FUNCTION(LocalCacheArrayColumnFunction),

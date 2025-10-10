@@ -6,7 +6,6 @@
 #include "common/types/types.h"
 #include "common/utils.h"
 #include "common/vector/value_vector.h"
-#include "processor/warning_context.h"
 #include "storage/index/hash_index.h"
 #include "storage/table/node_table.h"
 
@@ -126,7 +125,7 @@ bool IndexLookup::getNextTuplesInternal(ExecutionContext* context) {
     }
     for (auto& info : infos) {
         info.keyEvaluator->evaluate();
-        lookup(transaction::Transaction::Get(*context->clientContext), info);
+        lookup(context->clientContext->getTransaction(), info);
     }
     localState->errorHandler->flushStoredErrors();
     return true;
@@ -134,7 +133,7 @@ bool IndexLookup::getNextTuplesInternal(ExecutionContext* context) {
 
 void IndexLookup::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {
     auto errorHandler = std::make_unique<BatchInsertErrorHandler>(context,
-        WarningContext::Get(*context->clientContext)->getIgnoreErrorsOption());
+        context->clientContext->getWarningContext().getIgnoreErrorsOption());
     localState = std::make_unique<IndexLookupLocalState>(std::move(errorHandler));
     for (auto& pos : warningDataVectorPos) {
         localState->warningDataVectors.push_back(resultSet->getValueVector(pos).get());

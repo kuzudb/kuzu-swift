@@ -101,10 +101,10 @@ static std::unique_ptr<TableFuncBindData> bindFunc(ClientContext* context,
 static std::string createStopWordsTable(const ClientContext& context,
     const StopWordsTableInfo& info) {
     std::string query = "";
-    auto catalog = catalog::Catalog::Get(context);
+    auto catalog = context.getCatalog();
     switch (info.source) {
     case StopWordsSource::DEFAULT: {
-        if (catalog->containsTable(transaction::Transaction::Get(context), info.tableName)) {
+        if (catalog->containsTable(context.getTransaction(), info.tableName)) {
             return query;
         }
         query +=
@@ -150,21 +150,22 @@ std::string createFTSIndexQuery(ClientContext& context, const TableFuncBindData&
     auto tableID = ftsBindData->tableID;
     auto indexName = ftsBindData->indexName;
     validateInternalTablesNotExist(ftsBindData->tableID, ftsBindData->indexName,
-        *catalog::Catalog::Get(context), transaction::Transaction::Get(context));
+        *context.getCatalog(), context.getTransaction());
     context.setUseInternalCatalogEntry(true /* useInternalCatalogEntry */);
     // TODO(Ziyi): Copy statement can't be wrapped in manual transaction, so we can't wrap all
     // statements in a single transaction there.
     // Create the tokenize macro.
     std::string query = "";
-    if (!catalog::Catalog::Get(context)->containsMacro(transaction::Transaction::Get(context),
+    if (!context.getCatalog()->containsMacro(context.getTransaction(),
             FTSUtils::getTokenizeMacroName(tableID, indexName))) {
-        // TOKENIZE(text, tokenizer, extra_param)
         query += common::stringFormat(R"(CREATE MACRO `{}`(query) AS
-                            TOKENIZE(lower(regexp_replace(CAST(query as STRING), '{}', ' ', 'g')), '{}', '{}');)",
+                            string_split(lower(regexp_replace(
+                            CAST(query as STRING),
+                            '{}',
+                            ' ',
+                            'g')), ' ');)",
             FTSUtils::getTokenizeMacroName(tableID, indexName),
-            formatStrInCypher(ftsBindData->createFTSConfig.ignorePattern),
-            ftsBindData->createFTSConfig.tokenizerInfo.tokenizer,
-            ftsBindData->createFTSConfig.tokenizerInfo.jiebaDictDir);
+            formatStrInCypher(ftsBindData->createFTSConfig.ignorePattern));
     }
 
     // Create the stop words table if not exists, or the user is not using the default english
@@ -178,8 +179,8 @@ std::string createFTSIndexQuery(ClientContext& context, const TableFuncBindData&
                           "key(ID));",
         appearsInfoTableName);
     auto tableName = ftsBindData->tableName;
-    auto tableEntry = catalog::Catalog::Get(context)->getTableCatalogEntry(
-        transaction::Transaction::Get(context), tableName);
+    auto tableEntry =
+        context.getCatalog()->getTableCatalogEntry(context.getTransaction(), tableName);
     for (auto& property : ftsBindData->propertyIDs) {
         auto propertyName = tableEntry->getProperty(property).getName();
         query += stringFormat("COPY `{}` FROM "
@@ -279,8 +280,8 @@ void LenCompute::vertexCompute(const graph::VertexScanState::Chunk& chunk) {
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto& bindData = *input.bindData->constPtrCast<CreateFTSBindData>();
     auto& context = *input.context;
-    auto transaction = transaction::Transaction::Get(*context.clientContext);
-    auto catalog = catalog::Catalog::Get(*context.clientContext);
+    auto transaction = context.clientContext->getTransaction();
+    auto catalog = context.clientContext->getCatalog();
     auto docTableName = FTSUtils::getDocsTableName(bindData.tableID, bindData.indexName);
     auto docTableEntry = catalog->getTableCatalogEntry(transaction, docTableName);
     graph::NativeGraphEntry entry{{docTableEntry}, {} /* relTableEntries */};
@@ -297,7 +298,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         std::make_unique<FTSIndexAuxInfo>(ftsConfig));
     catalog->createIndex(transaction, std::move(indexEntry));
 
-    auto storageManager = storage::StorageManager::Get(*context.clientContext);
+    auto storageManager = context.clientContext->getStorageManager();
     auto nodeTable = storageManager->getTable(bindData.tableID)->ptrCast<storage::NodeTable>();
     auto tableEntry = catalog->getTableCatalogEntry(transaction, bindData.tableID);
     std::vector<column_id_t> columnIDs;
@@ -312,7 +313,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         ftsIndexType.constraintType == storage::IndexConstraintType::PRIMARY,
         ftsIndexType.definitionType == storage::IndexDefinitionType::BUILTIN};
     auto storageInfo = std::make_unique<FTSStorageInfo>(numDocs, avgDocLen,
-        nodeTable->getNumTotalRows(transaction::Transaction::Get(*context.clientContext)));
+        nodeTable->getNumTotalRows(context.clientContext->getTransaction()));
     auto onDiskIndex = std::make_unique<FTSIndex>(std::move(indexInfo), std::move(storageInfo),
         std::move(ftsConfig), context.clientContext);
     if (!context.clientContext->isInMemory()) {
@@ -323,12 +324,14 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         onDiskIndex->getInternalTableInfo().docTable->checkpoint(context.clientContext,
             docTableEntry, pageAllocator);
         auto termsTableName = FTSUtils::getTermsTableName(bindData.tableID, bindData.indexName);
-        auto termsTableEntry = catalog->getTableCatalogEntry(transaction, termsTableName);
+        auto termsTableEntry =
+            context.clientContext->getCatalog()->getTableCatalogEntry(transaction, termsTableName);
         onDiskIndex->getInternalTableInfo().termsTable->checkpoint(context.clientContext,
             termsTableEntry, pageAllocator);
         auto appearsInTableName =
             FTSUtils::getAppearsInTableName(bindData.tableID, bindData.indexName);
-        auto appearsInTableEntry = catalog->getTableCatalogEntry(transaction, appearsInTableName);
+        auto appearsInTableEntry = context.clientContext->getCatalog()->getTableCatalogEntry(
+            transaction, appearsInTableName);
         onDiskIndex->getInternalTableInfo().appearsInfoTable->checkpoint(context.clientContext,
             appearsInTableEntry, pageAllocator);
     }

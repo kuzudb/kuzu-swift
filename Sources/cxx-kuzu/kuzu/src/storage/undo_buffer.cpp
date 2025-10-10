@@ -4,6 +4,7 @@
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "catalog/catalog_set.h"
+#include "main/client_context.h"
 #include "storage/table/chunked_node_group.h"
 #include "storage/table/update_info.h"
 #include "storage/table/version_record_handler.h"
@@ -49,7 +50,6 @@ struct VectorUpdateRecord {
     UpdateInfo* updateInfo;
     idx_t vectorIdx;
     VectorUpdateInfo* vectorUpdateInfo;
-    transaction_t version; // This is used during roll back.
 };
 
 template<typename F>
@@ -136,12 +136,12 @@ void UndoBuffer::createVersionInfo(const UndoRecordType recordType, row_idx_t st
 }
 
 void UndoBuffer::createVectorUpdateInfo(UpdateInfo* updateInfo, const idx_t vectorIdx,
-    VectorUpdateInfo* vectorUpdateInfo, transaction_t version) {
+    VectorUpdateInfo* vectorUpdateInfo) {
     auto buffer = createUndoRecord(sizeof(UndoRecordHeader) + sizeof(VectorUpdateRecord));
     const UndoRecordHeader recordHeader{UndoRecordType::UPDATE_INFO, sizeof(VectorUpdateRecord)};
     *reinterpret_cast<UndoRecordHeader*>(buffer) = recordHeader;
     buffer += sizeof(UndoRecordHeader);
-    const VectorUpdateRecord vectorUpdateRecord{updateInfo, vectorIdx, vectorUpdateInfo, version};
+    const VectorUpdateRecord vectorUpdateRecord{updateInfo, vectorIdx, vectorUpdateInfo};
     *reinterpret_cast<VectorUpdateRecord*>(buffer) = vectorUpdateRecord;
 }
 
@@ -223,9 +223,7 @@ void UndoBuffer::commitVersionInfo(UndoRecordType recordType, const uint8_t* rec
 
 void UndoBuffer::commitVectorUpdateInfo(const uint8_t* record, transaction_t commitTS) {
     auto& undoRecord = *reinterpret_cast<VectorUpdateRecord const*>(record);
-    KU_ASSERT(undoRecord.updateInfo);
-    KU_ASSERT(undoRecord.vectorUpdateInfo);
-    undoRecord.updateInfo->commit(undoRecord.vectorIdx, undoRecord.vectorUpdateInfo, commitTS);
+    undoRecord.vectorUpdateInfo->version = commitTS;
 }
 
 void UndoBuffer::rollbackRecord(ClientContext* context, const UndoRecordType recordType,
@@ -242,7 +240,7 @@ void UndoBuffer::rollbackRecord(ClientContext* context, const UndoRecordType rec
         rollbackVersionInfo(context, recordType, record);
     } break;
     case UndoRecordType::UPDATE_INFO: {
-        rollbackVectorUpdateInfo(record);
+        rollbackVectorUpdateInfo(context->getTransaction(), record);
     } break;
     default: {
         KU_UNREACHABLE;
@@ -260,7 +258,7 @@ void UndoBuffer::rollbackCatalogEntryRecord(const uint8_t* record) {
         const auto newerEntry = entryToRollback->getNext();
         newerEntry->setPrev(entryToRollback->movePrev());
     } else {
-        // This is the beginning of the version chain.
+        // This is the begin of the version chain.
         auto olderEntry = entryToRollback->movePrev();
         catalogSet->eraseNoLock(catalogEntry->getName());
         if (olderEntry) {
@@ -291,7 +289,7 @@ void UndoBuffer::rollbackVersionInfo(ClientContext* context, UndoRecordType reco
     case UndoRecordType::DELETE_INFO: {
         undoRecord.versionRecordHandler->applyFuncToChunkedGroups(&ChunkedNodeGroup::rollbackDelete,
             undoRecord.nodeGroupIdx, undoRecord.startRow, undoRecord.numRows,
-            transaction::Transaction::Get(*context)->getCommitTS());
+            context->getTransaction()->getCommitTS());
     } break;
     default: {
         KU_UNREACHABLE;
@@ -299,10 +297,29 @@ void UndoBuffer::rollbackVersionInfo(ClientContext* context, UndoRecordType reco
     }
 }
 
-void UndoBuffer::rollbackVectorUpdateInfo(const uint8_t* record) {
+void UndoBuffer::rollbackVectorUpdateInfo(const transaction::Transaction* transaction,
+    const uint8_t* record) {
     auto& undoRecord = *reinterpret_cast<VectorUpdateRecord const*>(record);
     KU_ASSERT(undoRecord.updateInfo);
-    undoRecord.updateInfo->rollback(undoRecord.vectorIdx, undoRecord.version);
+    if (undoRecord.updateInfo->getVectorInfo(transaction, undoRecord.vectorIdx) !=
+        undoRecord.vectorUpdateInfo) {
+        // The version chain has been updated. No need to rollback.
+        return;
+    }
+    if (undoRecord.vectorUpdateInfo->getNext()) {
+        // Has newer versions. Simply remove the current one from the version chain.
+        const auto newerVersion = undoRecord.vectorUpdateInfo->getNext();
+        auto prevVersion = undoRecord.vectorUpdateInfo->movePrev();
+        prevVersion->next = newerVersion;
+        newerVersion->setPrev(std::move(prevVersion));
+    } else {
+        // This is the begin of the version chain.
+        if (auto prevVersion = undoRecord.vectorUpdateInfo->movePrev()) {
+            undoRecord.updateInfo->setVectorInfo(undoRecord.vectorIdx, std::move(prevVersion));
+        } else {
+            undoRecord.updateInfo->clearVectorInfo(undoRecord.vectorIdx);
+        }
+    }
 }
 
 } // namespace storage

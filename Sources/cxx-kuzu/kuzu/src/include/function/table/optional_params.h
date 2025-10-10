@@ -1,6 +1,7 @@
 #pragma once
 
 #include "binder/expression/expression_util.h"
+#include "main/client_context.h"
 
 namespace kuzu {
 namespace function {
@@ -23,11 +24,6 @@ struct LogicalTypeMapping<common::LogicalTypeID::UINT64> {
 template<>
 struct LogicalTypeMapping<common::LogicalTypeID::INT64> {
     using type = int64_t;
-};
-
-template<>
-struct LogicalTypeMapping<common::LogicalTypeID::STRING> {
-    using type = std::string;
 };
 
 template<typename PARAM>

@@ -46,8 +46,6 @@ public:
 
     void checkpoint(main::ClientContext& clientContext);
 
-    static TransactionManager* Get(const main::ClientContext& context);
-
 private:
     bool hasNoActiveTransactions() const;
     void checkpointNoLock(main::ClientContext& clientContext);

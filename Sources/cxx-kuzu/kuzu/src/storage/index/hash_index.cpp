@@ -8,8 +8,6 @@
 #include "common/types/int128_t.h"
 #include "common/types/ku_string.h"
 #include "common/types/types.h"
-#include "common/types/uint128_t.h"
-#include "main/client_context.h"
 #include "storage/disk_array.h"
 #include "storage/disk_array_collection.h"
 #include "storage/file_handle.h"
@@ -453,7 +451,6 @@ template class HashIndex<uint8_t>;
 template class HashIndex<double>;
 template class HashIndex<float>;
 template class HashIndex<int128_t>;
-template class HashIndex<uint128_t>;
 template class HashIndex<ku_string_t>;
 
 std::unique_ptr<IndexStorageInfo> PrimaryKeyIndexStorageInfo::deserialize(
@@ -703,7 +700,7 @@ std::unique_ptr<Index> PrimaryKeyIndex::load(main::ClientContext* context,
         std::make_unique<BufferReader>(storageInfoBuffer.data(), storageInfoBuffer.size());
     auto storageInfo = PrimaryKeyIndexStorageInfo::deserialize(std::move(storageInfoBufferReader));
     return std::make_unique<PrimaryKeyIndex>(indexInfo, std::move(storageInfo),
-        storageManager->isInMemory(), *MemoryManager::Get(*context),
+        storageManager->isInMemory(), *context->getMemoryManager(),
         *storageManager->getDataFH()->getPageManager(), &storageManager->getShadowFile());
 }
 

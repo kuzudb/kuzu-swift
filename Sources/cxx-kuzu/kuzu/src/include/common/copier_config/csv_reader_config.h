@@ -53,13 +53,13 @@ struct CSVOption {
             result["header"] = hasHeader ? "true" : "false";
         }
         if (setEscape) {
-            result["escape"] = stringFormat("'\\{}'", escapeChar);
+            result["escape"] = stringFormat("escape='\\{}'", escapeChar);
         }
         if (setDelim) {
-            result["delim"] = stringFormat("'{}'", delimiter);
+            result["delim"] = stringFormat("delim='{}'", delimiter);
         }
         if (setQuote) {
-            result["quote"] = stringFormat("'\\{}'", quoteChar);
+            result["quote"] = stringFormat("quote='\\{}'", quoteChar);
         }
         if (autoDetection != CopyConstants::DEFAULT_CSV_AUTO_DETECT) {
             result["auto_detect"] = autoDetection ? "true" : "false";

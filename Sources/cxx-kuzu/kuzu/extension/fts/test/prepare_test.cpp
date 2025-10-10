@@ -35,7 +35,8 @@ TEST_F(ApiTest, PrepareFTSTest) {
         conn->prepare("CALL QUERY_FTS_INDEX('person', 'personIdx', $1) RETURN node.ID, score;");
     result = conn->execute(prepared.get());
     ASSERT_FALSE(result->isSuccess());
-    ASSERT_EQ(result->getErrorMessage(), "Parameter 1 not found.");
+    ASSERT_EQ(result->getErrorMessage(), "Runtime exception: The expression: '$1' is a parameter "
+                                         "expression. Please assign it a value.");
 
     // Table name can't be a parameter expression.
     prepared =
@@ -62,7 +63,8 @@ TEST_F(ApiTest, PrepareFTSTest) {
         "CALL QUERY_FTS_INDEX('person', 'personIdx', 'alice', top:=$3) RETURN node.ID, score;");
     result = conn->execute(prepared.get());
     ASSERT_FALSE(result->isSuccess());
-    ASSERT_EQ(result->getErrorMessage(), "Parameter 3 not found.");
+    ASSERT_EQ(result->getErrorMessage(), "Runtime exception: The expression: 'top' is a parameter "
+                                         "expression. Please assign it a value.");
 
     // K can be a parameter expression.
     prepared = conn->prepare(
@@ -82,7 +84,8 @@ TEST_F(ApiTest, PrepareFTSTest) {
         "CALL QUERY_FTS_INDEX('person', 'personIdx', 'alice', k:=$3) RETURN node.ID, score;");
     result = conn->execute(prepared.get());
     ASSERT_FALSE(result->isSuccess());
-    ASSERT_EQ(result->getErrorMessage(), "Parameter 3 not found.");
+    ASSERT_EQ(result->getErrorMessage(), "Runtime exception: The expression: 'k' is a parameter "
+                                         "expression. Please assign it a value.");
 
     // B can be a parameter expression.
     prepared = conn->prepare(
@@ -102,7 +105,8 @@ TEST_F(ApiTest, PrepareFTSTest) {
         "CALL QUERY_FTS_INDEX('person', 'personIdx', 'alice', b:=$3) RETURN node.ID, score;");
     result = conn->execute(prepared.get());
     ASSERT_FALSE(result->isSuccess());
-    ASSERT_EQ(result->getErrorMessage(), "Parameter 3 not found.");
+    ASSERT_EQ(result->getErrorMessage(), "Runtime exception: The expression: 'b' is a parameter "
+                                         "expression. Please assign it a value.");
 
     // conjunctive can be a parameter expression.
     prepared = conn->prepare("CALL QUERY_FTS_INDEX('person', 'personIdx', 'alice', "
@@ -121,7 +125,9 @@ TEST_F(ApiTest, PrepareFTSTest) {
                              "conjunctive:=$3) RETURN node.ID, score;");
     result = conn->execute(prepared.get());
     ASSERT_FALSE(result->isSuccess());
-    ASSERT_EQ(result->getErrorMessage(), "Parameter 3 not found.");
+    ASSERT_EQ(result->getErrorMessage(),
+        "Runtime exception: The expression: 'conjunctive' is a parameter "
+        "expression. Please assign it a value.");
 }
 
 } // namespace testing

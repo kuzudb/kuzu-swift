@@ -779,7 +779,7 @@ static JsonScanFormat autoDetect(main::ClientContext* context, const std::string
     JsonScanConfig& config, std::vector<LogicalType>& types, std::vector<std::string>& names) {
     auto numRowsToDetect = config.breadth;
     JSONScanSharedState sharedState(*context, filePath, config.format);
-    JSONScanLocalState localState(*storage::MemoryManager::Get(*context), sharedState, context);
+    JSONScanLocalState localState(*context->getMemoryManager(), sharedState, context);
     std::unordered_map<std::string, idx_t> colNameToIdx;
     while (numRowsToDetect != 0) {
         auto numTuplesRead = localState.readNext();
@@ -837,8 +837,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
             JSONScanSharedState sharedState(*context,
                 scanInput->fileScanInfo.getFilePath(JsonExtension::JSON_SCAN_FILE_IDX),
                 scanConfig.format);
-            JSONScanLocalState localState(*storage::MemoryManager::Get(*context), sharedState,
-                context);
+            JSONScanLocalState localState(*context->getMemoryManager(), sharedState, context);
             localState.readNext();
             scanConfig.format = sharedState.jsonReader->getFormat();
         }
@@ -937,8 +936,8 @@ static std::unique_ptr<TableFuncLocalState> initLocalState(
     const TableFuncInitLocalStateInput& input) {
     auto jsonBindData = input.bindData.constPtrCast<JsonScanBindData>();
     auto sharedState = input.sharedState.ptrCast<JSONScanSharedState>();
-    auto& mm = *storage::MemoryManager::Get(*input.clientContext);
-    auto localState = std::make_unique<JSONScanLocalState>(mm, *sharedState, jsonBindData->context);
+    auto localState = std::make_unique<JSONScanLocalState>(*input.clientContext->getMemoryManager(),
+        *sharedState, jsonBindData->context);
     return localState;
 }
 
@@ -952,8 +951,8 @@ static void finalizeFunc(const processor::ExecutionContext* ctx,
     auto* jsonSharedState = sharedState->ptrCast<JSONScanSharedState>();
 
     jsonSharedState->sharedErrorHandler.throwCachedErrorsIfNeeded();
-    processor::WarningContext::Get(*ctx->clientContext)
-        ->populateWarnings(ctx->queryID, jsonSharedState->populateErrorFunc);
+    ctx->clientContext->getWarningContextUnsafe().populateWarnings(ctx->queryID,
+        jsonSharedState->populateErrorFunc);
 }
 
 function_set JsonScan::getFunctionSet() {

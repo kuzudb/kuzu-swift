@@ -9,8 +9,7 @@ namespace httpfs_extension {
 
 using namespace common;
 
-CachedFileManager::CachedFileManager(main::ClientContext* context)
-    : vfs{VirtualFileSystem::GetUnsafe(*context)} {
+CachedFileManager::CachedFileManager(main::ClientContext* context) : vfs{context->getVFSUnsafe()} {
     cacheDir = common::stringFormat("{}/{}",
         extension::ExtensionUtils::getLocalDirForExtension(context,
             StringUtils::getLower(HttpfsExtension::EXTENSION_NAME)),
@@ -40,7 +39,7 @@ std::unique_ptr<FileInfo> CachedFileManager::getCachedFileInfo(HTTPFileInfo* htt
 }
 
 void CachedFileManager::cleanUP(main::ClientContext* context) {
-    auto cacheDirForTrx = getCachedDirForTrx(transaction::Transaction::Get(*context)->getID());
+    auto cacheDirForTrx = getCachedDirForTrx(context->getTransaction()->getID());
     vfs->removeFileIfExists(cacheDirForTrx, context);
 }
 

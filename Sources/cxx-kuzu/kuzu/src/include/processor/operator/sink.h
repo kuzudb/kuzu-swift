@@ -5,11 +5,9 @@
 #include "processor/operator/physical_operator.h"
 #include "processor/result/factorized_table.h"
 #include "processor/result/result_set_descriptor.h"
+#include <processor/execution_context.h>
 
 namespace kuzu {
-namespace main {
-class QueryResult;
-}
 namespace processor {
 
 class KUZU_API Sink : public PhysicalOperator {
@@ -34,12 +32,6 @@ public:
         metrics->executionTime.start();
         executeInternal(context);
         metrics->executionTime.stop();
-    }
-
-    virtual std::unique_ptr<main::QueryResult> getQueryResult() const {
-        throw common::InternalException(
-            common::stringFormat("{} operator does not implement getQueryResult.",
-                PhysicalOperatorUtils::operatorTypeToString(operatorType)));
     }
 
     virtual std::shared_ptr<FactorizedTable> getResultFTable() const {
@@ -91,8 +83,6 @@ public:
 
     bool isSource() const final { return true; }
     bool isParallel() const final { return false; }
-
-    std::unique_ptr<main::QueryResult> getQueryResult() const override;
 
     std::shared_ptr<FactorizedTable> getResultFTable() const override { return messageTable; }
 

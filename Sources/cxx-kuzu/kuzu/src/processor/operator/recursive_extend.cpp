@@ -7,7 +7,6 @@
 #include "function/gds/gds_function_collection.h"
 #include "function/gds/gds_utils.h"
 #include "processor/execution_context.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::common;
 using namespace kuzu::binder;
@@ -85,8 +84,6 @@ static bool requireRelID(const RJAlgorithm& function) {
 
 void RecursiveExtend::executeInternal(ExecutionContext* context) {
     auto clientContext = context->clientContext;
-    auto transaction = transaction::Transaction::Get(*clientContext);
-    auto progressBar = ProgressBar::Get(*clientContext);
     auto graph = sharedState->graph.get();
     auto inputNodeMaskMap = sharedState->getInputNodeMaskMap();
     offset_t totalNumNodes = 0;
@@ -94,7 +91,7 @@ void RecursiveExtend::executeInternal(ExecutionContext* context) {
         totalNumNodes = inputNodeMaskMap->getNumMaskedNode();
     } else {
         for (auto& tableID : graph->getNodeTableIDs()) {
-            totalNumNodes += graph->getMaxOffset(transaction, tableID);
+            totalNumNodes += graph->getMaxOffset(clientContext->getTransaction(), tableID);
         }
     }
     std::vector<std::string> propertyNames;
@@ -126,17 +123,17 @@ void RecursiveExtend::executeInternal(ExecutionContext* context) {
             auto writer = function->getOutputWriter(context, bindData, *computeState, sourceNodeID,
                 sharedState.get());
             auto vertexCompute = std::make_unique<RJVertexCompute>(
-                storage::MemoryManager::Get(*clientContext), sharedState.get(), writer->copy(),
+                clientContext->getMemoryManager(), sharedState.get(), writer->copy(),
                 bindData.nodeOutput->constCast<NodeExpression>().getTableIDsSet());
             GDSUtils::runVertexCompute(context, computeState->frontierPair->getState(), graph,
                 *vertexCompute);
         };
-        auto maxOffset = graph->getMaxOffset(transaction, tableID);
+        auto maxOffset = graph->getMaxOffset(clientContext->getTransaction(), tableID);
         if (inputNodeMaskMap && inputNodeMaskMap->getOffsetMask(tableID)->isEnabled()) {
             for (const auto& offset :
                 inputNodeMaskMap->getOffsetMask(tableID)->range(0, maxOffset)) {
                 calcFunc(offset);
-                progressBar->updateProgress(context->queryID,
+                clientContext->getProgressBar()->updateProgress(context->queryID,
                     getRJProgress(totalNumNodes, completedNumNodes++));
                 if (sharedState->exceedLimit()) {
                     break;
@@ -145,7 +142,7 @@ void RecursiveExtend::executeInternal(ExecutionContext* context) {
         } else {
             for (auto offset = 0u; offset < maxOffset; ++offset) {
                 calcFunc(offset);
-                progressBar->updateProgress(context->queryID,
+                clientContext->getProgressBar()->updateProgress(context->queryID,
                     getRJProgress(totalNumNodes, completedNumNodes++));
                 if (sharedState->exceedLimit()) {
                     break;

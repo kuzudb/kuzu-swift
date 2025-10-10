@@ -644,13 +644,14 @@ void FactorizedTable::readFlatColToUnflatVector(uint8_t** tuplesToRead, ft_col_i
     }
 }
 
-FactorizedTableIterator::FactorizedTableIterator(FactorizedTable& factorizedTable)
+FlatTupleIterator::FlatTupleIterator(FactorizedTable& factorizedTable, std::vector<Value*> values)
     : factorizedTable{factorizedTable}, currentTupleBuffer{nullptr}, numFlatTuples{0},
-      nextFlatTupleIdx{0}, nextTupleIdx{1} {
+      nextFlatTupleIdx{0}, nextTupleIdx{1}, values{std::move(values)} {
     resetState();
+    KU_ASSERT(this->values.size() == factorizedTable.tableSchema.getNumColumns());
 }
 
-void FactorizedTableIterator::getNext(FlatTuple& tuple) {
+void FlatTupleIterator::getNextFlatTuple() {
     // Go to the next tuple if we have iterated all the flat tuples of the current tuple.
     if (nextFlatTupleIdx >= numFlatTuples) {
         currentTupleBuffer = factorizedTable.getTuple(nextTupleIdx);
@@ -662,16 +663,16 @@ void FactorizedTableIterator::getNext(FlatTuple& tuple) {
     for (auto i = 0ul; i < factorizedTable.getTableSchema()->getNumColumns(); i++) {
         auto column = factorizedTable.getTableSchema()->getColumn(i);
         if (column->isFlat()) {
-            readFlatColToFlatTuple(i, currentTupleBuffer, tuple);
+            readFlatColToFlatTuple(i, currentTupleBuffer);
         } else {
-            readUnflatColToFlatTuple(i, currentTupleBuffer, tuple);
+            readUnflatColToFlatTuple(i, currentTupleBuffer);
         }
     }
     updateFlatTuplePositionsInDataChunk();
     nextFlatTupleIdx++;
 }
 
-void FactorizedTableIterator::resetState() {
+void FlatTupleIterator::resetState() {
     numFlatTuples = 0;
     nextFlatTupleIdx = 0;
     nextTupleIdx = 1;
@@ -683,36 +684,34 @@ void FactorizedTableIterator::resetState() {
     }
 }
 
-void FactorizedTableIterator::readUnflatColToFlatTuple(ft_col_idx_t colIdx, uint8_t* valueBuffer,
-    FlatTuple& tuple) {
+void FlatTupleIterator::readUnflatColToFlatTuple(ft_col_idx_t colIdx, uint8_t* valueBuffer) {
     auto overflowValue =
         (overflow_value_t*)(valueBuffer + factorizedTable.getTableSchema()->getColOffset(colIdx));
     auto groupID = factorizedTable.getTableSchema()->getColumn(colIdx)->getGroupID();
     auto tupleSizeInOverflowBuffer =
-        LogicalTypeUtils::getRowLayoutSize(tuple[colIdx].getDataType());
+        LogicalTypeUtils::getRowLayoutSize(values[colIdx]->getDataType());
     valueBuffer = overflowValue->value +
                   tupleSizeInOverflowBuffer * flatTuplePositionsInDataChunk[groupID].first;
     auto isNull = factorizedTable.isOverflowColNull(
         overflowValue->value + tupleSizeInOverflowBuffer * overflowValue->numElements,
         flatTuplePositionsInDataChunk[groupID].first, colIdx);
-    tuple[colIdx].setNull(isNull);
+    values[colIdx]->setNull(isNull);
     if (!isNull) {
-        tuple[colIdx].copyFromRowLayout(valueBuffer);
+        readValueBufferToValue(colIdx, valueBuffer);
     }
 }
 
-void FactorizedTableIterator::readFlatColToFlatTuple(ft_col_idx_t colIdx, uint8_t* valueBuffer,
-    FlatTuple& tuple) {
+void FlatTupleIterator::readFlatColToFlatTuple(ft_col_idx_t colIdx, uint8_t* valueBuffer) {
     auto isNull = factorizedTable.isNonOverflowColNull(
         valueBuffer + factorizedTable.getTableSchema()->getNullMapOffset(), colIdx);
-    tuple[colIdx].setNull(isNull);
+    values[colIdx]->setNull(isNull);
     if (!isNull) {
-        tuple[colIdx].copyFromRowLayout(
+        readValueBufferToValue(colIdx,
             valueBuffer + factorizedTable.getTableSchema()->getColOffset(colIdx));
     }
 }
 
-void FactorizedTableIterator::updateInvalidEntriesInFlatTuplePositionsInDataChunk() {
+void FlatTupleIterator::updateInvalidEntriesInFlatTuplePositionsInDataChunk() {
     for (auto i = 0u; i < flatTuplePositionsInDataChunk.size(); i++) {
         bool isValidEntry = false;
         for (auto j = 0u; j < factorizedTable.getTableSchema()->getNumColumns(); j++) {
@@ -727,7 +726,7 @@ void FactorizedTableIterator::updateInvalidEntriesInFlatTuplePositionsInDataChun
     }
 }
 
-void FactorizedTableIterator::updateNumElementsInDataChunk() {
+void FlatTupleIterator::updateNumElementsInDataChunk() {
     auto colOffsetInTupleBuffer = 0ul;
     for (auto i = 0u; i < factorizedTable.getTableSchema()->getNumColumns(); i++) {
         auto column = factorizedTable.getTableSchema()->getColumn(i);
@@ -747,7 +746,7 @@ void FactorizedTableIterator::updateNumElementsInDataChunk() {
     }
 }
 
-void FactorizedTableIterator::updateFlatTuplePositionsInDataChunk() {
+void FlatTupleIterator::updateFlatTuplePositionsInDataChunk() {
     for (auto i = 0u; i < flatTuplePositionsInDataChunk.size(); i++) {
         if (!isValidDataChunkPos(i)) {
             continue;

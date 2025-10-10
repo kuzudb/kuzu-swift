@@ -2,7 +2,6 @@
 
 #include "binder/expression/expression_util.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 
@@ -35,10 +34,11 @@ void HashJoinProbe::initLocalStateInternal(ResultSet* resultSet, ExecutionContex
     columnIdxsToReadFrom.resize(probeDataInfo.getNumPayloads());
     iota(columnIdxsToReadFrom.begin(), columnIdxsToReadFrom.end(),
         probeDataInfo.keysDataPos.size());
-    auto mm = storage::MemoryManager::Get(*context->clientContext);
-    hashVector = std::make_unique<ValueVector>(LogicalType::HASH(), mm);
+    hashVector = std::make_unique<ValueVector>(LogicalType::HASH(),
+        context->clientContext->getMemoryManager());
     if (keyVectors.size() > 1) {
-        tmpHashVector = std::make_unique<ValueVector>(LogicalType::HASH(), mm);
+        tmpHashVector = std::make_unique<ValueVector>(LogicalType::HASH(),
+            context->clientContext->getMemoryManager());
     }
 }
 

@@ -1,8 +1,11 @@
 #pragma once
 
+#include <string>
+
 #include "catalog/catalog.h"
 #include "catalog/catalog_entry/catalog_entry_type.h"
 #include "common/api.h"
+#include "function/function.h"
 #include "main/database.h"
 #include "transaction/transaction.h"
 
@@ -19,6 +22,9 @@ namespace kuzu {
 namespace function {
 struct TableFunction;
 } // namespace function
+namespace main {
+class Database;
+} // namespace main
 
 namespace extension {
 
@@ -141,11 +147,6 @@ struct KUZU_API ExtensionUtils {
     static void addScalarFuncAlias(main::Database& database) {
         addFunc<typename T::alias>(database, T::name,
             catalog::CatalogEntryType::SCALAR_FUNCTION_ENTRY);
-    }
-
-    template<typename T>
-    static void addExportFunc(main::Database& database) {
-        addFunc<T>(database, T::name, catalog::CatalogEntryType::COPY_FUNCTION_ENTRY);
     }
 
     static void registerIndexType(main::Database& database, storage::IndexType type);

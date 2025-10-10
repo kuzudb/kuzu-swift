@@ -3,7 +3,6 @@
 #include "common/exception/interrupt.h"
 #include "common/exception/runtime.h"
 #include "common/task_system/progress_bar.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 
 using namespace kuzu::common;
@@ -201,8 +200,8 @@ bool PhysicalOperator::getNextTuple(ExecutionContext* context) {
 #endif
     metrics->executionTime.start();
     auto result = getNextTuplesInternal(context);
-    ProgressBar::Get(*context->clientContext)
-        ->updateProgress(context->queryID, getProgress(context));
+    context->clientContext->getProgressBar()->updateProgress(context->queryID,
+        getProgress(context));
     metrics->executionTime.stop();
     return result;
 }

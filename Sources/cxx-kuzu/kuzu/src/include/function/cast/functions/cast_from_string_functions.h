@@ -18,7 +18,7 @@ struct KUZU_API CastString {
 
     template<typename T>
     static inline bool tryCast(const ku_string_t& input, T& result) {
-        // try cast for signed integer types (not including int128)
+        // try cast for signed integer types
         return trySimpleIntegerCast<T, true>(reinterpret_cast<const char*>(input.getData()),
             input.len, result);
     }
@@ -36,15 +36,7 @@ struct KUZU_API CastString {
 template<>
 inline void CastString::operation(const ku_string_t& input, int128_t& result,
     ValueVector* /*resultVector*/, uint64_t /*rowToAdd*/, const CSVOption* /*option*/) {
-    simpleIntegerCast<int128_t>(reinterpret_cast<const char*>(input.getData()), input.len, result,
-        LogicalTypeID::INT128);
-}
-
-template<>
-inline void CastString::operation(const ku_string_t& input, uint128_t& result,
-    ValueVector* /*resultVector*/, uint64_t /*rowToAdd*/, const CSVOption* /*option*/) {
-    simpleIntegerCast<uint128_t, false>(reinterpret_cast<const char*>(input.getData()), input.len,
-        result, LogicalTypeID::UINT128);
+    simpleInt128Cast(reinterpret_cast<const char*>(input.getData()), input.len, result);
 }
 
 template<>

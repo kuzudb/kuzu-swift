@@ -17,7 +17,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapProjection(
     auto printInfo =
         std::make_unique<ProjectionPrintInfo>(logicalProjection.getExpressionsToProject());
     auto info = ProjectionInfo();
-    info.discardedChunkIndices = logicalProjection.getDiscardedGroupsPos();
+    info.discardedChunkPosSet = logicalProjection.getDiscardedGroupsPos();
     auto exprMapper = ExpressionMapper(inSchema);
     for (auto& expr : logicalProjection.getExpressionsToProject()) {
         info.addEvaluator(exprMapper.getEvaluator(expr), getDataPos(*expr, *outSchema));

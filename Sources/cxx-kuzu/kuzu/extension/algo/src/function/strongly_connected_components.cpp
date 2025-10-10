@@ -1,16 +1,12 @@
 #include "binder/binder.h"
-#include "binder/expression/expression.h"
 #include "common/task_system/progress_bar.h"
 #include "function/algo_function.h"
 #include "function/component_ids.h"
 #include "function/config/connected_components_config.h"
-#include "function/config/max_iterations_config.h"
 #include "function/gds/gds_frontier.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
-#include "function/table/bind_input.h"
 #include "processor/execution_context.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::binder;
 using namespace kuzu::common;
@@ -195,10 +191,9 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto clientContext = input.context->clientContext;
     auto sharedState = input.sharedState->ptrCast<GDSFuncSharedState>();
     auto nodeMask = sharedState->getGraphNodeMaskMap();
-    auto mm = MemoryManager::Get(*clientContext);
+    auto mm = clientContext->getMemoryManager();
     auto graph = sharedState->graph.get();
-    auto transaction = transaction::Transaction::Get(*clientContext);
-    auto maxOffsetMap = graph->getMaxOffsetMap(transaction);
+    auto maxOffsetMap = graph->getMaxOffsetMap(clientContext->getTransaction());
     auto maxIterations = input.bindData->optionalParams->constCast<MaxIterationOptionalParams>()
                              .maxIterations.getParamVal();
     auto currentFrontier = DenseFrontier::getUnvisitedFrontier(input.context, graph);
@@ -236,7 +231,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto bwdComputeState = GDSComputeState(frontierPair, std::move(bwdColoringEdgeCompute),
         std::move(bwdAuxiliaryState));
 
-    auto progressBar = ProgressBar::Get(*clientContext);
+    auto progressBar = clientContext->getProgressBar();
     for (auto i = 0u; i < maxIterations; i++) {
         // Init fwd and bwd component IDs to node offsets.
         GDSUtils::runVertexCompute(input.context, GDSDensityState::DENSE, graph,
@@ -292,8 +287,8 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     expression_vector columns;
     columns.push_back(nodeOutput->constCast<NodeExpression>().getInternalID());
     columns.push_back(input->binder->createVariable(GROUP_ID_COLUMN_NAME, LogicalType::INT64()));
-    auto bindData = std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry),
-        expression_vector{nodeOutput});
+    auto bindData =
+        std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry), nodeOutput);
     bindData->optionalParams =
         std::make_unique<MaxIterationOptionalParams>(input->optionalParamsLegacy);
     return bindData;

@@ -11,7 +11,7 @@ class RelGroupCatalogEntry;
 
 namespace storage {
 class CSRNodeGroup;
-struct InMemChunkedCSRHeader;
+struct ChunkedCSRHeader;
 } // namespace storage
 
 namespace processor {
@@ -110,12 +110,12 @@ public:
         const PartitionerSharedState& partitionerSharedState, const RelBatchInsertInfo& relInfo,
         common::node_group_idx_t nodeGroupIdx) = 0;
     virtual void populateCSRLengths(RelBatchInsertExecutionState& executionState,
-        storage::InMemChunkedCSRHeader& csrHeader, common::offset_t numNodes,
+        storage::ChunkedCSRHeader& csrHeader, common::offset_t numNodes,
         const RelBatchInsertInfo& relInfo) = 0;
     virtual void finalizeStartCSROffsets(RelBatchInsertExecutionState& executionState,
-        storage::InMemChunkedCSRHeader& csrHeader, const RelBatchInsertInfo& relInfo);
+        storage::ChunkedCSRHeader& csrHeader, const RelBatchInsertInfo& relInfo);
     virtual void writeToTable(RelBatchInsertExecutionState& executionState,
-        const storage::InMemChunkedCSRHeader& csrHeader, const RelBatchInsertLocalState& localState,
+        const storage::ChunkedCSRHeader& csrHeader, const RelBatchInsertLocalState& localState,
         BatchInsertSharedState& sharedState, const RelBatchInsertInfo& relInfo) = 0;
 };
 
@@ -158,7 +158,7 @@ private:
         common::offset_t numNodes, bool leaveGaps);
 
     static void checkRelMultiplicityConstraint(const catalog::RelGroupCatalogEntry& relGroupEntry,
-        const storage::InMemChunkedCSRHeader& csrHeader, common::offset_t startNodeOffset,
+        const storage::ChunkedCSRHeader& csrHeader, common::offset_t startNodeOffset,
         const RelBatchInsertInfo& relInfo);
 
 protected:

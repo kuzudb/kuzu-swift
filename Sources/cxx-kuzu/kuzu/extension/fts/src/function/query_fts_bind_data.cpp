@@ -47,16 +47,15 @@ std::vector<std::string> QueryFTSBindData::getQueryTerms(main::ClientContext& co
         ExpressionUtil::evaluateLiteral<std::string>(&context, query, LogicalType::STRING());
     auto config = entry.getAuxInfo().cast<FTSIndexAuxInfo>().config;
     FTSUtils::normalizeQuery(queryInStr, config.ignorePatternQuery);
-    auto terms = FTSUtils::tokenizeString(queryInStr, config);
-    auto stopWordsTable =
-        StorageManager::Get(context)
-            ->getTable(catalog::Catalog::Get(context)
-                           ->getTableCatalogEntry(transaction::Transaction::Get(context),
-                               config.stopWordsTableName)
-                           ->getTableID())
-            ->ptrCast<NodeTable>();
+    auto terms = StringUtils::split(queryInStr, " ");
+    auto stopWordsTable = context.getStorageManager()
+                              ->getTable(context.getCatalog()
+                                             ->getTableCatalogEntry(context.getTransaction(),
+                                                 config.stopWordsTableName)
+                                             ->getTableID())
+                              ->ptrCast<NodeTable>();
     return FTSUtils::stemTerms(terms, entry.getAuxInfo().cast<FTSIndexAuxInfo>().config,
-        MemoryManager::Get(context), stopWordsTable, transaction::Transaction::Get(context),
+        context.getMemoryManager(), stopWordsTable, context.getTransaction(),
         optionalParams->constCast<QueryFTSOptionalParams>().conjunctive.getParamVal(),
         true /* isQuery */);
 }

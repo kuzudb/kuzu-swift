@@ -1,9 +1,7 @@
 #include "processor/operator/simple/load_extension.h"
 
 #include "extension/extension_manager.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 
@@ -18,9 +16,18 @@ std::string LoadExtensionPrintInfo::toString() const {
 
 void LoadExtension::executeInternal(ExecutionContext* context) {
     auto clientContext = context->clientContext;
-    ExtensionManager::Get(*clientContext)->loadExtension(path, clientContext);
+    if (ExtensionUtils::isOfficialExtension(path) &&
+        clientContext->getExtensionManager()->isStaticLinkedExtension(path)) {
+        appendMessage(
+            stringFormat(
+                "Extension {} is already statically linked with the kuzu core. No need to LOAD.",
+                path),
+            context->clientContext->getMemoryManager());
+        return;
+    }
+    clientContext->getExtensionManager()->loadExtension(path, clientContext);
     appendMessage(stringFormat("Extension: {} has been loaded.", path),
-        storage::MemoryManager::Get(*clientContext));
+        clientContext->getMemoryManager());
 }
 
 } // namespace processor

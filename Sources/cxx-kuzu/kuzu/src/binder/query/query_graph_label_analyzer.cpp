@@ -4,7 +4,6 @@
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/exception/binder.h"
 #include "common/string_format.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::common;
 using namespace kuzu::catalog;
@@ -50,7 +49,7 @@ struct Candidates {
 };
 
 void QueryGraphLabelAnalyzer::pruneNode(const QueryGraph& graph, NodeExpression& node) const {
-    auto catalog = Catalog::Get(clientContext);
+    auto catalog = clientContext.getCatalog();
     for (auto i = 0u; i < graph.getNumQueryRels(); ++i) {
         auto queryRel = graph.getQueryRel(i);
         if (queryRel->isRecursive()) {
@@ -59,7 +58,7 @@ void QueryGraphLabelAnalyzer::pruneNode(const QueryGraph& graph, NodeExpression&
         Candidates candidates;
         auto isSrcConnect = *queryRel->getSrcNode() == node;
         auto isDstConnect = *queryRel->getDstNode() == node;
-        auto tx = transaction::Transaction::Get(clientContext);
+        auto tx = clientContext.getTransaction();
         if (queryRel->getDirectionType() == RelDirectionType::BOTH) {
             if (isSrcConnect || isDstConnect) {
                 for (auto entry : queryRel->getEntries()) {

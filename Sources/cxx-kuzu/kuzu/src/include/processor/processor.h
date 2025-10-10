@@ -1,15 +1,12 @@
 #pragma once
 
 #include "common/task_system/task_scheduler.h"
+#include "processor/physical_plan.h"
+#include "processor/result/factorized_table.h"
 
 namespace kuzu {
-namespace main {
-class QueryResult;
-}
 namespace processor {
-class FactorizedTable;
-class PhysicalPlan;
-class PhysicalOperator;
+
 class QueryProcessor {
 
 public:
@@ -19,10 +16,9 @@ public:
     explicit QueryProcessor(uint64_t numThreads);
 #endif
 
-    common::TaskScheduler* getTaskScheduler() { return taskScheduler.get(); }
+    inline common::TaskScheduler* getTaskScheduler() { return taskScheduler.get(); }
 
-    std::unique_ptr<main::QueryResult> execute(PhysicalPlan* physicalPlan,
-        ExecutionContext* context);
+    std::shared_ptr<FactorizedTable> execute(PhysicalPlan* physicalPlan, ExecutionContext* context);
 
 private:
     void decomposePlanIntoTask(PhysicalOperator* op, common::Task* task, ExecutionContext* context);

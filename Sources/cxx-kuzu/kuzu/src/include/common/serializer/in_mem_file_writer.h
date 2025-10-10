@@ -34,7 +34,7 @@ public:
     page_idx_t getNumPagesToFlush() const { return pages.size(); }
 
     static uint64_t getPageSize();
-    void flush(Writer& writer) const;
+    void flush(BufferedFileWriter& writer) const;
 
     uint64_t getSize() const override {
         uint64_t size = pages.size() > 1 ? KUZU_PAGE_SIZE * (pages.size() - 1) : 0;

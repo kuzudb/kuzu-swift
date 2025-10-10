@@ -27,8 +27,6 @@ struct KUZU_API ScalarFunction : public ScalarOrAggregateFunction {
     scalar_func_exec_t execFunc = nullptr;
     scalar_func_select_t selectFunc = nullptr;
     scalar_func_compile_exec_t compileFunc = nullptr;
-    bool isListLambda = false;
-    bool isVarLength = false;
 
     ScalarFunction() = default;
     ScalarFunction(std::string name, std::vector<common::LogicalTypeID> parameterTypeIDs,
@@ -212,15 +210,15 @@ struct KUZU_API ScalarFunction : public ScalarOrAggregateFunction {
             dataPtr);
     }
 
-    template<typename OPERAND_TYPE, typename RESULT_TYPE, typename FUNC,
-        typename EXECUTOR = UnaryFunctionExecutor>
-    static void UnarySetSeedFunction(
+    template<typename OPERAND_TYPE, typename RESULT_TYPE, typename FUNC>
+    static void UnaryExecStructFunction(
         const std::vector<std::shared_ptr<common::ValueVector>>& params,
         const std::vector<common::SelectionVector*>& paramSelVectors, common::ValueVector& result,
         common::SelectionVector* resultSelVector, void* dataPtr) {
         KU_ASSERT(params.size() == 1);
-        EXECUTOR::template executeSwitch<OPERAND_TYPE, RESULT_TYPE, FUNC, SetSeedFunctionWrapper>(
-            *params[0], paramSelVectors[0], result, resultSelVector, dataPtr);
+        UnaryFunctionExecutor::executeSwitch<OPERAND_TYPE, RESULT_TYPE, FUNC,
+            UnaryStructFunctionWrapper>(*params[0], paramSelVectors[0], result, resultSelVector,
+            dataPtr);
     }
 
     template<typename RESULT_TYPE, typename FUNC>

@@ -15,8 +15,6 @@ public:
     virtual void clear() = 0;
     virtual void flush() = 0;
     virtual void sync() = 0;
-    virtual void onObjectBegin() {};
-    virtual void onObjectEnd() {};
 
     template<class TARGET>
     const TARGET& cast() const {

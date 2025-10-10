@@ -15,7 +15,6 @@
 #include "function/rewrite_function.h"
 #include "function/schema/vector_node_rel_functions.h"
 #include "main/client_context.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::common;
 using namespace kuzu::parser;
@@ -348,8 +347,8 @@ static void checkWeightedShortestPathSupportedType(const LogicalType& type) {
 std::shared_ptr<RelExpression> Binder::createRecursiveQueryRel(const parser::RelPattern& relPattern,
     const std::vector<TableCatalogEntry*>& entries, std::shared_ptr<NodeExpression> srcNode,
     std::shared_ptr<NodeExpression> dstNode, RelDirectionType directionType) {
-    auto catalog = Catalog::Get(*clientContext);
-    auto transaction = transaction::Transaction::Get(*clientContext);
+    auto catalog = clientContext->getCatalog();
+    auto transaction = clientContext->getTransaction();
     table_catalog_entry_set_t nodeEntrySet;
     for (auto entry : entries) {
         auto& relGroupEntry = entry->constCast<RelGroupCatalogEntry>();
@@ -582,7 +581,7 @@ std::shared_ptr<NodeExpression> Binder::bindQueryNode(const NodePattern& nodePat
     for (auto& [propertyName, rhs] : nodePattern.getPropertyKeyVals()) {
         auto boundLhs = expressionBinder.bindNodeOrRelPropertyExpression(*queryNode, propertyName);
         auto boundRhs = expressionBinder.bindExpression(*rhs);
-        boundRhs = expressionBinder.forceCast(boundRhs, boundLhs->dataType);
+        boundRhs = expressionBinder.implicitCastIfNecessary(boundRhs, boundLhs->dataType);
         queryNode->addPropertyDataExpr(propertyName, std::move(boundRhs));
     }
     queryGraph.addQueryNode(queryNode);
@@ -633,8 +632,8 @@ static std::vector<TableCatalogEntry*> sortEntries(const table_catalog_entry_set
 
 std::vector<TableCatalogEntry*> Binder::bindNodeTableEntries(
     const std::vector<std::string>& tableNames) const {
-    auto transaction = transaction::Transaction::Get(*clientContext);
-    auto catalog = Catalog::Get(*clientContext);
+    auto transaction = clientContext->getTransaction();
+    auto catalog = clientContext->getCatalog();
     auto useInternal = clientContext->useInternalCatalogEntry();
     table_catalog_entry_set_t entrySet;
     if (tableNames.empty()) { // Rewrite as all node tables in database.
@@ -655,8 +654,8 @@ std::vector<TableCatalogEntry*> Binder::bindNodeTableEntries(
 }
 
 TableCatalogEntry* Binder::bindNodeTableEntry(const std::string& name) const {
-    auto transaction = transaction::Transaction::Get(*clientContext);
-    auto catalog = Catalog::Get(*clientContext);
+    auto transaction = clientContext->getTransaction();
+    auto catalog = clientContext->getCatalog();
     auto useInternal = clientContext->useInternalCatalogEntry();
     if (!catalog->containsTable(transaction, name, useInternal)) {
         throw BinderException(stringFormat("Table {} does not exist.", name));
@@ -666,8 +665,8 @@ TableCatalogEntry* Binder::bindNodeTableEntry(const std::string& name) const {
 
 std::vector<TableCatalogEntry*> Binder::bindRelGroupEntries(
     const std::vector<std::string>& tableNames) const {
-    auto transaction = transaction::Transaction::Get(*clientContext);
-    auto catalog = Catalog::Get(*clientContext);
+    auto transaction = clientContext->getTransaction();
+    auto catalog = clientContext->getCatalog();
     auto useInternal = clientContext->useInternalCatalogEntry();
     table_catalog_entry_set_t entrySet;
     if (tableNames.empty()) { // Rewrite as all rel groups in database.

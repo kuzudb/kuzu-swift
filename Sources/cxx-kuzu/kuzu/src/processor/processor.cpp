@@ -1,9 +1,7 @@
 #include "processor/processor.h"
 
 #include "common/task_system/progress_bar.h"
-#include "main/query_result.h"
 #include "processor/operator/sink.h"
-#include "processor/physical_plan.h"
 #include "processor/processor_task.h"
 
 using namespace kuzu::common;
@@ -11,7 +9,6 @@ using namespace kuzu::storage;
 
 namespace kuzu {
 namespace processor {
-
 #if defined(__APPLE__)
 QueryProcessor::QueryProcessor(uint64_t numThreads, uint32_t threadQos) {
     taskScheduler = std::make_unique<TaskScheduler>(numThreads, threadQos);
@@ -22,7 +19,7 @@ QueryProcessor::QueryProcessor(uint64_t numThreads) {
 }
 #endif
 
-std::unique_ptr<main::QueryResult> QueryProcessor::execute(PhysicalPlan* physicalPlan,
+std::shared_ptr<FactorizedTable> QueryProcessor::execute(PhysicalPlan* physicalPlan,
     ExecutionContext* context) {
     auto lastOperator = physicalPlan->lastOperator.get();
     // The root pipeline(task) consists of operators and its prevOperator only, because we
@@ -35,17 +32,16 @@ std::unique_ptr<main::QueryResult> QueryProcessor::execute(PhysicalPlan* physica
         decomposePlanIntoTask(sink->getChild(i), task.get(), context);
     }
     initTask(task.get());
-    auto progressBar = ProgressBar::Get(*context->clientContext);
-    progressBar->startProgress(context->queryID);
+    context->clientContext->getProgressBar()->startProgress(context->queryID);
     taskScheduler->scheduleTaskAndWaitOrError(task, context);
-    progressBar->endProgress(context->queryID);
-    return sink->getQueryResult();
+    context->clientContext->getProgressBar()->endProgress(context->queryID);
+    return sink->getResultFTable();
 }
 
 void QueryProcessor::decomposePlanIntoTask(PhysicalOperator* op, Task* task,
     ExecutionContext* context) {
     if (op->isSource()) {
-        ProgressBar::Get(*context->clientContext)->addPipeline();
+        context->clientContext->getProgressBar()->addPipeline();
     }
     if (op->isSink()) {
         auto childTask = std::make_unique<ProcessorTask>(ku_dynamic_cast<Sink*>(op), context);

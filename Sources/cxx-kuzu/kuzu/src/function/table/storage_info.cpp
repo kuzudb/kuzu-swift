@@ -8,7 +8,6 @@
 #include "function/table/bind_data.h"
 #include "function/table/bind_input.h"
 #include "function/table/simple_table_function.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
 #include "storage/storage_manager.h"
 #include "storage/table/list_chunk_data.h"
@@ -38,6 +37,40 @@ struct StorageInfoLocalState final : TableFuncLocalState {
     }
 };
 
+static void collectColumns(const Column* column, std::vector<const Column*>& result) {
+    result.push_back(column);
+    if (column->getNullColumn()) {
+        result.push_back(column->getNullColumn());
+    }
+    switch (column->getDataType().getPhysicalType()) {
+    case PhysicalTypeID::STRUCT: {
+        const auto structColumn = ku_dynamic_cast<const StructColumn*>(column);
+        const auto numChildren = StructType::getNumFields(structColumn->getDataType());
+        for (auto i = 0u; i < numChildren; i++) {
+            const auto childColumn = structColumn->getChild(i);
+            collectColumns(childColumn, result);
+        }
+    } break;
+    case PhysicalTypeID::STRING: {
+        const auto stringColumn = ku_dynamic_cast<const StringColumn*>(column);
+        auto& dictionary = stringColumn->getDictionary();
+        collectColumns(stringColumn->getIndexColumn(), result);
+        collectColumns(dictionary.getDataColumn(), result);
+        collectColumns(dictionary.getOffsetColumn(), result);
+    } break;
+    case PhysicalTypeID::ARRAY:
+    case PhysicalTypeID::LIST: {
+        const auto listColumn = ku_dynamic_cast<const ListColumn*>(column);
+        collectColumns(listColumn->getOffsetColumn(), result);
+        collectColumns(listColumn->getSizeColumn(), result);
+        collectColumns(listColumn->getDataColumn(), result);
+    } break;
+    default: {
+        // DO NOTHING.
+    }
+    }
+}
+
 struct StorageInfoBindData final : TableFuncBindData {
     TableCatalogEntry* tableEntry;
     const ClientContext* context;
@@ -54,7 +87,7 @@ struct StorageInfoBindData final : TableFuncBindData {
 
 static std::unique_ptr<TableFuncLocalState> initLocalState(
     const TableFuncInitLocalStateInput& input) {
-    return std::make_unique<StorageInfoLocalState>(MemoryManager::Get(*input.clientContext));
+    return std::make_unique<StorageInfoLocalState>(input.clientContext->getMemoryManager());
 }
 
 struct StorageInfoOutputData {
@@ -75,8 +108,7 @@ static void resetOutputIfNecessary(const StorageInfoLocalState* localState,
 }
 
 static void appendStorageInfoForChunkData(StorageInfoLocalState* localState, DataChunk& outputChunk,
-    StorageInfoOutputData& outputData, const Column& column, const ColumnChunkData& chunkData,
-    bool ignoreNull = false) {
+    StorageInfoOutputData& outputData, ColumnChunkData& chunkData, bool ignoreNull = false) {
     resetOutputIfNecessary(localState, outputChunk);
     auto vectorPos = outputChunk.state->getSelVector().getSelSize();
     auto residency = chunkData.getResidencyState();
@@ -98,7 +130,8 @@ static void appendStorageInfoForChunkData(StorageInfoLocalState* localState, Dat
     outputChunk.getValueVectorMutable(2).setValue<uint64_t>(vectorPos, outputData.chunkIdx);
     outputChunk.getValueVectorMutable(3).setValue(vectorPos,
         ResidencyStateUtils::toString(residency));
-    outputChunk.getValueVectorMutable(4).setValue(vectorPos, column.getName());
+    outputChunk.getValueVectorMutable(4).setValue(vectorPos,
+        outputData.columns[outputData.columnIdx++]->getName());
     outputChunk.getValueVectorMutable(5).setValue(vectorPos, columnType.toString());
     outputChunk.getValueVectorMutable(6).setValue<uint64_t>(vectorPos, metadata.getStartPageIdx());
     outputChunk.getValueVectorMutable(7).setValue<uint64_t>(vectorPos, metadata.getNumPages());
@@ -130,7 +163,7 @@ static void appendStorageInfoForChunkData(StorageInfoLocalState* localState, Dat
         // Types which don't support statistics.
         // types not supported by TypeUtils::visit can
         // also be ignored since we don't track statistics for them
-        [](int128_t) {}, [](struct_entry_t) {}, [](interval_t) {}, [](uint128_t) {});
+        [](int128_t) {}, [](struct_entry_t) {}, [](interval_t) {});
     outputChunk.getValueVectorMutable(11).setValue(vectorPos,
         metadata.compMeta.toString(physicalType));
     outputChunk.state->getSelVectorUnsafe().incrementSelSize();
@@ -138,40 +171,37 @@ static void appendStorageInfoForChunkData(StorageInfoLocalState* localState, Dat
         ignoreNull = true;
     }
     if (!ignoreNull && chunkData.hasNullData()) {
-        appendStorageInfoForChunkData(localState, outputChunk, outputData, *column.getNullColumn(),
+        appendStorageInfoForChunkData(localState, outputChunk, outputData,
             *chunkData.getNullData());
     }
     switch (columnType.getPhysicalType()) {
     case PhysicalTypeID::STRUCT: {
         auto& structChunk = chunkData.cast<StructChunkData>();
-        const auto& structColumn = ku_dynamic_cast<const StructColumn&>(column);
         auto numChildren = structChunk.getNumChildren();
         for (auto i = 0u; i < numChildren; i++) {
             appendStorageInfoForChunkData(localState, outputChunk, outputData,
-                *structColumn.getChild(i), structChunk.getChild(i));
+                *structChunk.getChild(i));
         }
     } break;
     case PhysicalTypeID::STRING: {
         auto& stringChunk = chunkData.cast<StringChunkData>();
         auto& dictionaryChunk = stringChunk.getDictionaryChunk();
-        const auto& stringColumn = ku_dynamic_cast<const StringColumn&>(column);
         appendStorageInfoForChunkData(localState, outputChunk, outputData,
-            *stringColumn.getIndexColumn(), *stringChunk.getIndexColumnChunk());
+            *stringChunk.getIndexColumnChunk());
         appendStorageInfoForChunkData(localState, outputChunk, outputData,
-            *stringColumn.getDictionary().getDataColumn(), *dictionaryChunk.getStringDataChunk());
+            *dictionaryChunk.getStringDataChunk());
         appendStorageInfoForChunkData(localState, outputChunk, outputData,
-            *stringColumn.getDictionary().getOffsetColumn(), *dictionaryChunk.getOffsetChunk());
+            *dictionaryChunk.getOffsetChunk());
     } break;
     case PhysicalTypeID::ARRAY:
     case PhysicalTypeID::LIST: {
         auto& listChunk = chunkData.cast<ListChunkData>();
-        const auto& listColumn = ku_dynamic_cast<const ListColumn&>(column);
         appendStorageInfoForChunkData(localState, outputChunk, outputData,
-            *listColumn.getOffsetColumn(), *listChunk.getOffsetColumnChunk());
+            *listChunk.getOffsetColumnChunk());
         appendStorageInfoForChunkData(localState, outputChunk, outputData,
-            *listColumn.getSizeColumn(), *listChunk.getSizeColumnChunk());
+            *listChunk.getSizeColumnChunk());
         appendStorageInfoForChunkData(localState, outputChunk, outputData,
-            *listColumn.getDataColumn(), *listChunk.getDataColumnChunk());
+            *listChunk.getDataColumnChunk());
     } break;
     default: {
         // DO NOTHING.
@@ -184,21 +214,18 @@ static void appendStorageInfoForChunkedGroup(StorageInfoLocalState* localState,
     auto numColumns = chunkedGroup->getNumColumns();
     outputData.columnIdx = 0;
     for (auto i = 0u; i < numColumns; i++) {
-        for (auto* segment : chunkedGroup->getColumnChunk(i).getSegments()) {
-            appendStorageInfoForChunkData(localState, outputChunk, outputData,
-                *outputData.columns[i], *segment);
-        }
+        resetOutputIfNecessary(localState, outputChunk);
+        appendStorageInfoForChunkData(localState, outputChunk, outputData,
+            chunkedGroup->getColumnChunk(i).getData());
     }
     if (chunkedGroup->getFormat() == NodeGroupDataFormat::CSR) {
         auto& chunkedCSRGroup = chunkedGroup->cast<ChunkedCSRNodeGroup>();
-        for (auto* segment : chunkedCSRGroup.getCSRHeader().offset->getSegments()) {
-            appendStorageInfoForChunkData(localState, outputChunk, outputData,
-                *outputData.columns[numColumns], *segment, true);
-        }
-        for (auto* segment : chunkedCSRGroup.getCSRHeader().length->getSegments()) {
-            appendStorageInfoForChunkData(localState, outputChunk, outputData,
-                *outputData.columns[numColumns + 1], *segment, true);
-        }
+        resetOutputIfNecessary(localState, outputChunk);
+        appendStorageInfoForChunkData(localState, outputChunk, outputData,
+            chunkedCSRGroup.getCSRHeader().offset->getData(), true);
+        resetOutputIfNecessary(localState, outputChunk);
+        appendStorageInfoForChunkData(localState, outputChunk, outputData,
+            chunkedCSRGroup.getCSRHeader().length->getData(), true);
     }
 }
 
@@ -225,7 +252,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
     auto& dataChunk = output.dataChunk;
     auto localState = ku_dynamic_cast<StorageInfoLocalState*>(input.localState);
     KU_ASSERT(dataChunk.state->getSelVector().isUnfiltered());
-    auto storageManager = StorageManager::Get(*input.context->clientContext);
+    auto storageManager = input.context->clientContext->getStorageManager();
     while (true) {
         if (localState->currChunkIdx < localState->dataChunkCollection->getNumChunks()) {
             // Copy from local state chunk.
@@ -257,7 +284,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
             auto& nodeTable = table->cast<NodeTable>();
             std::vector<const Column*> columns;
             for (auto columnID = 0u; columnID < nodeTable.getNumColumns(); columnID++) {
-                columns.push_back(&nodeTable.getColumn(columnID));
+                collectColumns(&nodeTable.getColumn(columnID), columns);
             }
             outputData.columns = std::move(columns);
             numNodeGroups = nodeTable.getNumNodeGroups();
@@ -276,7 +303,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
                     auto directedRelTableData = relTable.getDirectedTableData(direction);
                     std::vector<const Column*> columns;
                     for (auto columnID = 0u; columnID < relTable.getNumColumns(); columnID++) {
-                        columns.push_back(directedRelTableData->getColumn(columnID));
+                        collectColumns(directedRelTableData->getColumn(columnID), columns);
                     }
                     columns.push_back(directedRelTableData->getCSROffsetColumn());
                     columns.push_back(directedRelTableData->getCSRLengthColumn());
@@ -322,12 +349,11 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const ClientContext* context,
     columnTypes.emplace_back(LogicalType::STRING());
     columnTypes.emplace_back(LogicalType::STRING());
     auto tableName = input->getLiteralVal<std::string>(0);
-    auto catalog = Catalog::Get(*context);
-    if (!catalog->containsTable(transaction::Transaction::Get(*context), tableName)) {
+    auto catalog = context->getCatalog();
+    if (!catalog->containsTable(context->getTransaction(), tableName)) {
         throw BinderException{"Table " + tableName + " does not exist!"};
     }
-    auto tableEntry =
-        catalog->getTableCatalogEntry(transaction::Transaction::Get(*context), tableName);
+    auto tableEntry = catalog->getTableCatalogEntry(context->getTransaction(), tableName);
     columnNames = TableFunction::extractYieldVariables(columnNames, input->yieldVariables);
     auto columns = input->binder->createVariables(columnNames, columnTypes);
     return std::make_unique<StorageInfoBindData>(columns, tableEntry, context);

@@ -57,8 +57,6 @@ public:
     void scheduleTaskAndWaitOrError(const std::shared_ptr<Task>& task,
         processor::ExecutionContext* context, bool launchNewWorkerThread = false);
 
-    static TaskScheduler* Get(const main::ClientContext& context);
-
 private:
     // Functions to launch worker threads and for the worker threads to use to grab task from queue.
     void runWorkerThread();
@@ -90,8 +88,6 @@ public:
 
     void scheduleTaskAndWaitOrError(const std::shared_ptr<Task>& task,
         processor::ExecutionContext* context, bool launchNewWorkerThread = false);
-
-    static TaskScheduler* Get(const main::ClientContext& context);
 
 private:
     std::shared_ptr<ScheduledTask> pushTaskIntoQueue(const std::shared_ptr<Task>& task);

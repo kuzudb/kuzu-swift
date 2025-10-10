@@ -6,7 +6,6 @@
 #include "cypher_parser.h"
 #pragma GCC diagnostic pop
 
-#include "common/enums/conflict_action.h"
 #include "extension/transformer_extension.h"
 #include "parser/ddl/parsed_property_definition.h"
 #include "statement.h"
@@ -53,7 +52,6 @@ public:
     std::string transformSchemaName(CypherParser::OC_SchemaNameContext& ctx);
     static std::string transformSymbolicName(CypherParser::OC_SymbolicNameContext& ctx);
     static std::string transformStringLiteral(antlr4::tree::TerminalNode& stringLiteral);
-    static common::ConflictAction transformConflictAction(CypherParser::KU_IfNotExistsContext* ctx);
 
     // Transform copy statement.
     std::unique_ptr<Statement> transformCopyTo(CypherParser::KU_CopyTOContext& ctx);
@@ -116,6 +114,7 @@ public:
     std::vector<s_parsed_expr_pair> transformProperties(CypherParser::KU_PropertiesContext& ctx);
     std::vector<std::string> transformRelTypes(CypherParser::OC_RelationshipTypesContext& ctx);
     std::vector<std::string> transformNodeLabels(CypherParser::OC_NodeLabelsContext& ctx);
+    std::string transformNodeLabel(CypherParser::OC_NodeLabelContext& ctx);
     std::string transformLabelName(CypherParser::OC_LabelNameContext& ctx);
     std::string transformRelTypeName(CypherParser::OC_RelTypeNameContext& ctx);
 
@@ -185,8 +184,6 @@ public:
     std::unique_ptr<ParsedExpression> transformOcQuantifier(
         CypherParser::OC_QuantifierContext& ctx);
     std::unique_ptr<ParsedExpression> createPropertyExpression(
-        CypherParser::OC_PropertyKeyNameContext& ctx, std::unique_ptr<ParsedExpression> child);
-    std::unique_ptr<ParsedExpression> createPropertyExpression(
         CypherParser::OC_PropertyLookupContext& ctx, std::unique_ptr<ParsedExpression> child);
     std::unique_ptr<ParsedExpression> transformCaseExpression(
         CypherParser::OC_CaseExpressionContext& ctx);
@@ -218,10 +215,6 @@ public:
     std::unique_ptr<Statement> transformDropProperty(CypherParser::KU_AlterTableContext& ctx);
     std::unique_ptr<Statement> transformRenameProperty(CypherParser::KU_AlterTableContext& ctx);
     std::unique_ptr<Statement> transformCommentOn(CypherParser::KU_CommentOnContext& ctx);
-    std::string transformUnionType(CypherParser::KU_UnionTypeContext& ctx);
-    std::string transformStructType(CypherParser::KU_StructTypeContext& ctx);
-    std::string transformMapType(CypherParser::KU_MapTypeContext& ctx);
-    std::string transformDecimalType(CypherParser::KU_DecimalTypeContext& ctx);
     std::string transformDataType(CypherParser::KU_DataTypeContext& ctx);
     std::string getPKName(CypherParser::KU_CreateNodeTableContext& ctx);
     std::string transformPrimaryKey(CypherParser::KU_CreateNodeConstraintContext& ctx);

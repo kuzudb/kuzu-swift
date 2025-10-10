@@ -1,7 +1,6 @@
 #pragma once
 
 #include "catalog/catalog_entry/function_catalog_entry.h"
-#include "catalog/catalog_entry/scalar_macro_catalog_entry.h"
 #include "catalog/catalog_set.h"
 #include "common/cast.h"
 #include "function/function.h"
@@ -55,8 +54,6 @@ class KUZU_API Catalog {
 public:
     Catalog();
     virtual ~Catalog() = default;
-
-    static Catalog* Get(const main::ClientContext& context);
 
     // ----------------------------- Tables ----------------------------
 
@@ -171,10 +168,6 @@ public:
     std::vector<FunctionCatalogEntry*> getFunctionEntries(
         const transaction::Transaction* transaction) const;
 
-    // Get all macro entries.
-    std::vector<ScalarMacroCatalogEntry*> getMacroEntries(
-        const transaction::Transaction* transaction) const;
-
     // Add function with name.
     void addFunction(transaction::Transaction* transaction, CatalogEntryType entryType,
         std::string name, function::function_set functionSet, bool isInternal = false);
@@ -188,15 +181,9 @@ public:
         const std::string& macroName) const;
     void addScalarMacroFunction(transaction::Transaction* transaction, std::string name,
         std::unique_ptr<function::ScalarMacroFunction> macro);
-    ScalarMacroCatalogEntry* getScalarMacroCatalogEntry(const transaction::Transaction* transaction,
-        kuzu::common::oid_t MacroID) const;
-    void dropMacroEntry(transaction::Transaction* transaction, const kuzu::common::oid_t macroID);
-    void dropMacroEntry(transaction::Transaction* transaction,
-        const ScalarMacroCatalogEntry* entry);
     function::ScalarMacroFunction* getScalarMacroFunction(
         const transaction::Transaction* transaction, const std::string& name) const;
     std::vector<std::string> getMacroNames(const transaction::Transaction* transaction) const;
-    void dropMacro(transaction::Transaction* transaction, std::string& name);
 
     void incrementVersion() { version++; }
     uint64_t getVersion() const { return version; }
@@ -236,7 +223,6 @@ private:
     std::unique_ptr<CatalogSet> functions;
     std::unique_ptr<CatalogSet> types;
     std::unique_ptr<CatalogSet> indexes;
-    std::unique_ptr<CatalogSet> macros;
     std::unique_ptr<CatalogSet> internalTables;
     std::unique_ptr<CatalogSet> internalSequences;
     std::unique_ptr<CatalogSet> internalFunctions;

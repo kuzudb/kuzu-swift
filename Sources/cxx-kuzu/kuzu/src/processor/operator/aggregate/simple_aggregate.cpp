@@ -1,7 +1,6 @@
 #include "processor/operator/aggregate/simple_aggregate.h"
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -47,8 +46,7 @@ SimpleAggregateSharedState::SimpleAggregateSharedState(main::ClientContext* cont
           getNumPartitionsForParallelism(context)},
       hasDistinct{isAnyFunctionDistinct(aggregateFunctions)},
       globalPartitions{hasDistinct ? getNumPartitionsForParallelism(context) : 0},
-      aggregateOverflowBuffer{storage::MemoryManager::Get(*context)} {
-    auto mm = storage::MemoryManager::Get(*context);
+      aggregateOverflowBuffer{context->getMemoryManager()} {
     for (size_t funcIdx = 0; funcIdx < this->aggregateFunctions.size(); funcIdx++) {
         auto& aggregateFunction = this->aggregateFunctions[funcIdx];
         globalAggregateStates.push_back(aggregateFunction.createInitialNullAggregateState());
@@ -60,10 +58,10 @@ SimpleAggregateSharedState::SimpleAggregateSharedState(main::ClientContext* cont
             for (auto& partition : globalPartitions) {
                 std::vector<LogicalType> keyTypes(1);
                 keyTypes[0] = distinctKeyType.copy();
-                auto hashTable = std::make_unique<AggregateHashTable>(*mm, std::move(keyTypes),
-                    std::vector<LogicalType>{} /*payloadTypes*/, std::vector<AggregateFunction>{},
-                    std::vector<LogicalType>{}, 0, schema.copy());
-                auto queue = std::make_unique<HashTableQueue>(mm,
+                auto hashTable = std::make_unique<AggregateHashTable>(*context->getMemoryManager(),
+                    std::move(keyTypes), std::vector<LogicalType>{} /*payloadTypes*/,
+                    std::vector<AggregateFunction>{}, std::vector<LogicalType>{}, 0, schema.copy());
+                auto queue = std::make_unique<HashTableQueue>(context->getMemoryManager(),
                     AggregateHashTableUtils::getTableSchemaForKeys(std::vector<LogicalType>{},
                         aggInfos[funcIdx].distinctAggKeyType));
                 partition.distinctTables.emplace_back(Partition::DistinctData{std::move(hashTable),
@@ -198,7 +196,7 @@ void SimpleAggregate::initLocalStateInternal(ResultSet* resultSet, ExecutionCont
         localAggregateStates.push_back(func.createInitialNullAggregateState());
         std::unique_ptr<PartitioningAggregateHashTable> distinctHT;
         if (func.isDistinct) {
-            auto mm = storage::MemoryManager::Get(*context->clientContext);
+            auto mm = context->clientContext->getMemoryManager();
             std::vector<LogicalType> keyTypes;
             keyTypes.push_back(aggInfos[i].distinctAggKeyType.copy());
             distinctHT = std::make_unique<PartitioningAggregateHashTable>(
@@ -216,7 +214,7 @@ void SimpleAggregate::initLocalStateInternal(ResultSet* resultSet, ExecutionCont
 }
 
 void SimpleAggregate::executeInternal(ExecutionContext* context) {
-    InMemOverflowBuffer localOverflowBuffer(storage::MemoryManager::Get(*context->clientContext));
+    InMemOverflowBuffer localOverflowBuffer(context->clientContext->getMemoryManager());
     while (children[0]->getNextTuple(context)) {
         for (auto i = 0u; i < aggregateFunctions.size(); i++) {
             auto aggregateFunction = &aggregateFunctions[i];
@@ -268,7 +266,7 @@ void SimpleAggregateFinalize::finalizeInternal(ExecutionContext* /*context*/) {
 
 void SimpleAggregateFinalize::executeInternal(ExecutionContext* context) {
     KU_ASSERT(sharedState->isReadyForFinalization());
-    sharedState->finalizePartitions(storage::MemoryManager::Get(*context->clientContext), aggInfos);
+    sharedState->finalizePartitions(context->clientContext->getMemoryManager(), aggInfos);
 }
 
 } // namespace processor

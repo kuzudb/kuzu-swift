@@ -11,29 +11,31 @@ FTSInternalTableInfo::FTSInternalTableInfo(main::ClientContext* context, common:
     auto docTableName = FTSUtils::getDocsTableName(tableID, indexName);
     auto termsTableName = FTSUtils::getTermsTableName(tableID, indexName);
     auto appearsInTableName = FTSUtils::getAppearsInTableName(tableID, indexName);
-    auto storageManager = storage::StorageManager::Get(*context);
-    auto catalog = catalog::Catalog::Get(*context);
-    auto transaction = transaction::Transaction::Get(*context);
+    auto storageManager = context->getStorageManager();
+    auto catalog = context->getCatalog();
     table = storageManager->getTable(tableID)->ptrCast<storage::NodeTable>();
     stopWordsTable =
         storageManager
-            ->getTable(catalog->getTableCatalogEntry(transaction, stopWordsTableName)->getTableID())
+            ->getTable(catalog->getTableCatalogEntry(context->getTransaction(), stopWordsTableName)
+                           ->getTableID())
             ->ptrCast<storage::NodeTable>();
-    docTable =
-        storageManager
-            ->getTable(catalog->getTableCatalogEntry(transaction, docTableName)->getTableID())
-            ->ptrCast<storage::NodeTable>();
+    docTable = storageManager
+                   ->getTable(catalog->getTableCatalogEntry(context->getTransaction(), docTableName)
+                                  ->getTableID())
+                   ->ptrCast<storage::NodeTable>();
     termsTable =
         storageManager
-            ->getTable(catalog->getTableCatalogEntry(transaction, termsTableName)->getTableID())
+            ->getTable(catalog->getTableCatalogEntry(context->getTransaction(), termsTableName)
+                           ->getTableID())
             ->ptrCast<storage::NodeTable>();
     auto appearsInTableEntry =
-        catalog->getTableCatalogEntry(transaction, appearsInTableName)
+        catalog->getTableCatalogEntry(context->getTransaction(), appearsInTableName)
             ->constPtrCast<catalog::RelGroupCatalogEntry>()
             ->getRelEntryInfo(termsTable->getTableID(), docTable->getTableID());
     appearsInfoTable =
         storageManager->getTable(appearsInTableEntry->oid)->ptrCast<storage::RelTable>();
-    dfColumnID = catalog->getTableCatalogEntry(transaction, termsTableName)->getColumnID("df");
+    dfColumnID =
+        catalog->getTableCatalogEntry(context->getTransaction(), termsTableName)->getColumnID("df");
 }
 
 } // namespace fts_extension

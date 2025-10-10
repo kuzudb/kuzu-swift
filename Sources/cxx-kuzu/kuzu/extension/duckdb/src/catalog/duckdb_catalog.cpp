@@ -6,7 +6,6 @@
 #include "common/exception/runtime.h"
 #include "connector/duckdb_type_converter.h"
 #include "function/duckdb_scan.h"
-#include "storage/buffer_manager/memory_manager.h"
 #include "storage/duckdb_storage.h"
 
 namespace kuzu {
@@ -17,7 +16,7 @@ DuckDBCatalog::DuckDBCatalog(std::string dbPath, std::string catalogName,
     const binder::AttachOption& attachOption)
     : CatalogExtension{}, dbPath{std::move(dbPath)}, catalogName{std::move(catalogName)},
       defaultSchemaName{std::move(defaultSchemaName)},
-      tableNamesVector{common::LogicalType::STRING(), storage::MemoryManager::Get(*context)},
+      tableNamesVector{common::LogicalType::STRING(), context->getMemoryManager()},
       connector{connector} {
     skipUnsupportedTable = DuckDBStorageExtension::SKIP_UNSUPPORTED_TABLE_DEFAULT_VAL;
     auto& options = attachOption.options;

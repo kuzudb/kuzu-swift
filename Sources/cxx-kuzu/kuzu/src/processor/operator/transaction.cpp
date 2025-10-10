@@ -23,23 +23,22 @@ bool Transaction::getNextTuplesInternal(ExecutionContext* context) {
     }
     hasExecuted = true;
     auto clientContext = context->clientContext;
-    auto transactionContext = TransactionContext::Get(*clientContext);
-    validateActiveTransaction(*transactionContext);
+    validateActiveTransaction(*clientContext->getTransactionContext());
     switch (transactionAction) {
     case TransactionAction::BEGIN_READ: {
-        transactionContext->beginReadTransaction();
+        clientContext->getTransactionContext()->beginReadTransaction();
     } break;
     case TransactionAction::BEGIN_WRITE: {
-        transactionContext->beginWriteTransaction();
+        clientContext->getTransactionContext()->beginWriteTransaction();
     } break;
     case TransactionAction::COMMIT: {
-        transactionContext->commit();
+        clientContext->getTransactionContext()->commit();
     } break;
     case TransactionAction::ROLLBACK: {
-        transactionContext->rollback();
+        clientContext->getTransactionContext()->rollback();
     } break;
     case TransactionAction::CHECKPOINT: {
-        TransactionManager::Get(*clientContext)->checkpoint(*clientContext);
+        clientContext->getTransactionManagerUnsafe()->checkpoint(*clientContext);
     } break;
     default: {
         KU_UNREACHABLE;

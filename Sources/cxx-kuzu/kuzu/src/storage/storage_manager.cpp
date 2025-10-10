@@ -3,11 +3,8 @@
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/file_system/virtual_file_system.h"
-#include "common/random_engine.h"
 #include "common/serializer/in_mem_file_writer.h"
-#include "main/attached_database.h"
 #include "main/client_context.h"
-#include "main/database.h"
 #include "main/db_config.h"
 #include "storage/buffer_manager/buffer_manager.h"
 #include "storage/buffer_manager/memory_manager.h"
@@ -24,11 +21,11 @@ using namespace kuzu::transaction;
 namespace kuzu {
 namespace storage {
 
-StorageManager::StorageManager(const std::string& databasePath, bool readOnly, bool enableChecksums,
+StorageManager::StorageManager(const std::string& databasePath, bool readOnly,
     MemoryManager& memoryManager, bool enableCompression, VirtualFileSystem* vfs)
     : databasePath{databasePath}, readOnly{readOnly}, dataFH{nullptr}, memoryManager{memoryManager},
       enableCompression{enableCompression} {
-    wal = std::make_unique<WAL>(databasePath, readOnly, enableChecksums, vfs);
+    wal = std::make_unique<WAL>(databasePath, readOnly, vfs);
     shadowFile =
         std::make_unique<ShadowFile>(*memoryManager.getBufferManager(), vfs, this->databasePath);
     inMemory = main::DBConfig::isDBPathInMemory(databasePath);
@@ -51,11 +48,10 @@ void StorageManager::initDataFileHandle(VirtualFileSystem* vfs, main::ClientCont
                 // Reserve the first page for the database header.
                 dataFH->getPageManager()->allocatePage();
                 // Write a dummy database header page.
-                const auto* initialHeader = getOrInitDatabaseHeader(*context);
-                auto headerWriter =
-                    std::make_shared<InMemFileWriter>(*MemoryManager::Get(*context));
+                static const auto defaultHeader = DatabaseHeader{{}, {}};
+                auto headerWriter = std::make_shared<InMemFileWriter>(*context->getMemoryManager());
                 Serializer headerSerializer(headerWriter);
-                initialHeader->serialize(headerSerializer);
+                defaultHeader.serialize(headerSerializer);
                 dataFH->getFileInfo()->writeFile(headerWriter->getPage(0).data(), KUZU_PAGE_SIZE,
                     StorageConstants::DB_HEADER_PAGE_IDX);
                 dataFH->getFileInfo()->syncFile();
@@ -70,10 +66,13 @@ Table* StorageManager::getTable(table_id_t tableID) {
     return tables.at(tableID).get();
 }
 
-void StorageManager::recover(main::ClientContext& clientContext, bool throwOnWalReplayFailure,
-    bool enableChecksums) {
-    const auto walReplayer = std::make_unique<WALReplayer>(clientContext);
-    walReplayer->replay(throwOnWalReplayFailure, enableChecksums);
+void StorageManager::recover(main::ClientContext& clientContext) {
+    try {
+        const auto walReplayer = std::make_unique<WALReplayer>(clientContext);
+        walReplayer->replay();
+    } catch (std::exception&) {
+        throw;
+    }
 }
 
 void StorageManager::createNodeTable(NodeTableCatalogEntry* entry) {
@@ -157,7 +156,7 @@ void StorageManager::reclaimDroppedTables(const Catalog& catalog) {
 
 bool StorageManager::checkpoint(main::ClientContext* context, PageAllocator& pageAllocator) {
     bool hasChanges = false;
-    const auto catalog = Catalog::Get(*context);
+    const auto catalog = context->getCatalog();
     const auto nodeTableEntries = catalog->getNodeTableEntries(&DUMMY_CHECKPOINT_TRANSACTION);
     const auto relGroupEntries = catalog->getRelGroupEntries(&DUMMY_CHECKPOINT_TRANSACTION);
 
@@ -283,34 +282,6 @@ void StorageManager::deserialize(main::ClientContext* context, const Catalog* ca
                 info.nodePair.dstTableID, this, &memoryManager);
             tables.at(info.oid)->deserialize(context, this, deSer);
         }
-    }
-}
-
-common::ku_uuid_t StorageManager::getOrInitDatabaseID(const main::ClientContext& clientContext) {
-    return getOrInitDatabaseHeader(clientContext)->databaseID;
-}
-
-const storage::DatabaseHeader* StorageManager::getOrInitDatabaseHeader(
-    const main::ClientContext& clientContext) {
-    if (databaseHeader == nullptr) {
-        // We should only create the database header if a persistent one doesn't exist
-        KU_ASSERT(std::nullopt == DatabaseHeader::readDatabaseHeader(*dataFH->getFileInfo()));
-        databaseHeader = std::make_unique<DatabaseHeader>(
-            DatabaseHeader::createInitialHeader(RandomEngine::Get(clientContext)));
-    }
-    return databaseHeader.get();
-}
-
-void StorageManager::setDatabaseHeader(std::unique_ptr<storage::DatabaseHeader> header) {
-    KU_ASSERT(!databaseHeader || header->databaseID.value == databaseHeader->databaseID.value);
-    databaseHeader = std::move(header);
-}
-
-StorageManager* StorageManager::Get(const main::ClientContext& context) {
-    if (context.getAttachedDatabase()) {
-        return context.getAttachedDatabase()->getStorageManager();
-    } else {
-        return context.getDatabase()->getStorageManager();
     }
 }
 

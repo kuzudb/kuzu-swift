@@ -1,5 +1,7 @@
 #pragma once
 
+#include "binder/expression/expression.h"
+#include "function/config/max_iterations_config.h"
 #include "function/gds/gds.h"
 
 namespace kuzu {

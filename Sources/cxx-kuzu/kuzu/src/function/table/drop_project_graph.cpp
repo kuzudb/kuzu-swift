@@ -1,7 +1,5 @@
 #include "function/table/bind_data.h"
-#include "function/table/bind_input.h"
 #include "function/table/standalone_call_function.h"
-#include "function/table/table_function.h"
 #include "graph/graph_entry_set.h"
 #include "processor/execution_context.h"
 
@@ -23,9 +21,9 @@ struct DropProjectedGraphBindData final : TableFuncBindData {
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     const auto bindData = ku_dynamic_cast<DropProjectedGraphBindData*>(input.bindData);
-    auto graphEntrySet = graph::GraphEntrySet::Get(*input.context->clientContext);
-    graphEntrySet->validateGraphExist(bindData->graphName);
-    graphEntrySet->dropGraph(bindData->graphName);
+    auto& graphEntrySet = input.context->clientContext->getGraphEntrySetUnsafe();
+    graphEntrySet.validateGraphExist(bindData->graphName);
+    graphEntrySet.dropGraph(bindData->graphName);
     return 0;
 }
 

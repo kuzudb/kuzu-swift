@@ -122,15 +122,8 @@ public:
         const std::vector<common::column_id_t>& columnIDs, ChunkedNodeGroup& chunkedGroup,
         common::row_idx_t startRowIdx, common::row_idx_t numRowsToAppend);
     common::row_idx_t append(const transaction::Transaction* transaction,
-        const std::vector<common::column_id_t>& columnIDs, InMemChunkedNodeGroup& chunkedGroup,
-        common::row_idx_t startRowIdx, common::row_idx_t numRowsToAppend);
-    common::row_idx_t append(const transaction::Transaction* transaction,
         const std::vector<common::column_id_t>& columnIDs,
-        std::span<const ColumnChunkData*> chunkedGroup, common::row_idx_t startRowIdx,
-        common::row_idx_t numRowsToAppend);
-    common::row_idx_t append(const transaction::Transaction* transaction,
-        const std::vector<common::column_id_t>& columnIDs,
-        std::span<const ColumnChunk*> chunkedGroup, common::row_idx_t startRowIdx,
+        const std::vector<ColumnChunk*>& chunkedGroup, common::row_idx_t startRowIdx,
         common::row_idx_t numRowsToAppend);
     void append(const transaction::Transaction* transaction,
         const std::vector<common::ValueVector*>& vectors, common::row_idx_t startRowIdx,
@@ -234,7 +227,7 @@ private:
     template<ResidencyState SCAN_RESIDENCY_STATE>
     common::row_idx_t getNumResidentRows(const common::UniqLock& lock) const;
     template<ResidencyState SCAN_RESIDENCY_STATE>
-    std::unique_ptr<InMemChunkedNodeGroup> scanAllInsertedAndVersions(MemoryManager& memoryManager,
+    std::unique_ptr<ChunkedNodeGroup> scanAllInsertedAndVersions(MemoryManager& memoryManager,
         const common::UniqLock& lock, const std::vector<common::column_id_t>& columnIDs,
         const std::vector<const Column*>& columns) const;
 
@@ -244,10 +237,6 @@ private:
 
     common::row_idx_t getStartRowIdxInGroupNoLock() const;
     common::row_idx_t getStartRowIdxInGroup(const common::UniqLock& lock) const;
-
-    void scanCommittedUpdatesForColumn(std::vector<ChunkCheckpointState>& chunkCheckpointStates,
-        MemoryManager& memoryManager, const common::UniqLock& lock, common::column_id_t columnID,
-        const Column* column) const;
 
 protected:
     MemoryManager& mm;

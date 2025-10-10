@@ -22,11 +22,11 @@ StorageDriver::StorageDriver(Database* database) {
 StorageDriver::~StorageDriver() = default;
 
 static TableCatalogEntry* getEntry(const ClientContext& context, const std::string& tableName) {
-    return Catalog::Get(context)->getTableCatalogEntry(Transaction::Get(context), tableName);
+    return context.getCatalog()->getTableCatalogEntry(context.getTransaction(), tableName);
 }
 
 static Table* getTable(const ClientContext& context, const std::string& tableName) {
-    return StorageManager::Get(context)->getTable(getEntry(context, tableName)->getTableID());
+    return context.getStorageManager()->getTable(getEntry(context, tableName)->getTableID());
 }
 
 static bool validateNumericalType(const LogicalType& type) {
@@ -109,16 +109,16 @@ void StorageDriver::scan(const std::string& nodeName, const std::string& propert
 
 uint64_t StorageDriver::getNumNodes(const std::string& nodeName) const {
     clientContext->query("BEGIN TRANSACTION READ ONLY;");
-    auto transaction = Transaction::Get(*clientContext);
-    auto result = getTable(*clientContext, nodeName)->getNumTotalRows(transaction);
+    auto result =
+        getTable(*clientContext, nodeName)->getNumTotalRows(clientContext->getTransaction());
     clientContext->query("COMMIT");
     return result;
 }
 
 uint64_t StorageDriver::getNumRels(const std::string& relName) const {
     clientContext->query("BEGIN TRANSACTION READ ONLY;");
-    auto transaction = Transaction::Get(*clientContext);
-    auto result = getTable(*clientContext, relName)->getNumTotalRows(transaction);
+    auto result =
+        getTable(*clientContext, relName)->getNumTotalRows(clientContext->getTransaction());
     clientContext->query("COMMIT");
     return result;
 }
@@ -131,13 +131,12 @@ void StorageDriver::scanColumn(Table* table, column_id_t columnID, const offset_
     // Create value vectors
     auto idVector = std::make_unique<ValueVector>(LogicalType::INTERNAL_ID());
     auto columnVector = std::make_unique<ValueVector>(column->getDataType().copy(),
-        MemoryManager::Get(*clientContext));
+        clientContext->getMemoryManager());
     auto vectorState = DataChunkState::getSingleValueDataChunkState();
     idVector->state = vectorState;
     columnVector->state = vectorState;
     auto scanState = std::make_unique<NodeTableScanState>(idVector.get(),
         std::vector{columnVector.get()}, vectorState);
-    auto transaction = Transaction::Get(*clientContext);
     switch (auto physicalType = column->getDataType().getPhysicalType()) {
     case PhysicalTypeID::BOOL:
     case PhysicalTypeID::INT128:
@@ -153,7 +152,8 @@ void StorageDriver::scanColumn(Table* table, column_id_t columnID, const offset_
     case PhysicalTypeID::FLOAT: {
         for (auto i = 0u; i < size; ++i) {
             idVector->setValue(0, nodeID_t{offsets[i], table->getTableID()});
-            [[maybe_unused]] auto res = nodeTable->lookup(transaction, *scanState);
+            [[maybe_unused]] auto res =
+                nodeTable->lookup(clientContext->getTransaction(), *scanState);
             memcpy(result, columnVector->getData(),
                 PhysicalTypeUtils::getFixedTypeSize(physicalType));
         }
@@ -165,7 +165,8 @@ void StorageDriver::scanColumn(Table* table, column_id_t columnID, const offset_
         auto arraySize = elementSize * numElements;
         for (auto i = 0u; i < size; ++i) {
             idVector->setValue(0, nodeID_t{offsets[i], table->getTableID()});
-            [[maybe_unused]] auto res = nodeTable->lookup(transaction, *scanState);
+            [[maybe_unused]] auto res =
+                nodeTable->lookup(clientContext->getTransaction(), *scanState);
             auto dataVector = ListVector::getDataVector(columnVector.get());
             memcpy(result, dataVector->getData() + i * arraySize, arraySize);
         }

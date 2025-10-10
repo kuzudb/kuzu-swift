@@ -11,7 +11,6 @@
 #include "parser/parser.h"
 #include "parser/port_db.h"
 #include "parser/query/regular_query.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::binder;
 using namespace kuzu::common;
@@ -69,7 +68,7 @@ static std::string getExportRelTableDataQuery(const TableCatalogEntry& relGroupE
 
 static std::vector<ExportedTableData> getExportInfo(const Catalog& catalog,
     main::ClientContext* context, Binder* binder, FileTypeInfo& fileTypeInfo) {
-    auto transaction = Transaction::Get(*context);
+    auto transaction = context->getTransaction();
     std::vector<ExportedTableData> exportData;
     for (auto entry : catalog.getNodeTableEntries(transaction, false /*useInternal*/)) {
         ExportedTableData tableData;
@@ -158,9 +157,9 @@ std::unique_ptr<BoundStatement> Binder::bindExportDatabaseClause(const Statement
         throw BinderException{"Only export to csv can have options."};
     }
     auto exportData =
-        getExportInfo(*Catalog::Get(*clientContext), clientContext, this, fileTypeInfo);
-    auto boundFilePath = VirtualFileSystem::GetUnsafe(*clientContext)
-                             ->expandPath(clientContext, exportDB.getFilePath());
+        getExportInfo(*clientContext->getCatalog(), clientContext, this, fileTypeInfo);
+    auto boundFilePath =
+        clientContext->getVFSUnsafe()->expandPath(clientContext, exportDB.getFilePath());
     return std::make_unique<BoundExportDatabase>(boundFilePath, fileTypeInfo, std::move(exportData),
         std::move(parsedOptions), exportSchemaOnly);
 }

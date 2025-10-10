@@ -44,12 +44,12 @@ FileHandle* Spiller::getDataFH() const {
     return nullptr;
 }
 
-void Spiller::addUnusedChunk(InMemChunkedNodeGroup* nodeGroup) {
+void Spiller::addUnusedChunk(ChunkedNodeGroup* nodeGroup) {
     std::unique_lock lock(partitionerGroupsMtx);
     fullPartitionerGroups.insert(nodeGroup);
 }
 
-void Spiller::clearUnusedChunk(InMemChunkedNodeGroup* nodeGroup) {
+void Spiller::clearUnusedChunk(ChunkedNodeGroup* nodeGroup) {
     std::unique_lock lock(partitionerGroupsMtx);
     auto entry = fullPartitionerGroups.find(nodeGroup);
     if (entry != fullPartitionerGroups.end()) {
@@ -88,7 +88,7 @@ void Spiller::loadFromDisk(ColumnChunkData& chunk) const {
 }
 
 SpillResult Spiller::claimNextGroup() {
-    InMemChunkedNodeGroup* groupToFlush = nullptr;
+    ChunkedNodeGroup* groupToFlush = nullptr;
     {
         std::unique_lock lock(partitionerGroupsMtx);
         if (!fullPartitionerGroups.empty()) {

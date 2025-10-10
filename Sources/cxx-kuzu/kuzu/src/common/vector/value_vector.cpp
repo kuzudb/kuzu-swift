@@ -7,7 +7,6 @@
 #include "common/serializer/deserializer.h"
 #include "common/serializer/serializer.h"
 #include "common/system_config.h"
-#include "common/types/uint128_t.h"
 #include "common/types/value/nested.h"
 #include "common/types/value/value.h"
 #include "common/vector/auxiliary_buffer.h"
@@ -59,24 +58,25 @@ uint32_t ValueVector::countNonNull() const {
 bool ValueVector::discardNull(ValueVector& vector) {
     if (vector.hasNoNullsGuarantee()) {
         return true;
-    }
-    auto selectedPos = 0u;
-    if (vector.state->getSelVector().isUnfiltered()) {
-        auto buffer = vector.state->getSelVectorUnsafe().getMutableBuffer();
-        for (auto i = 0u; i < vector.state->getSelVector().getSelSize(); i++) {
-            buffer[selectedPos] = i;
-            selectedPos += !vector.isNull(i);
-        }
-        vector.state->getSelVectorUnsafe().setToFiltered();
     } else {
-        for (auto i = 0u; i < vector.state->getSelVector().getSelSize(); i++) {
-            auto pos = vector.state->getSelVector()[i];
-            vector.state->getSelVectorUnsafe()[selectedPos] = pos;
-            selectedPos += !vector.isNull(pos);
+        auto selectedPos = 0u;
+        if (vector.state->getSelVector().isUnfiltered()) {
+            auto buffer = vector.state->getSelVectorUnsafe().getMutableBuffer();
+            for (auto i = 0u; i < vector.state->getSelVector().getSelSize(); i++) {
+                buffer[selectedPos] = i;
+                selectedPos += !vector.isNull(i);
+            }
+            vector.state->getSelVectorUnsafe().setToFiltered();
+        } else {
+            for (auto i = 0u; i < vector.state->getSelVector().getSelSize(); i++) {
+                auto pos = vector.state->getSelVector()[i];
+                vector.state->getSelVectorUnsafe()[i] = pos;
+                selectedPos += !vector.isNull(pos);
+            }
         }
+        vector.state->getSelVectorUnsafe().setSelSize(selectedPos);
+        return selectedPos > 0;
     }
-    vector.state->getSelVectorUnsafe().setSelSize(selectedPos);
-    return selectedPos > 0;
 }
 
 bool ValueVector::setNullFromBits(const uint64_t* srcNullEntries, uint64_t srcOffset,
@@ -232,9 +232,6 @@ void ValueVector::copyFromValue(uint64_t pos, const Value& value) {
     case PhysicalTypeID::INTERNAL_ID: {
         memcpy(dstValue, &value.val.internalIDVal, numBytesPerValue);
     } break;
-    case PhysicalTypeID::UINT128: {
-        memcpy(dstValue, &value.val.uint128Val, numBytesPerValue);
-    } break;
     default: {
         KU_UNREACHABLE;
     }
@@ -315,9 +312,6 @@ std::unique_ptr<Value> ValueVector::getAsValue(uint64_t pos) const {
     } break;
     case PhysicalTypeID::INTERNAL_ID: {
         value->val.internalIDVal = getValue<internalID_t>(pos);
-    } break;
-    case PhysicalTypeID::UINT128: {
-        value->val.uint128Val = getValue<uint128_t>(pos);
     } break;
     default: {
         KU_UNREACHABLE;
@@ -433,7 +427,6 @@ template KUZU_API void ValueVector::setValue<uint32_t>(uint32_t pos, uint32_t va
 template KUZU_API void ValueVector::setValue<uint16_t>(uint32_t pos, uint16_t val);
 template KUZU_API void ValueVector::setValue<uint8_t>(uint32_t pos, uint8_t val);
 template KUZU_API void ValueVector::setValue<int128_t>(uint32_t pos, int128_t val);
-template KUZU_API void ValueVector::setValue<uint128_t>(uint32_t pos, uint128_t val);
 template KUZU_API void ValueVector::setValue<double>(uint32_t pos, double val);
 template KUZU_API void ValueVector::setValue<float>(uint32_t pos, float val);
 template KUZU_API void ValueVector::setValue<date_t>(uint32_t pos, date_t val);

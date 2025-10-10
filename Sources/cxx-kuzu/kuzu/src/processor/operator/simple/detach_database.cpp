@@ -1,10 +1,8 @@
 #include "processor/operator/simple/detach_database.h"
 
-#include "main/client_context.h"
 #include "main/database.h"
 #include "main/database_manager.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 namespace kuzu {
 namespace processor {
@@ -15,13 +13,13 @@ std::string DetatchDatabasePrintInfo::toString() const {
 
 void DetachDatabase::executeInternal(ExecutionContext* context) {
     auto clientContext = context->clientContext;
-    auto dbManager = main::DatabaseManager::Get(*clientContext);
+    auto dbManager = clientContext->getDatabaseManager();
     if (dbManager->hasAttachedDatabase(dbName) &&
         dbManager->getAttachedDatabase(dbName)->getDBType() == common::ATTACHED_KUZU_DB_TYPE) {
         clientContext->setDefaultDatabase(nullptr /* defaultDatabase */);
     }
     dbManager->detachDatabase(dbName);
-    appendMessage("Detached database successfully.", storage::MemoryManager::Get(*clientContext));
+    appendMessage("Detached database successfully.", clientContext->getMemoryManager());
 }
 
 } // namespace processor

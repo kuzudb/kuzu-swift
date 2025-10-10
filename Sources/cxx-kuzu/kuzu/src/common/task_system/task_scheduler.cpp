@@ -1,14 +1,11 @@
 #include "common/task_system/task_scheduler.h"
-
-#include "main/client_context.h"
-#include "main/database.h"
-#include "processor/processor.h"
-
 #if defined(__APPLE__)
 #include <pthread.h>
 
 #include <pthread/qos.h>
 #endif
+
+using namespace kuzu::common;
 
 namespace kuzu {
 namespace common {
@@ -221,10 +218,5 @@ void TaskScheduler::runTask(Task* task) {
         task->deRegisterThreadAndFinalizeTask();
     }
 }
-
-TaskScheduler* TaskScheduler::Get(const main::ClientContext& context) {
-    return context.getDatabase()->getQueryProcessor()->getTaskScheduler();
-}
-
 } // namespace common
 } // namespace kuzu

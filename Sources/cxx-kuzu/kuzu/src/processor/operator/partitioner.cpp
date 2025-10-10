@@ -5,7 +5,6 @@
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
 #include "storage/table/rel_table.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::common;
 using namespace kuzu::storage;
@@ -73,9 +72,9 @@ void Partitioner::initGlobalStateInternal(ExecutionContext* context) {
     const auto clientContext = context->clientContext;
     // If initialization is required
     if (!sharedState->srcNodeTable) {
-        auto storageManager = StorageManager::Get(*clientContext);
-        auto catalog = catalog::Catalog::Get(*clientContext);
-        auto transaction = transaction::Transaction::Get(*clientContext);
+        auto storageManager = clientContext->getStorageManager();
+        auto catalog = clientContext->getCatalog();
+        auto transaction = clientContext->getTransaction();
         auto fromTableID =
             catalog->getTableCatalogEntry(transaction, dataInfo.fromTableName)->getTableID();
         auto toTableID =
@@ -143,7 +142,7 @@ void Partitioner::executeInternal(ExecutionContext* context) {
             partitionIdxes->state = keyVector->state;
             partitionInfo.partitionerFunc(keyVector.get(), partitionIdxes.get());
             auto chunkToCopyFrom = constructDataChunk(keyVector->state);
-            copyDataToPartitions(*MemoryManager::Get(*context->clientContext), partitioningIdx,
+            copyDataToPartitions(*context->clientContext->getMemoryManager(), partitioningIdx,
                 chunkToCopyFrom);
         }
     }

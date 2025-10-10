@@ -4,6 +4,7 @@
 
 #include "common/exception/binder.h"
 #include "common/types/types.h"
+#include "function/gds/gds.h"
 
 namespace kuzu {
 namespace function {

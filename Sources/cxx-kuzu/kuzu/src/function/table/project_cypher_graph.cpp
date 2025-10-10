@@ -1,6 +1,5 @@
 #include "binder/binder.h"
 #include "function/table/bind_data.h"
-#include "function/table/bind_input.h"
 #include "function/table/standalone_call_function.h"
 #include "function/table/table_function.h"
 #include "graph/graph_entry_set.h"
@@ -27,15 +26,15 @@ struct ProjectGraphCypherBindData final : TableFuncBindData {
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     const auto bindData = ku_dynamic_cast<ProjectGraphCypherBindData*>(input.bindData);
-    auto graphEntrySet = GraphEntrySet::Get(*input.context->clientContext);
-    graphEntrySet->validateGraphNotExist(bindData->graphName);
+    auto& graphEntrySet = input.context->clientContext->getGraphEntrySetUnsafe();
+    graphEntrySet.validateGraphNotExist(bindData->graphName);
     // bind graph entry to check if input is valid or not. Ignore bind result.
     auto parsedStatements = parser::Parser::parseQuery(bindData->cypherQuery);
     KU_ASSERT(parsedStatements.size() == 1);
     auto binder = binder::Binder(input.context->clientContext);
     binder.bind(*parsedStatements[0]);
     auto entry = std::make_unique<ParsedCypherGraphEntry>(bindData->cypherQuery);
-    graphEntrySet->addGraph(bindData->graphName, std::move(entry));
+    graphEntrySet.addGraph(bindData->graphName, std::move(entry));
     return 0;
 }
 

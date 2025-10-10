@@ -113,8 +113,6 @@ public:
         }
     }
 
-    Writer* getWriter() const { return writer.get(); }
-
 private:
     std::shared_ptr<Writer> writer;
 };

@@ -5,7 +5,8 @@
 #include "binder/ddl/bound_create_table_info.h"
 #include "catalog/catalog.h"
 #include "common/serializer/deserializer.h"
-#include "transaction/transaction.h"
+#include "main/client_context.h"
+#include <common/exception/binder.h>
 
 using namespace kuzu::common;
 using namespace kuzu::main;
@@ -32,7 +33,7 @@ void RelGroupCatalogEntry::dropFromToConnection(table_id_t srcTableID, table_id_
 
 void RelTableCatalogInfo::serialize(Serializer& ser) const {
     ser.writeDebuggingInfo("nodePair");
-    nodePair.serialize(ser);
+    ser.serializeValue(nodePair);
     ser.writeDebuggingInfo("oid");
     ser.serializeValue(oid);
 }
@@ -131,8 +132,8 @@ static std::string getFromToStr(const NodeTableIDPair& pair, const Catalog* cata
 
 std::string RelGroupCatalogEntry::toCypher(const ToCypherInfo& info) const {
     auto relGroupInfo = info.constCast<RelGroupToCypherInfo>();
-    auto catalog = Catalog::Get(*relGroupInfo.context);
-    auto transaction = transaction::Transaction::Get(*relGroupInfo.context);
+    auto catalog = relGroupInfo.context->getCatalog();
+    auto transaction = relGroupInfo.context->getTransaction();
     std::stringstream ss;
     ss << stringFormat("CREATE REL TABLE `{}` (", getName());
     KU_ASSERT(!relTableInfos.empty());

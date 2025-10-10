@@ -2,8 +2,6 @@
 
 #include <random>
 
-#include "main/client_context.h"
-
 namespace kuzu {
 namespace common {
 
@@ -15,11 +13,6 @@ RandomEngine::RandomEngine(uint64_t seed, uint64_t stream) : randomState(RandomS
     randomState.pcg.seed(seed, stream);
 }
 
-void RandomEngine::setSeed(uint64_t seed) {
-    std::unique_lock xLck{mtx};
-    randomState.pcg.seed(seed);
-}
-
 uint32_t RandomEngine::nextRandomInteger() {
     std::unique_lock xLck{mtx};
     return randomState.pcg();
@@ -28,10 +21,6 @@ uint32_t RandomEngine::nextRandomInteger() {
 uint32_t RandomEngine::nextRandomInteger(uint32_t upper) {
     std::unique_lock xLck{mtx};
     return randomState.pcg(upper);
-}
-
-RandomEngine* RandomEngine::Get(const main::ClientContext& context) {
-    return context.randomEngine.get();
 }
 
 } // namespace common

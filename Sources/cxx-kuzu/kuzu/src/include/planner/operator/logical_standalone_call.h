@@ -1,25 +1,22 @@
 #pragma once
 
+#include "main/db_config.h"
 #include "planner/operator/logical_operator.h"
 
 namespace kuzu {
-namespace main {
-struct Option;
-}
 namespace planner {
 
 class LogicalStandaloneCall final : public LogicalOperator {
-    static constexpr LogicalOperatorType type_ = LogicalOperatorType::STANDALONE_CALL;
-
 public:
     LogicalStandaloneCall(const main::Option* option,
         std::shared_ptr<binder::Expression> optionValue)
-        : LogicalOperator{type_}, option{option}, optionValue{std::move(optionValue)} {}
+        : LogicalOperator{LogicalOperatorType::STANDALONE_CALL}, option{option},
+          optionValue{std::move(optionValue)} {}
 
     const main::Option* getOption() const { return option; }
     std::shared_ptr<binder::Expression> getOptionValue() const { return optionValue; }
 
-    std::string getExpressionsForPrinting() const override;
+    std::string getExpressionsForPrinting() const override { return option->name; }
 
     void computeFlatSchema() override { createEmptySchema(); }
 
