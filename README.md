@@ -23,7 +23,7 @@ Alternatively, you can add the package through Xcode:
 
 ## Docs
 
-The API documentation for kuzu-swift is [available here](https://api-docs.kuzudb.com/swift/documentation/kuzu/).
+The API documentation for kuzu-swift is [available here](https://kuzudb.github.io/api-docs/swift/documentation/kuzu/).
 
 ## Examples
 
