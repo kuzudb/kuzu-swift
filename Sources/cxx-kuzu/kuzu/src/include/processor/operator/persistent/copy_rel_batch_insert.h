@@ -5,7 +5,7 @@
 namespace kuzu {
 namespace storage {
 class CSRNodeGroup;
-struct InMemChunkedCSRHeader;
+struct ChunkedCSRHeader;
 } // namespace storage
 
 namespace processor {
@@ -25,21 +25,21 @@ public:
         common::node_group_idx_t nodeGroupIdx) override;
 
     void populateCSRLengths(RelBatchInsertExecutionState& executionState,
-        storage::InMemChunkedCSRHeader& csrHeader, common::offset_t numNodes,
+        storage::ChunkedCSRHeader& csrHeader, common::offset_t numNodes,
         const RelBatchInsertInfo& relInfo) override;
 
     void finalizeStartCSROffsets(RelBatchInsertExecutionState& executionState,
-        storage::InMemChunkedCSRHeader& csrHeader, const RelBatchInsertInfo& relInfo) override;
+        storage::ChunkedCSRHeader& csrHeader, const RelBatchInsertInfo& relInfo) override;
 
     void writeToTable(RelBatchInsertExecutionState& executionState,
-        const storage::InMemChunkedCSRHeader& csrHeader, const RelBatchInsertLocalState& localState,
+        const storage::ChunkedCSRHeader& csrHeader, const RelBatchInsertLocalState& localState,
         BatchInsertSharedState& sharedState, const RelBatchInsertInfo& relInfo) override;
 
 private:
     static void setRowIdxFromCSROffsets(storage::ColumnChunkData& rowIdxChunk,
         storage::ColumnChunkData& csrOffsetChunk);
 
-    static void populateCSRLengthsInternal(const storage::InMemChunkedCSRHeader& csrHeader,
+    static void populateCSRLengthsInternal(const storage::ChunkedCSRHeader& csrHeader,
         common::offset_t numNodes, storage::InMemChunkedNodeGroupCollection& partition,
         common::column_id_t boundNodeOffsetColumn);
 };

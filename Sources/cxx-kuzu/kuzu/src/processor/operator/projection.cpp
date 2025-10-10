@@ -33,17 +33,17 @@ bool Projection::getNextTuplesInternal(ExecutionContext* context) {
     for (auto& evaluator : info.evaluators) {
         evaluator->evaluate();
     }
-    if (!info.discardedChunkIndices.empty()) {
+    if (!info.discardedChunkPosSet.empty()) {
         resultSet->multiplicity *=
-            resultSet->getNumTuplesWithoutMultiplicity(info.discardedChunkIndices);
+            resultSet->getNumTuplesWithoutMultiplicity(info.discardedChunkPosSet);
     }
     // The if statement is added to avoid the cost of calculating numTuples when metric is disabled.
     if (metrics->numOutputTuple.enabled) [[unlikely]] {
-        if (info.activeChunkIndices.empty()) {
+        if (info.outputChunkPosSet.empty()) {
             // In COUNT(*) case we are projecting away everything and only track multiplicity
             metrics->numOutputTuple.increase(resultSet->multiplicity);
         } else {
-            metrics->numOutputTuple.increase(resultSet->getNumTuples(info.activeChunkIndices));
+            metrics->numOutputTuple.increase(resultSet->getNumTuples(info.outputChunkPosSet));
         }
     }
     return true;

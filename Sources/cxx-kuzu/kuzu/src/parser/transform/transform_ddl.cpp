@@ -1,5 +1,4 @@
 #include "common/exception/parser.h"
-#include "common/string_format.h"
 #include "parser/ddl/alter.h"
 #include "parser/ddl/create_sequence.h"
 #include "parser/ddl/create_table.h"
@@ -62,7 +61,7 @@ std::string Transformer::getPKName(CypherParser::KU_CreateNodeTableContext& ctx)
     return pkName;
 }
 
-ConflictAction Transformer::transformConflictAction(CypherParser::KU_IfNotExistsContext* ctx) {
+static ConflictAction getConflictAction(CypherParser::KU_IfNotExistsContext* ctx) {
     if (ctx != nullptr) {
         return ConflictAction::ON_CONFLICT_DO_NOTHING;
     }
@@ -73,7 +72,7 @@ std::unique_ptr<Statement> Transformer::transformCreateNodeTable(
     CypherParser::KU_CreateNodeTableContext& ctx) {
     auto tableName = transformSchemaName(*ctx.oC_SchemaName());
     auto createTableInfo =
-        CreateTableInfo(TableType::NODE, tableName, transformConflictAction(ctx.kU_IfNotExists()));
+        CreateTableInfo(TableType::NODE, tableName, getConflictAction(ctx.kU_IfNotExists()));
     // If CREATE NODE TABLE AS syntax
     if (ctx.oC_Query()) {
         return std::make_unique<CreateTable>(std::move(createTableInfo),
@@ -106,7 +105,7 @@ std::unique_ptr<Statement> Transformer::transformCreateRelGroup(
     std::unique_ptr<ExtraCreateTableInfo> extraInfo =
         std::make_unique<ExtraCreateRelTableGroupInfo>(relMultiplicity, std::move(fromToPairs),
             std::move(options));
-    auto conflictAction = transformConflictAction(ctx.kU_IfNotExists());
+    auto conflictAction = getConflictAction(ctx.kU_IfNotExists());
     auto createTableInfo = CreateTableInfo(common::TableType::REL, tableName, conflictAction);
     if (ctx.kU_PropertyDefinitions()) {
         createTableInfo.propertyDefinitions =
@@ -192,8 +191,6 @@ DropType transformDropType(CypherParser::KU_DropContext& ctx) {
         return DropType::TABLE;
     } else if (ctx.SEQUENCE()) {
         return DropType::SEQUENCE;
-    } else if (ctx.MACRO()) {
-        return DropType::MACRO;
     } else {
         KU_UNREACHABLE;
     }
@@ -339,48 +336,8 @@ std::vector<ParsedPropertyDefinition> Transformer::transformPropertyDefinitions(
     return definitions;
 }
 
-static std::string convertColumnDefinitionsToString(
-    const std::vector<ParsedColumnDefinition>& columnDefinitions) {
-    std::string result;
-    for (auto& columnDefinition : columnDefinitions) {
-        result += common::stringFormat("{} {},", columnDefinition.name, columnDefinition.type);
-    }
-    return result.substr(0, result.length() - 1);
-}
-
-std::string Transformer::transformUnionType(CypherParser::KU_UnionTypeContext& ctx) {
-    return common::stringFormat("{}({})", ctx.UNION()->getText(),
-        convertColumnDefinitionsToString(transformColumnDefinitions(*ctx.kU_ColumnDefinitions())));
-}
-
-std::string Transformer::transformStructType(CypherParser::KU_StructTypeContext& ctx) {
-    return common::stringFormat("{}({})", ctx.STRUCT()->getText(),
-        convertColumnDefinitionsToString(transformColumnDefinitions(*ctx.kU_ColumnDefinitions())));
-}
-
-std::string Transformer::transformMapType(CypherParser::KU_MapTypeContext& ctx) {
-    return common::stringFormat("{}({},{})", ctx.MAP()->getText(),
-        transformDataType(*ctx.kU_DataType()[0]), transformDataType(*ctx.kU_DataType()[1]));
-}
-
-std::string Transformer::transformDecimalType(CypherParser::KU_DecimalTypeContext& ctx) {
-    return ctx.getText();
-}
-
 std::string Transformer::transformDataType(CypherParser::KU_DataTypeContext& ctx) {
-    if (ctx.oC_SymbolicName()) {
-        return transformSymbolicName(*ctx.oC_SymbolicName());
-    } else if (ctx.kU_UnionType()) {
-        return transformUnionType(*ctx.kU_UnionType());
-    } else if (ctx.kU_StructType()) {
-        return transformStructType(*ctx.kU_StructType());
-    } else if (ctx.kU_MapType()) {
-        return transformMapType(*ctx.kU_MapType());
-    } else if (ctx.kU_DecimalType()) {
-        return transformDecimalType(*ctx.kU_DecimalType());
-    } else {
-        return transformDataType(*ctx.kU_DataType()) + ctx.kU_ListIdentifiers()->getText();
-    }
+    return ctx.getText();
 }
 
 std::string Transformer::transformPrimaryKey(CypherParser::KU_CreateNodeConstraintContext& ctx) {

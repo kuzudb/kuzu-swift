@@ -17,18 +17,16 @@ struct CreateHNSWIndexBindData final : function::TableFuncBindData {
     catalog::TableCatalogEntry* tableEntry;
     common::property_id_t propertyID;
     HNSWIndexConfig config;
-    bool skipAfterBind;
 
     CreateHNSWIndexBindData(main::ClientContext* context, std::string indexName,
         catalog::TableCatalogEntry* tableEntry, common::property_id_t propertyID,
-        common::offset_t numNodes, HNSWIndexConfig config, bool skipAfterBind = false)
+        common::offset_t numNodes, HNSWIndexConfig config)
         : TableFuncBindData{numNodes}, context{context}, indexName{std::move(indexName)},
-          tableEntry{tableEntry}, propertyID{propertyID}, config{std::move(config)},
-          skipAfterBind{skipAfterBind} {}
+          tableEntry{tableEntry}, propertyID{propertyID}, config{std::move(config)} {}
 
     std::unique_ptr<TableFuncBindData> copy() const override {
         return std::make_unique<CreateHNSWIndexBindData>(context, indexName, tableEntry, propertyID,
-            numRows, config.copy(), skipAfterBind);
+            numRows, config.copy());
     }
 };
 

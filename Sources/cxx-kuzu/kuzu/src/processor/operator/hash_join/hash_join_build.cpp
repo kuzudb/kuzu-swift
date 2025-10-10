@@ -2,7 +2,6 @@
 
 #include "binder/expression/expression_util.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 using namespace kuzu::storage;
@@ -41,7 +40,7 @@ void HashJoinBuild::initLocalStateInternal(ResultSet* resultSet, ExecutionContex
     for (auto& pos : info.payloadsPos) {
         payloadVectors.push_back(resultSet->getValueVector(pos).get());
     }
-    hashTable = std::make_unique<JoinHashTable>(*MemoryManager::Get(*context->clientContext),
+    hashTable = std::make_unique<JoinHashTable>(*context->clientContext->getMemoryManager(),
         std::move(keyTypes), info.tableSchema.copy());
 }
 

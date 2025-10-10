@@ -1,9 +1,8 @@
 #include "binder/expression/node_expression.h"
 #include "function/gds/gds_function_collection.h"
 #include "function/gds/rec_joins.h"
-#include "function/gds/weight_utils.h"
 #include "processor/execution_context.h"
-#include "transaction/transaction.h"
+#include "wsp_utils.h"
 
 using namespace kuzu::binder;
 using namespace kuzu::common;
@@ -150,9 +149,8 @@ public:
     void switchToDense(ExecutionContext* context) {
         KU_ASSERT(densityState == GDSDensityState::SPARSE);
         densityState = GDSDensityState::DENSE;
-        auto mm = MemoryManager::Get(*context->clientContext);
         for (auto& [tableID, maxOffset] : maxOffsetMap) {
-            denseObjects.allocate(tableID, maxOffset, mm);
+            denseObjects.allocate(tableID, maxOffset, context->clientContext->getMemoryManager());
             auto data = denseObjects.getData(tableID);
             for (auto i = 0u; i < maxOffset; i++) {
                 data[i].store(std::numeric_limits<double>::max());
@@ -191,7 +189,7 @@ public:
         chunk.forEach([&](auto neighbors, auto propertyVectors, auto i) {
             auto nbrNodeID = neighbors[i];
             auto weight = propertyVectors[0]->template getValue<T>(i);
-            WeightUtils::checkWeight(WeightedSPDestinationsFunction::name, weight);
+            checkWeight(weight);
             if (costsPair->update(boundNodeID.offset, nbrNodeID.offset,
                     static_cast<double>(weight))) {
                 result.push_back(nbrNodeID);
@@ -306,17 +304,16 @@ private:
         auto nextDenseFrontier = DenseFrontier::getUninitializedFrontier(context, graph);
         auto frontierPair = std::make_unique<DenseSparseDynamicFrontierPair>(
             std::move(curDenseFrontier), std::move(nextDenseFrontier));
-        auto costsPair = std::make_unique<CostsPair>(
-            graph->getMaxOffsetMap(transaction::Transaction::Get(*clientContext)));
+        auto costsPair =
+            std::make_unique<CostsPair>(graph->getMaxOffsetMap(clientContext->getTransaction()));
         auto costPairPtr = costsPair.get();
         auto auxiliaryState = std::make_unique<WSPDestinationsAuxiliaryState>(std::move(costsPair));
         std::unique_ptr<GDSComputeState> gdsState;
-        WeightUtils::visit(WeightedSPDestinationsFunction::name,
-            bindData.weightPropertyExpr->getDataType(), [&]<typename T>(T) {
-                auto edgeCompute = std::make_unique<WSPDestinationsEdgeCompute<T>>(costPairPtr);
-                gdsState = std::make_unique<GDSComputeState>(std::move(frontierPair),
-                    std::move(edgeCompute), std::move(auxiliaryState));
-            });
+        visit(bindData.weightPropertyExpr->getDataType(), [&]<typename T>(T) {
+            auto edgeCompute = std::make_unique<WSPDestinationsEdgeCompute<T>>(costPairPtr);
+            gdsState = std::make_unique<GDSComputeState>(std::move(frontierPair),
+                std::move(edgeCompute), std::move(auxiliaryState));
+        });
         return gdsState;
     }
 
@@ -328,7 +325,7 @@ private:
         auto clientContext = context->clientContext;
         return std::make_unique<WSPDestinationsOutputWriter>(clientContext,
             sharedState->getOutputNodeMaskMap(), sourceNodeID, costs,
-            sharedState->graph->getMaxOffsetMap(transaction::Transaction::Get(*clientContext)));
+            sharedState->graph->getMaxOffsetMap(clientContext->getTransaction()));
     }
 };
 

@@ -6,16 +6,12 @@
 #include "common/arrow/arrow.h"
 #include "common/arrow/arrow_buffer.h"
 #include "common/types/types.h"
+#include "main/query_result.h"
 
 struct ArrowSchema;
 
 namespace kuzu {
-namespace processor {
-class FlatTuple;
-}
-
 namespace common {
-class Value;
 
 // An Arrow Vector(i.e., Array) is defined by a few pieces of metadata and data:
 //  1) a logical data type;
@@ -49,41 +45,37 @@ struct ArrowVector {
 // An arrow data chunk consisting of N rows in columnar format.
 class ArrowRowBatch {
 public:
-    ArrowRowBatch(const std::vector<LogicalType>& types, std::int64_t capacity,
-        bool fallbackExtensionTypes);
+    ArrowRowBatch(std::vector<LogicalType> types, std::int64_t capacity);
 
-    void append(const processor::FlatTuple& tuple);
-    std::int64_t size() const { return numTuples; }
-    ArrowArray toArray(const std::vector<LogicalType>& types);
+    //! Append a data chunk to the underlying arrow array
+    ArrowArray append(main::QueryResult& queryResult, std::int64_t chunkSize);
 
 private:
-    static void appendValue(ArrowVector* vector, const Value& value, bool fallbackExtensionTypes);
+    static void appendValue(ArrowVector* vector, const LogicalType& type, Value* value);
 
-    static ArrowArray* convertVectorToArray(ArrowVector& vector, const LogicalType& type,
-        bool fallbackExtensionTypes);
-    static ArrowArray* convertStructVectorToArray(ArrowVector& vector, const LogicalType& type,
-        bool fallbackExtensionTypes);
-    static ArrowArray* convertInternalIDVectorToArray(ArrowVector& vector, const LogicalType& type,
-        bool fallbackExtensionTypes);
+    static ArrowArray* convertVectorToArray(ArrowVector& vector, const LogicalType& type);
+    static ArrowArray* convertStructVectorToArray(ArrowVector& vector, const LogicalType& type);
+    static ArrowArray* convertInternalIDVectorToArray(ArrowVector& vector, const LogicalType& type);
 
-    static void copyNonNullValue(ArrowVector* vector, const Value& value, std::int64_t pos,
-        bool fallbackExtensionTypes);
-    static void copyNullValue(ArrowVector* vector, const Value& value, std::int64_t pos);
+    static void copyNonNullValue(ArrowVector* vector, const LogicalType& type, Value* value,
+        std::int64_t pos);
+    static void copyNullValue(ArrowVector* vector, Value* value, std::int64_t pos);
 
     template<LogicalTypeID DT>
-    static void templateCopyNonNullValue(ArrowVector* vector, const Value& value, std::int64_t pos,
-        bool fallbackExtensionTypes);
+    static void templateCopyNonNullValue(ArrowVector* vector, const LogicalType& type, Value* value,
+        std::int64_t pos);
     template<LogicalTypeID DT>
     static void templateCopyNullValue(ArrowVector* vector, std::int64_t pos);
-    static void copyNullValueUnion(ArrowVector* vector, const Value& value, std::int64_t pos);
+    static void copyNullValueUnion(ArrowVector* vector, Value* value, std::int64_t pos);
     template<LogicalTypeID DT>
-    static ArrowArray* templateCreateArray(ArrowVector& vector, const LogicalType& type,
-        bool fallbackExtensionTypes);
+    static ArrowArray* templateCreateArray(ArrowVector& vector, const LogicalType& type);
+
+    ArrowArray toArray();
 
 private:
+    std::vector<LogicalType> types;
     std::vector<std::unique_ptr<ArrowVector>> vectors;
     std::int64_t numTuples;
-    bool fallbackExtensionTypes = false;
 };
 
 } // namespace common

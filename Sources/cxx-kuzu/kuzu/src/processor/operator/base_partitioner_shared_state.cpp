@@ -1,16 +1,15 @@
 #include "processor/operator/base_partitioner_shared_state.h"
 
+#include "main/client_context.h"
 #include "storage/table/node_table.h"
-#include "transaction/transaction.h"
 
 namespace kuzu::processor {
 void PartitionerSharedState::initialize(const common::logical_type_vec_t&,
     common::idx_t numPartitioners, const main::ClientContext* clientContext) {
     KU_ASSERT(numPartitioners >= 1 && numPartitioners <= DIRECTIONS);
-    auto transaction = transaction::Transaction::Get(*clientContext);
-    numNodes[0] = srcNodeTable->getNumTotalRows(transaction);
+    numNodes[0] = srcNodeTable->getNumTotalRows(clientContext->getTransaction());
     if (numPartitioners > 1) {
-        numNodes[1] = dstNodeTable->getNumTotalRows(transaction);
+        numNodes[1] = dstNodeTable->getNumTotalRows(clientContext->getTransaction());
     }
     numPartitions[0] = getNumPartitionsFromRows(numNodes[0]);
     if (numPartitioners > 1) {

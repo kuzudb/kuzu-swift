@@ -289,24 +289,23 @@ static constexpr char DOC_ID_PROP_NAME[] = "docID";
 static std::unordered_map<offset_t, uint64_t> getDFs(main::ClientContext& context,
     processor::ExecutionContext* executionContext, graph::Graph* graph,
     catalog::TableCatalogEntry* termsEntry, std::vector<std::string>& queryTerms) {
-    auto storageManager = StorageManager::Get(context);
+    auto storageManager = context.getStorageManager();
     auto tableID = termsEntry->getTableID();
     auto& termsNodeTable = storageManager->getTable(tableID)->cast<NodeTable>();
-    auto tx = transaction::Transaction::Get(context);
+    auto tx = context.getTransaction();
     auto dfColumnID = termsEntry->getColumnID(DOC_FREQUENCY_PROP_NAME);
     std::vector<LogicalType> vectorTypes;
     vectorTypes.push_back(LogicalType::INTERNAL_ID());
     vectorTypes.push_back(LogicalType::UINT64());
-    auto dataChunk = Table::constructDataChunk(MemoryManager::Get(context), std::move(vectorTypes));
+    auto dataChunk = Table::constructDataChunk(context.getMemoryManager(), std::move(vectorTypes));
     dataChunk.state->getSelVectorUnsafe().setSelSize(1);
     auto nodeIDVector = &dataChunk.getValueVectorMutable(0);
     auto dfVector = &dataChunk.getValueVectorMutable(1);
-    auto termsVector = ValueVector(LogicalType::STRING(), MemoryManager::Get(context));
+    auto termsVector = ValueVector(LogicalType::STRING(), context.getMemoryManager());
     termsVector.state = dataChunk.state;
     auto nodeTableScanState =
         NodeTableScanState(nodeIDVector, std::vector{dfVector}, dataChunk.state);
-    nodeTableScanState.setToTable(transaction::Transaction::Get(context), &termsNodeTable,
-        {dfColumnID}, {});
+    nodeTableScanState.setToTable(context.getTransaction(), &termsNodeTable, {dfColumnID}, {});
     std::unordered_map<offset_t, uint64_t> dfs;
     std::vector<VCQueryTerm> vcQueryTerms;
     vcQueryTerms.reserve(queryTerms.size());
@@ -370,7 +369,7 @@ static void initFrontier(FrontierPair& frontierPair, table_id_t termsTableID,
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto& clientContext = *input.context->clientContext;
-    auto transaction = transaction::Transaction::Get(clientContext);
+    auto transaction = clientContext.getTransaction();
     auto sharedState = input.sharedState->ptrCast<QFTSSharedState>();
     auto graph = sharedState->graph.get();
     auto graphEntry = graph->getGraphEntry();
@@ -392,7 +391,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         std::move(nextFrontier));
     auto termsTableID = termsEntry->getTableID();
     initFrontier(*frontierPair, termsTableID, dfs);
-    auto storageManager = StorageManager::Get(clientContext);
+    auto storageManager = clientContext.getStorageManager();
     frontierPair->setActiveNodesForNextIter();
 
     node_id_map_t<ScoreInfo> scores;
@@ -404,7 +403,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
         {TERM_FREQUENCY_PROP_NAME});
 
     // Do vertex compute to calculate the score for doc with the length property.
-    auto mm = MemoryManager::Get(clientContext);
+    auto mm = clientContext.getMemoryManager();
     auto numUniqueTerms = getNumUniqueTerms(queryTerms);
     auto writer =
         std::make_unique<QFTSOutputWriter>(scores, mm, qFTSBindData, numUniqueTerms, *sharedState);
@@ -447,8 +446,8 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
 
     auto tableEntry = FTSIndexUtils::bindNodeTable(*context, inputTableName, indexName,
         FTSIndexUtils::IndexOperation::QUERY);
-    auto catalog = catalog::Catalog::Get(*context);
-    auto transaction = transaction::Transaction::Get(*context);
+    auto catalog = context->getCatalog();
+    auto transaction = context->getTransaction();
     auto ftsIndexEntry = catalog->getIndex(transaction, tableEntry->getTableID(), indexName);
     auto entry = catalog->getTableCatalogEntry(transaction, inputTableName);
     auto nodeOutput = GDSFunction::bindNodeOutput(*input, {entry});
@@ -471,7 +470,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     auto scoreColumn = input->binder->createVariable(scoreColumnName, LogicalType::DOUBLE());
     columns.push_back(scoreColumn);
     auto nodeTable =
-        StorageManager::Get(*context)->getTable(ftsIndexEntry->getTableID())->ptrCast<NodeTable>();
+        context->getStorageManager()->getTable(ftsIndexEntry->getTableID())->ptrCast<NodeTable>();
     auto index = nodeTable->getIndex(indexName);
     KU_ASSERT(index.has_value());
     auto& ftsIndex = index.value()->cast<FTSIndex>();
@@ -492,7 +491,7 @@ static void getLogicalPlan(Planner* planner, const BoundReadingClause& readingCl
     op->computeFactorizedSchema();
     planner->planReadOp(std::move(op), predicates, plan);
 
-    auto nodeOutput = bindData->output[0]->ptrCast<NodeExpression>();
+    auto nodeOutput = bindData->nodeOutput->ptrCast<NodeExpression>();
     KU_ASSERT(nodeOutput != nullptr);
     planner->getCardinliatyEstimatorUnsafe().init(*nodeOutput);
     auto scanPlan = planner->getNodePropertyScanPlan(*nodeOutput);

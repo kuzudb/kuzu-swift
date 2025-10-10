@@ -16,11 +16,10 @@
 #include "common/types/interval_t.h"
 #include "common/types/ku_list.h"
 #include "common/types/ku_string.h"
-#include "common/types/uint128_t.h"
 #include "function/built_in_function_utils.h"
 #include "function/cast/functions/numeric_limits.h"
+#include "main/client_context.h"
 #include "storage/compression/float_compression.h"
-#include "transaction/transaction.h"
 
 using kuzu::function::BuiltInFunctionsUtils;
 
@@ -260,8 +259,6 @@ std::string PhysicalTypeUtils::toString(PhysicalTypeID physicalType) {
         return "INTERVAL";
     case PhysicalTypeID::INTERNAL_ID:
         return "INTERNAL_ID";
-    case PhysicalTypeID::UINT128:
-        return "UINT128";
     case PhysicalTypeID::STRING:
         return "STRING";
     case PhysicalTypeID::STRUCT:
@@ -312,8 +309,6 @@ uint32_t PhysicalTypeUtils::getFixedTypeSize(PhysicalTypeID physicalType) {
         return sizeof(interval_t);
     case PhysicalTypeID::INTERNAL_ID:
         return sizeof(internalID_t);
-    case PhysicalTypeID::UINT128:
-        return sizeof(uint128_t);
     case PhysicalTypeID::ALP_EXCEPTION_FLOAT:
         return storage::EncodeException<float>::sizeInBytes();
     case PhysicalTypeID::ALP_EXCEPTION_DOUBLE:
@@ -664,7 +659,6 @@ std::string LogicalType::toString() const {
     case LogicalTypeID::TIMESTAMP_TZ:
     case LogicalTypeID::TIMESTAMP:
     case LogicalTypeID::INTERVAL:
-    case LogicalTypeID::UINT128:
     case LogicalTypeID::BLOB:
     case LogicalTypeID::UUID:
     case LogicalTypeID::STRING:
@@ -738,8 +732,7 @@ LogicalType LogicalType::convertFromString(const std::string& str, main::ClientC
     } else if (tryGetIDFromString(upperDataTypeString, type.typeID)) {
         type.physicalType = LogicalType::getPhysicalType(type.typeID, type.extraTypeInfo);
     } else if (context != nullptr) {
-        auto transaction = transaction::Transaction::Get(*context);
-        type = catalog::Catalog::Get(*context)->getType(transaction, upperDataTypeString);
+        type = context->getCatalog()->getType(context->getTransaction(), upperDataTypeString);
     } else {
         throw common::RuntimeException{"Invalid datatype string: " + str};
     }
@@ -883,9 +876,6 @@ PhysicalTypeID LogicalType::getPhysicalType(LogicalTypeID typeID,
     case LogicalTypeID::INTERNAL_ID: {
         return PhysicalTypeID::INTERNAL_ID;
     }
-    case LogicalTypeID::UINT128: {
-        return PhysicalTypeID::UINT128;
-    }
     case LogicalTypeID::BLOB:
     case LogicalTypeID::STRING: {
         return PhysicalTypeID::STRING;
@@ -934,8 +924,6 @@ bool tryGetIDFromString(const std::string& str, LogicalTypeID& id) {
         id = LogicalTypeID::UINT8;
     } else if ("INT128" == upperStr) {
         id = LogicalTypeID::INT128;
-    } else if ("UINT128" == upperStr) {
-        id = LogicalTypeID::UINT128;
     } else if ("DOUBLE" == upperStr || "FLOAT8" == upperStr) {
         id = LogicalTypeID::DOUBLE;
     } else if ("FLOAT" == upperStr || "FLOAT4" == upperStr || "REAL" == upperStr) {
@@ -1005,8 +993,6 @@ std::string LogicalTypeUtils::toString(LogicalTypeID dataTypeID) {
         return "UINT8";
     case LogicalTypeID::INT128:
         return "INT128";
-    case LogicalTypeID::UINT128:
-        return "UINT128";
     case LogicalTypeID::DOUBLE:
         return "DOUBLE";
     case LogicalTypeID::FLOAT:
@@ -1134,7 +1120,6 @@ bool LogicalTypeUtils::isUnsigned(const LogicalTypeID& dataType) {
     case LogicalTypeID::UINT32:
     case LogicalTypeID::UINT16:
     case LogicalTypeID::UINT8:
-    case LogicalTypeID::UINT128:
         return true;
     default:
         return false;
@@ -1156,7 +1141,6 @@ bool LogicalTypeUtils::isIntegral(const LogicalTypeID& dataType) {
     case LogicalTypeID::UINT16:
     case LogicalTypeID::UINT8:
     case LogicalTypeID::INT128:
-    case LogicalTypeID::UINT128:
     case LogicalTypeID::SERIAL:
         return true;
     default:
@@ -1179,7 +1163,6 @@ bool LogicalTypeUtils::isNumerical(const LogicalTypeID& dataType) {
     case LogicalTypeID::UINT16:
     case LogicalTypeID::UINT8:
     case LogicalTypeID::INT128:
-    case LogicalTypeID::UINT128:
     case LogicalTypeID::DOUBLE:
     case LogicalTypeID::FLOAT:
     case LogicalTypeID::SERIAL:
@@ -1226,17 +1209,16 @@ std::vector<LogicalTypeID> LogicalTypeUtils::getAllValidComparableLogicalTypes()
     return std::vector<LogicalTypeID>{LogicalTypeID::BOOL, LogicalTypeID::INT64,
         LogicalTypeID::INT32, LogicalTypeID::INT16, LogicalTypeID::INT8, LogicalTypeID::UINT64,
         LogicalTypeID::UINT32, LogicalTypeID::UINT16, LogicalTypeID::UINT8, LogicalTypeID::INT128,
-        LogicalTypeID::UINT128, LogicalTypeID::DOUBLE, LogicalTypeID::FLOAT, LogicalTypeID::DATE,
-        LogicalTypeID::TIMESTAMP, LogicalTypeID::TIMESTAMP_NS, LogicalTypeID::TIMESTAMP_MS,
-        LogicalTypeID::TIMESTAMP_SEC, LogicalTypeID::TIMESTAMP_TZ, LogicalTypeID::INTERVAL,
-        LogicalTypeID::BLOB, LogicalTypeID::UUID, LogicalTypeID::STRING, LogicalTypeID::SERIAL};
+        LogicalTypeID::DOUBLE, LogicalTypeID::FLOAT, LogicalTypeID::DATE, LogicalTypeID::TIMESTAMP,
+        LogicalTypeID::TIMESTAMP_NS, LogicalTypeID::TIMESTAMP_MS, LogicalTypeID::TIMESTAMP_SEC,
+        LogicalTypeID::TIMESTAMP_TZ, LogicalTypeID::INTERVAL, LogicalTypeID::BLOB,
+        LogicalTypeID::UUID, LogicalTypeID::STRING, LogicalTypeID::SERIAL};
 }
 
 std::vector<LogicalTypeID> LogicalTypeUtils::getIntegerTypeIDs() {
     return std::vector<LogicalTypeID>{LogicalTypeID::INT128, LogicalTypeID::INT64,
         LogicalTypeID::INT32, LogicalTypeID::INT16, LogicalTypeID::INT8, LogicalTypeID::SERIAL,
-        LogicalTypeID::UINT128, LogicalTypeID::UINT64, LogicalTypeID::UINT32, LogicalTypeID::UINT16,
-        LogicalTypeID::UINT8};
+        LogicalTypeID::UINT64, LogicalTypeID::UINT32, LogicalTypeID::UINT16, LogicalTypeID::UINT8};
 }
 
 std::vector<LogicalTypeID> LogicalTypeUtils::getFloatingPointTypeIDs() {
@@ -1255,8 +1237,8 @@ std::vector<LogicalTypeID> LogicalTypeUtils::getAllValidLogicTypeIDs() {
     return std::vector<LogicalTypeID>{LogicalTypeID::INTERNAL_ID, LogicalTypeID::BOOL,
         LogicalTypeID::INT64, LogicalTypeID::INT32, LogicalTypeID::INT16, LogicalTypeID::INT8,
         LogicalTypeID::UINT64, LogicalTypeID::UINT32, LogicalTypeID::UINT16, LogicalTypeID::UINT8,
-        LogicalTypeID::INT128, LogicalTypeID::UINT128, LogicalTypeID::DOUBLE, LogicalTypeID::STRING,
-        LogicalTypeID::BLOB, LogicalTypeID::UUID, LogicalTypeID::DATE, LogicalTypeID::TIMESTAMP,
+        LogicalTypeID::INT128, LogicalTypeID::DOUBLE, LogicalTypeID::STRING, LogicalTypeID::BLOB,
+        LogicalTypeID::UUID, LogicalTypeID::DATE, LogicalTypeID::TIMESTAMP,
         LogicalTypeID::TIMESTAMP_NS, LogicalTypeID::TIMESTAMP_MS, LogicalTypeID::TIMESTAMP_SEC,
         LogicalTypeID::TIMESTAMP_TZ, LogicalTypeID::INTERVAL, LogicalTypeID::LIST,
         LogicalTypeID::ARRAY, LogicalTypeID::MAP, LogicalTypeID::FLOAT, LogicalTypeID::SERIAL,
@@ -1277,7 +1259,6 @@ std::vector<LogicalType> LogicalTypeUtils::getAllValidLogicTypes() {
     typeVec.push_back(LogicalType::UINT16());
     typeVec.push_back(LogicalType::UINT8());
     typeVec.push_back(LogicalType::INT128());
-    typeVec.push_back(LogicalType::UINT128());
     typeVec.push_back(LogicalType::DOUBLE());
     typeVec.push_back(LogicalType::STRING());
     typeVec.push_back(LogicalType::BLOB());
@@ -1752,34 +1733,31 @@ static inline bool tryCombineDecimalWithNumeric(const LogicalType& dec, const Lo
     // How many digits before the decimal point does result require?
     switch (nonDec.getLogicalTypeID()) {
     case LogicalTypeID::INT8:
-        requiredDigits = function::NumericLimits<int8_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<int8_t>::digits();
         break;
     case LogicalTypeID::UINT8:
-        requiredDigits = function::NumericLimits<uint8_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<uint8_t>::digits();
         break;
     case LogicalTypeID::INT16:
-        requiredDigits = function::NumericLimits<int16_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<int16_t>::digits();
         break;
     case LogicalTypeID::UINT16:
-        requiredDigits = function::NumericLimits<uint16_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<uint16_t>::digits();
         break;
     case LogicalTypeID::INT32:
-        requiredDigits = function::NumericLimits<int32_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<int32_t>::digits();
         break;
     case LogicalTypeID::UINT32:
-        requiredDigits = function::NumericLimits<uint32_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<uint32_t>::digits();
         break;
     case LogicalTypeID::INT64:
-        requiredDigits = function::NumericLimits<int64_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<int64_t>::digits();
         break;
     case LogicalTypeID::UINT64:
-        requiredDigits = function::NumericLimits<uint64_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<uint64_t>::digits();
         break;
     case LogicalTypeID::INT128:
-        requiredDigits = function::NumericLimits<int128_t>::maxNumDigits();
-        break;
-    case LogicalTypeID::UINT128:
-        requiredDigits = function::NumericLimits<uint128_t>::maxNumDigits();
+        requiredDigits = function::NumericLimits<int128_t>::digits();
         break;
     default:
         requiredDigits = DECIMAL_PRECISION_LIMIT + 1;

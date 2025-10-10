@@ -1,13 +1,11 @@
 #include "processor/operator/order_by/top_k.h"
 
 #include "binder/expression/expression_util.h"
-#include "common/constants.h"
 #include "common/system_config.h"
 #include "common/type_utils.h"
 #include "function/binary_function_executor.h"
 #include "function/comparison/comparison_functions.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 
@@ -260,8 +258,8 @@ void TopKLocalState::append(const std::vector<common::ValueVector*>& keyVectors,
 
 void TopK::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {
     localState = TopKLocalState();
-    localState.init(info, storage::MemoryManager::Get(*context->clientContext), *resultSet,
-        skipNumber, limitNumber);
+    localState.init(info, context->clientContext->getMemoryManager(), *resultSet, skipNumber,
+        limitNumber);
     for (auto& dataPos : info.payloadsPos) {
         payloadVectors.push_back(resultSet->getValueVector(dataPos).get());
     }
@@ -271,8 +269,7 @@ void TopK::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* contex
 }
 
 void TopK::initGlobalStateInternal(ExecutionContext* context) {
-    sharedState->init(info, storage::MemoryManager::Get(*context->clientContext), skipNumber,
-        limitNumber);
+    sharedState->init(info, context->clientContext->getMemoryManager(), skipNumber, limitNumber);
 }
 
 void TopK::executeInternal(ExecutionContext* context) {

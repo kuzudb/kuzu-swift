@@ -7,8 +7,6 @@
 #include "main/client_context.h"
 #include "parser/expression/parsed_function_expression.h"
 #include "parser/standalone_call_function.h"
-#include "transaction/transaction.h"
-#include "transaction/transaction_context.h"
 
 namespace kuzu {
 namespace parser {
@@ -21,13 +19,12 @@ std::string StandaloneCallRewriter::getRewriteQuery(const Statement& statement) 
 void StandaloneCallRewriter::visitStandaloneCallFunction(const Statement& statement) {
     auto& standaloneCallFunc = statement.constCast<StandaloneCallFunction>();
     main::ClientContext::TransactionHelper::runFuncInTransaction(
-        *transaction::TransactionContext::Get(*context),
+        *context->getTransactionContext(),
         [&]() -> void {
             auto funcName = standaloneCallFunc.getFunctionExpression()
                                 ->constPtrCast<ParsedFunctionExpression>()
                                 ->getFunctionName();
-            if (!catalog::Catalog::Get(*context)->containsFunction(
-                    transaction::Transaction::Get(*context), funcName) &&
+            if (!context->getCatalog()->containsFunction(context->getTransaction(), funcName) &&
                 !singleStatement) {
                 throw common::ParserException{
                     funcName + " must be called in a query which doesn't have other statements."};

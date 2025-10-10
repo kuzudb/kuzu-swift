@@ -2,7 +2,6 @@
 
 #include "common/assert.h"
 #include "common/uniq_lock.h"
-#include "main/client_context.h"
 
 using namespace kuzu::common;
 
@@ -23,11 +22,11 @@ static idx_t defaultGetFileIdxFunc(const CopyFromFileError&) {
 }
 
 WarningContext::WarningContext(main::ClientConfig* clientConfig)
-    : clientConfig{clientConfig}, queryWarningCount{0}, numStoredWarnings{0},
-      ignoreErrorsOption{false} {}
+    : clientConfig(clientConfig), queryWarningCount(0), numStoredWarnings(0),
+      ignoreErrorsOption(false) {}
 
 void WarningContext::appendWarningMessages(const std::vector<CopyFromFileError>& messages) {
-    UniqLock lock{mtx};
+    common::UniqLock lock{mtx};
 
     queryWarningCount += messages.size();
 
@@ -85,10 +84,6 @@ void WarningContext::setIgnoreErrorsForCurrentQuery(bool ignoreErrors) {
 
 bool WarningContext::getIgnoreErrorsOption() const {
     return ignoreErrorsOption;
-}
-
-WarningContext* WarningContext::Get(const main::ClientContext& context) {
-    return context.warningContext.get();
 }
 
 } // namespace processor

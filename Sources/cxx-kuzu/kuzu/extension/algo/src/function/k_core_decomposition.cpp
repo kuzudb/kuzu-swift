@@ -4,9 +4,7 @@
 #include "function/degrees.h"
 #include "function/gds/gds_utils.h"
 #include "function/gds/gds_vertex_compute.h"
-#include "function/table/bind_input.h"
 #include "processor/execution_context.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::binder;
 using namespace kuzu::common;
@@ -168,10 +166,10 @@ private:
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto clientContext = input.context->clientContext;
-    auto mm = MemoryManager::Get(*clientContext);
+    auto mm = clientContext->getMemoryManager();
     auto sharedState = input.sharedState->ptrCast<GDSFuncSharedState>();
     auto graph = sharedState->graph.get();
-    auto transaction = transaction::Transaction::Get(*clientContext);
+    auto transaction = clientContext->getTransaction();
     auto degrees = Degrees(graph->getMaxOffsetMap(transaction), mm);
     DegreesUtils::computeDegree(input.context, graph, sharedState->getGraphNodeMaskMap(), &degrees,
         ExtendDirection::BOTH);
@@ -188,7 +186,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     auto computeState = GDSComputeState(std::move(frontierPair), std::move(removeVertexEdgeCompute),
         std::move(auxiliaryState));
     auto coreValue = 0u;
-    auto numNodes = graph->getNumNodes(transaction);
+    auto numNodes = graph->getNumNodes(clientContext->getTransaction());
     auto numNodesComputed = 0u;
     while (numNodes != numNodesComputed) {
         // Compute current core value
@@ -213,11 +211,12 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
             // Repeat until all remaining nodes has degree greater than current core.
         }
         auto progress = static_cast<double>(numNodesComputed) / numNodes;
-        ProgressBar::Get(*clientContext)->updateProgress(input.context->queryID, progress);
+        clientContext->getProgressBar()->updateProgress(input.context->queryID, progress);
         coreValue++;
     }
     // Write output
-    auto vertexCompute = KCoreResultVertexCompute(mm, sharedState, coreValues);
+    auto vertexCompute =
+        KCoreResultVertexCompute(clientContext->getMemoryManager(), sharedState, coreValues);
     GDSUtils::runVertexCompute(input.context, GDSDensityState::DENSE, graph, vertexCompute);
     sharedState->factorizedTablePool.mergeLocalTables();
     return 0;
@@ -233,8 +232,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     expression_vector columns;
     columns.push_back(nodeOutput->constCast<NodeExpression>().getInternalID());
     columns.push_back(input->binder->createVariable(GROUP_ID_COLUMN_NAME, LogicalType::INT64()));
-    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry),
-        expression_vector{nodeOutput});
+    return std::make_unique<GDSBindData>(std::move(columns), std::move(graphEntry), nodeOutput);
 }
 
 function_set KCoreDecompositionFunction::getFunctionSet() {

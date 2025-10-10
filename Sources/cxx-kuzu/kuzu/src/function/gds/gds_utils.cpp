@@ -7,8 +7,6 @@
 #include "function/gds/gds_task.h"
 #include "graph/graph.h"
 #include "graph/graph_entry.h"
-#include "main/client_context.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::common;
 using namespace kuzu::catalog;
@@ -28,8 +26,7 @@ static std::shared_ptr<FrontierTask> getFrontierTask(const main::ClientContext* 
     auto numThreads = context->getMaxNumThreadForExec();
     auto sharedState =
         std::make_shared<FrontierTaskSharedState>(numThreads, *computeState.frontierPair);
-    auto maxOffset =
-        graph->getMaxOffset(transaction::Transaction::Get(*context), info.getBoundTableID());
+    auto maxOffset = graph->getMaxOffset(context->getTransaction(), info.getBoundTableID());
     sharedState->morselDispatcher.init(maxOffset);
     return std::make_shared<FrontierTask>(numThreads, info, sharedState);
 }
@@ -53,8 +50,8 @@ static void scheduleFrontierTask(ExecutionContext* context, const GraphRelInfo& 
     // more generally decrease the number of worker threads by 1. Therefore, we instruct
     // scheduleTaskAndWaitOrError to start a new thread by passing true as the last
     // argument.
-    TaskScheduler::Get(*context->clientContext)
-        ->scheduleTaskAndWaitOrError(task, context, true /* launchNewWorkerThread */);
+    clientContext->getTaskScheduler()->scheduleTaskAndWaitOrError(task, context,
+        true /* launchNewWorkerThread */);
 }
 
 static void runOneIteration(ExecutionContext* context, Graph* graph,
@@ -128,12 +125,12 @@ static void runVertexComputeInternal(const TableCatalogEntry* currentEntry,
         task->runSparse();
         return;
     }
-    auto maxOffset = graph->getMaxOffset(transaction::Transaction::Get(*context->clientContext),
-        currentEntry->getTableID());
+    auto maxOffset =
+        graph->getMaxOffset(context->clientContext->getTransaction(), currentEntry->getTableID());
     auto sharedState = task->getSharedState();
     sharedState->morselDispatcher.init(maxOffset);
-    TaskScheduler::Get(*context->clientContext)
-        ->scheduleTaskAndWaitOrError(task, context, true /* launchNewWorkerThread */);
+    context->clientContext->getTaskScheduler()->scheduleTaskAndWaitOrError(task, context,
+        true /* launchNewWorkerThread */);
 }
 
 void GDSUtils::runVertexCompute(ExecutionContext* context, GDSDensityState densityState,

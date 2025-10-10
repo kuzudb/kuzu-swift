@@ -2,7 +2,6 @@
 
 #include "main/plan_printer.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 
@@ -12,7 +11,7 @@ namespace processor {
 void Profile::executeInternal(ExecutionContext* context) {
     const auto planInString =
         main::PlanPrinter::printPlanToOstream(info.physicalPlan, context->profiler).str();
-    appendMessage(planInString, storage::MemoryManager::Get(*context->clientContext));
+    appendMessage(planInString, context->clientContext->getMemoryManager());
 }
 
 } // namespace processor

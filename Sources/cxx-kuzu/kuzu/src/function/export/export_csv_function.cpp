@@ -4,7 +4,6 @@
 #include "function/export/export_function.h"
 #include "function/scalar_function.h"
 #include "main/client_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 namespace kuzu {
 namespace function {
@@ -113,7 +112,7 @@ struct ExportCSVSharedState : public ExportFuncSharedState {
     ExportCSVSharedState() = default;
 
     void init(main::ClientContext& context, const ExportFuncBindData& bindData) override {
-        fileInfo = VirtualFileSystem::GetUnsafe(context)->openFile(bindData.fileName,
+        fileInfo = context.getVFSUnsafe()->openFile(bindData.fileName,
             FileOpenFlags(FileFlags::WRITE | FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS), &context);
         writeHeader(bindData);
     }
@@ -164,8 +163,8 @@ struct ExportCSVLocalState final : public ExportFuncLocalState {
             castFuncs[i] = function::CastFunction::bindCastFunction("cast",
                 exportCSVBindData.types[i], LogicalType::STRING())
                                ->execFunc;
-            auto castVector = std::make_unique<ValueVector>(LogicalTypeID::STRING,
-                storage::MemoryManager::Get(context));
+            auto castVector =
+                std::make_unique<ValueVector>(LogicalTypeID::STRING, context.getMemoryManager());
             castVectors.push_back(castVector.get());
             if (isFlatVec[i]) {
                 flatCastDataChunk->insert(numInsertedFlatVector, std::move(castVector));

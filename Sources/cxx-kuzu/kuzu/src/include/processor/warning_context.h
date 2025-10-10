@@ -6,6 +6,7 @@
 
 #include "common/api.h"
 #include "common/types/types.h"
+#include "main/client_config.h"
 #include "processor/operator/persistent/reader/copy_from_error.h"
 
 namespace kuzu {
@@ -15,9 +16,7 @@ class ValueVector;
 namespace storage {
 class ColumnChunkData;
 }
-namespace main {
-struct ClientConfig;
-}
+
 namespace processor {
 
 class SerialCSVReader;
@@ -51,8 +50,6 @@ public:
     // NOTE: this function only works if the logical operator is COPY FROM
     // for other operators setIgnoreErrorsForCurrentQuery() is not called
     bool getIgnoreErrorsOption() const;
-
-    static WarningContext* Get(const main::ClientContext& context);
 
 private:
     std::mutex mtx;

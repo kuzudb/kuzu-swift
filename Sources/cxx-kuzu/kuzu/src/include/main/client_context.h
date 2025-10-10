@@ -5,48 +5,45 @@
 #include <mutex>
 #include <optional>
 
-#include "common/arrow/arrow_result_config.h"
 #include "common/timer.h"
 #include "common/types/value/value.h"
 #include "function/table/scan_replacement.h"
 #include "main/client_config.h"
 #include "main/prepared_statement_manager.h"
 #include "main/query_result.h"
+#include "parser/statement.h"
 #include "prepared_statement.h"
+#include "processor/warning_context.h"
+#include "transaction/transaction_context.h"
 
 namespace kuzu {
+namespace parser {
+class StandaloneCallRewriter;
+} // namespace parser
+
+namespace binder {
+class Binder;
+class ExpressionBinder;
+} // namespace binder
+
 namespace common {
 class RandomEngine;
 class TaskScheduler;
 class ProgressBar;
-class VirtualFileSystem;
 } // namespace common
-
-namespace catalog {
-class Catalog;
-}
 
 namespace extension {
 class ExtensionManager;
 } // namespace extension
 
+namespace processor {
+class ImportDB;
+class TableFunctionCall;
+} // namespace processor
+
 namespace graph {
 class GraphEntrySet;
 }
-
-namespace storage {
-class StorageManager;
-}
-
-namespace processor {
-class ImportDB;
-class WarningContext;
-} // namespace processor
-
-namespace transaction {
-class TransactionContext;
-class Transaction;
-} // namespace transaction
 
 namespace main {
 struct DBConfig;
@@ -71,14 +68,14 @@ struct ActiveQuery {
  */
 class KUZU_API ClientContext {
     friend class Connection;
-    friend class EmbeddedShell;
-    friend struct SpillToDiskSetting;
+    friend class binder::Binder;
+    friend class binder::ExpressionBinder;
     friend class processor::ImportDB;
-    friend class processor::WarningContext;
-    friend class transaction::TransactionContext;
-    friend class common::RandomEngine;
-    friend class common::ProgressBar;
-    friend class graph::GraphEntrySet;
+    friend class processor::TableFunctionCall;
+    friend class parser::StandaloneCallRewriter;
+    friend struct SpillToDiskSetting;
+    friend class EmbeddedShell;
+    friend class extension::ExtensionManager;
 
 public:
     explicit ClientContext(Database* database);
@@ -107,6 +104,13 @@ public:
     void setMaxNumThreadForExec(uint64_t numThreads);
     uint64_t getMaxNumThreadForExec() const;
 
+    // Transaction.
+    transaction::Transaction* getTransaction() const;
+    transaction::TransactionContext* getTransactionContext() const;
+
+    // Progress bar
+    common::ProgressBar* getProgressBar() const;
+
     // Replace function.
     void addScanReplace(function::ScanReplacement scanReplacement);
     std::unique_ptr<function::ScanReplacementData> tryReplaceByName(
@@ -121,9 +125,17 @@ public:
 
     // Getters.
     std::string getDatabasePath() const;
-    Database* getDatabase() const;
-    AttachedKuzuDatabase* getAttachedDatabase() const;
-
+    Database* getDatabase() const { return localDatabase; }
+    common::TaskScheduler* getTaskScheduler() const;
+    DatabaseManager* getDatabaseManager() const;
+    storage::StorageManager* getStorageManager() const;
+    storage::MemoryManager* getMemoryManager() const;
+    extension::ExtensionManager* getExtensionManager() const;
+    storage::WAL* getWAL() const;
+    catalog::Catalog* getCatalog() const;
+    transaction::TransactionManager* getTransactionManagerUnsafe() const;
+    common::VirtualFileSystem* getVFSUnsafe() const;
+    common::RandomEngine* getRandomEngine() const;
     const CachedPreparedStatementManager& getCachedPreparedStatementManager() const {
         return cachedPreparedStatementManager;
     }
@@ -145,25 +157,25 @@ public:
     void addScalarFunction(std::string name, function::function_set definitions);
     void removeScalarFunction(const std::string& name);
 
+    processor::WarningContext& getWarningContextUnsafe();
+    const processor::WarningContext& getWarningContext() const;
+
+    graph::GraphEntrySet& getGraphEntrySetUnsafe();
+
+    const graph::GraphEntrySet& getGraphEntrySet() const;
+
     void cleanUp();
 
-    struct QueryConfig {
-        QueryResultType resultType;
-        common::ArrowResultConfig arrowConfig;
-
-        QueryConfig() : resultType{QueryResultType::FTABLE}, arrowConfig{} {}
-        QueryConfig(QueryResultType resultType, common::ArrowResultConfig arrowConfig)
-            : resultType{resultType}, arrowConfig{arrowConfig} {}
-    };
-
-    std::unique_ptr<QueryResult> query(std::string_view queryStatement,
-        std::optional<uint64_t> queryID = std::nullopt, QueryConfig config = {});
+    // Query.
     std::unique_ptr<PreparedStatement> prepareWithParams(std::string_view query,
         std::unordered_map<std::string, std::unique_ptr<common::Value>> inputParams = {});
     std::unique_ptr<QueryResult> executeWithParams(PreparedStatement* preparedStatement,
         std::unordered_map<std::string, std::unique_ptr<common::Value>> inputParams,
         std::optional<uint64_t> queryID = std::nullopt);
+    std::unique_ptr<QueryResult> query(std::string_view queryStatement,
+        std::optional<uint64_t> queryID = std::nullopt);
 
+private:
     struct TransactionHelper {
         enum class TransactionCommitAction : uint8_t {
             COMMIT_IF_NEW,
@@ -184,8 +196,6 @@ public:
             const std::function<void()>& fun, bool readOnlyStatement, bool isTransactionStatement,
             TransactionCommitAction action);
     };
-
-private:
     void validateTransaction(bool readOnly, bool requireTransaction) const;
 
     std::vector<std::shared_ptr<parser::Statement>> parseQuery(std::string_view query);
@@ -197,7 +207,8 @@ private:
 
     PrepareResult prepareNoLock(std::shared_ptr<parser::Statement> parsedStatement,
         bool shouldCommitNewTransaction,
-        std::unordered_map<std::string, std::shared_ptr<common::Value>> inputParams = {});
+        std::optional<std::unordered_map<std::string, std::shared_ptr<common::Value>>> inputParams =
+            std::nullopt);
 
     template<typename T, typename... Args>
     std::unique_ptr<QueryResult> executeWithParams(PreparedStatement* preparedStatement,
@@ -211,9 +222,10 @@ private:
 
     std::unique_ptr<QueryResult> executeNoLock(PreparedStatement* preparedStatement,
         CachedPreparedStatement* cachedPreparedStatement,
-        std::optional<uint64_t> queryID = std::nullopt, QueryConfig config = {});
+        std::optional<uint64_t> queryID = std::nullopt);
+
     std::unique_ptr<QueryResult> queryNoLock(std::string_view query,
-        std::optional<uint64_t> queryID = std::nullopt, QueryConfig config = {});
+        std::optional<uint64_t> queryID = std::nullopt);
 
     bool canExecuteWriteQuery() const;
 
@@ -242,7 +254,7 @@ private:
     // Progress bar.
     std::unique_ptr<common::ProgressBar> progressBar;
     // Warning information
-    std::unique_ptr<processor::WarningContext> warningContext;
+    processor::WarningContext warningContext;
     // Graph entries
     std::unique_ptr<graph::GraphEntrySet> graphEntrySet;
     // Whether the query can access internal tables/sequences or not.

@@ -16,7 +16,6 @@
 #include "common/string_format.h"
 #include "extension/extension_manager.h"
 #include "function/function_collection.h"
-#include "main/client_context.h"
 #include "transaction/transaction.h"
 
 using namespace kuzu::binder;
@@ -32,21 +31,12 @@ Catalog::Catalog() : version{0} {
     registerBuiltInFunctions();
 }
 
-Catalog* Catalog::Get(const main::ClientContext& context) {
-    if (context.getAttachedDatabase()) {
-        return context.getAttachedDatabase()->getCatalog();
-    } else {
-        return context.getDatabase()->getCatalog();
-    }
-}
-
 void Catalog::initCatalogSets() {
     tables = std::make_unique<CatalogSet>();
     sequences = std::make_unique<CatalogSet>();
     functions = std::make_unique<CatalogSet>();
     types = std::make_unique<CatalogSet>();
     indexes = std::make_unique<CatalogSet>();
-    macros = std::make_unique<CatalogSet>();
     internalTables = std::make_unique<CatalogSet>(true /* isInternal */);
     internalSequences = std::make_unique<CatalogSet>(true /* isInternal */);
     internalFunctions = std::make_unique<CatalogSet>(true /* isInternal */);
@@ -169,13 +159,6 @@ void Catalog::dropTableEntry(Transaction* transaction, const TableCatalogEntry* 
     } else {
         internalTables->dropEntry(transaction, entry->getName(), entry->getOID());
     }
-}
-void Catalog::dropMacroEntry(Transaction* transaction, const kuzu::common::oid_t macroID) {
-    dropMacroEntry(transaction, getScalarMacroCatalogEntry(transaction, macroID));
-}
-
-void Catalog::dropMacroEntry(Transaction* transaction, const ScalarMacroCatalogEntry* entry) {
-    macros->dropEntry(transaction, entry->getName(), entry->getOID());
 }
 
 void Catalog::alterTableEntry(Transaction* transaction, const BoundAlterInfo& info) {
@@ -436,24 +419,13 @@ void Catalog::dropFunction(Transaction* transaction, const std::string& name) {
 CatalogEntry* Catalog::getFunctionEntry(const Transaction* transaction, const std::string& name,
     bool useInternal) const {
     CatalogEntry* result = nullptr;
-    if (functions->containsEntry(transaction, name)) {
-        result = functions->getEntry(transaction, name);
-    } else if (macros->containsEntry(transaction, name)) {
-        result = macros->getEntry(transaction, name);
-    } else if (useInternal) {
+    if (!functions->containsEntry(transaction, name)) {
+        if (!useInternal) {
+            throw CatalogException(getFunctionDoesNotExistMessage(name));
+        }
         result = internalFunctions->getEntry(transaction, name);
     } else {
-        throw CatalogException(getFunctionDoesNotExistMessage(name));
-    }
-    return result;
-}
-
-std::vector<ScalarMacroCatalogEntry*> Catalog::getMacroEntries(
-    const Transaction* transaction) const {
-    std::vector<ScalarMacroCatalogEntry*> result;
-    for (auto& [_, entry] : macros->getEntries(transaction)) {
-        KU_ASSERT(entry->getType() == CatalogEntryType::SCALAR_MACRO_ENTRY);
-        result.push_back(entry->ptrCast<ScalarMacroCatalogEntry>());
+        result = functions->getEntry(transaction, name);
     }
     return result;
 }
@@ -468,12 +440,12 @@ std::vector<FunctionCatalogEntry*> Catalog::getFunctionEntries(
 }
 
 bool Catalog::containsMacro(const Transaction* transaction, const std::string& macroName) const {
-    return macros->containsEntry(transaction, macroName);
+    return functions->containsEntry(transaction, macroName);
 }
 
 function::ScalarMacroFunction* Catalog::getScalarMacroFunction(const Transaction* transaction,
     const std::string& name) const {
-    return macros->getEntry(transaction, name)
+    return functions->getEntry(transaction, name)
         ->constCast<ScalarMacroCatalogEntry>()
         .getMacroFunction();
 }
@@ -482,35 +454,17 @@ function::ScalarMacroFunction* Catalog::getScalarMacroFunction(const Transaction
 void Catalog::addScalarMacroFunction(Transaction* transaction, std::string name,
     std::unique_ptr<function::ScalarMacroFunction> macro) {
     auto entry = std::make_unique<ScalarMacroCatalogEntry>(std::move(name), std::move(macro));
-    macros->createEntry(transaction, std::move(entry));
-}
-
-ScalarMacroCatalogEntry* Catalog::getScalarMacroCatalogEntry(const Transaction* transaction,
-    kuzu::common::oid_t macroID) const {
-    auto result = functions->getEntryOfOID(transaction, macroID);
-    if (result == nullptr) {
-        throw RuntimeException(
-            stringFormat("Cannot find macro catalog entry with id {}.", std::to_string(macroID)));
-    }
-
-    return result->ptrCast<ScalarMacroCatalogEntry>();
+    functions->createEntry(transaction, std::move(entry));
 }
 
 std::vector<std::string> Catalog::getMacroNames(const Transaction* transaction) const {
     std::vector<std::string> macroNames;
-    for (auto& [_, function] : macros->getEntries(transaction)) {
-        KU_ASSERT(function->getType() == CatalogEntryType::SCALAR_MACRO_ENTRY);
-        macroNames.push_back(function->getName());
+    for (auto& [_, function] : functions->getEntries(transaction)) {
+        if (function->getType() == CatalogEntryType::SCALAR_MACRO_ENTRY) {
+            macroNames.push_back(function->getName());
+        }
     }
     return macroNames;
-}
-
-void Catalog::dropMacro(Transaction* transaction, std::string& name) {
-    if (!containsMacro(transaction, name)) {
-        throw CatalogException{stringFormat("Marco {} doesn't exist.", name)};
-    }
-    auto entry = getFunctionEntry(transaction, name);
-    macros->dropEntry(transaction, name, entry->getOID());
 }
 
 void Catalog::registerBuiltInFunctions() {
@@ -584,7 +538,6 @@ void Catalog::serialize(Serializer& ser) const {
     functions->serialize(ser);
     types->serialize(ser);
     indexes->serialize(ser);
-    macros->serialize(ser);
     internalTables->serialize(ser);
     internalSequences->serialize(ser);
     internalFunctions->serialize(ser);
@@ -597,7 +550,6 @@ void Catalog::deserialize(Deserializer& deSer) {
     registerBuiltInFunctions();
     types = CatalogSet::deserialize(deSer);
     indexes = CatalogSet::deserialize(deSer);
-    macros = CatalogSet::deserialize(deSer);
     internalTables = CatalogSet::deserialize(deSer);
     internalSequences = CatalogSet::deserialize(deSer);
     internalFunctions = CatalogSet::deserialize(deSer);

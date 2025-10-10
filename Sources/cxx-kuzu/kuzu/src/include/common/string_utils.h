@@ -78,6 +78,8 @@ public:
     static std::string extractStringBetween(const std::string& input, char delimiterStart,
         char delimiterEnd, bool includeDelimiter = false);
 
+    static std::string removeEscapedCharacters(const std::string& input);
+
     static uint64_t caseInsensitiveHash(const std::string& str);
 
     static bool caseInsensitiveEquals(std::string_view left, std::string_view right);

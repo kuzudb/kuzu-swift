@@ -24,12 +24,8 @@ public:
     RandomEngine();
     RandomEngine(uint64_t seed, uint64_t stream);
 
-    void setSeed(uint64_t seed);
-
     uint32_t nextRandomInteger();
     uint32_t nextRandomInteger(uint32_t upper);
-
-    static RandomEngine* Get(const main::ClientContext& context);
 
 private:
     std::mutex mtx;

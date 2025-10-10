@@ -45,9 +45,11 @@ StatementType PreparedStatement::getStatementType() const {
     return preparedSummary.statementType;
 }
 
-static void validateParam(const std::string& paramName, Value* newVal, Value* oldVal) {
-    if (newVal->getDataType().getLogicalTypeID() == LogicalTypeID::POINTER &&
-        newVal->getValue<uint8_t*>() != oldVal->getValue<uint8_t*>()) {
+void PreparedStatement::validateExecuteParam(const std::string& paramName,
+    common::Value* param) const {
+    if (param->getDataType().getLogicalTypeID() == LogicalTypeID::POINTER &&
+        (!parameterMap.contains(paramName) ||
+            parameterMap.at(paramName)->getValue<uint8_t*>() != param->getValue<uint8_t*>())) {
         throw BinderException(stringFormat(
             "When preparing the current statement the dataframe passed into parameter "
             "'{}' was different from the one provided during prepare. Dataframes parameters "
@@ -55,24 +57,6 @@ static void validateParam(const std::string& paramName, Value* newVal, Value* ol
             "execute or they match the one passed during prepare.",
             paramName));
     }
-}
-
-std::unordered_set<std::string> PreparedStatement::getKnownParameters() {
-    std::unordered_set<std::string> result;
-    for (auto& [k, _] : parameterMap) {
-        result.insert(k);
-    }
-    return result;
-}
-
-void PreparedStatement::updateParameter(const std::string& name, Value* value) {
-    KU_ASSERT(parameterMap.contains(name));
-    validateParam(name, value, parameterMap.at(name).get());
-    *parameterMap.at(name) = std::move(*value);
-}
-
-void PreparedStatement::addParameter(const std::string& name, Value* value) {
-    parameterMap.insert({name, std::make_shared<Value>(*value)});
 }
 
 PreparedStatement::~PreparedStatement() = default;

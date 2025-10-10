@@ -13,7 +13,6 @@
 #include "graph/graph_entry_set.h"
 #include "index/hnsw_index.h"
 #include "index/hnsw_index_utils.h"
-#include "main/client_context.h"
 #include "parser/parser.h"
 #include "planner/operator/logical_hash_join.h"
 #include "planner/operator/logical_projection.h"
@@ -71,8 +70,8 @@ std::unique_ptr<TableFuncBindData> QueryHNSWIndexBindData::copy() const {
 
 static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     const TableFuncBindInput* input) {
-    auto catalog = Catalog::Get(*context);
-    auto transaction = transaction::Transaction::Get(*context);
+    auto catalog = context->getCatalog();
+    auto transaction = context->getTransaction();
     context->setUseInternalCatalogEntry(true /* useInternalCatalogEntry */);
     const auto tableOrGraphName = input->getLiteralVal<std::string>(0);
     auto indexName = input->getLiteralVal<std::string>(1);
@@ -81,8 +80,8 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
     std::unique_ptr<BoundStatement> boundStatement;
     if (catalog->containsTable(transaction, tableOrGraphName)) {
         tableName = tableOrGraphName;
-    } else if (graph::GraphEntrySet::Get(*context)->hasGraph(tableOrGraphName)) {
-        auto graphEntry = graph::GraphEntrySet::Get(*context)->getEntry(tableOrGraphName);
+    } else if (context->getGraphEntrySetUnsafe().hasGraph(tableOrGraphName)) {
+        auto graphEntry = context->getGraphEntrySetUnsafe().getEntry(tableOrGraphName);
         std::string cypherQuery;
         if (graphEntry->type == graph::GraphEntryType::NATIVE) {
             auto& nativeEntry = graphEntry->cast<graph::ParsedNativeGraphEntry>();
@@ -133,8 +132,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(main::ClientContext* context,
         throw BinderException(
             stringFormat("Cannot find table or graph named as {}.", tableOrGraphName));
     }
-    auto nodeTableEntry = HNSWIndexUtils::bindNodeTable(*context, tableName);
-    (void)HNSWIndexUtils::validateIndexExistence(*context, nodeTableEntry, indexName,
+    auto nodeTableEntry = HNSWIndexUtils::bindNodeTable(*context, tableName, indexName,
         HNSWIndexUtils::IndexOperation::QUERY);
     // Bind columns
     auto columnNames = std::vector<std::string>{QueryVectorIndexFunction::nnColumnName,
@@ -228,7 +226,7 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
     // As `k` can be larger than the default vector capacity, we run the actual search in the first
     // call, and output the rest of the query result in chunks in the following calls.
     if (!localState->hasResultToOutput()) {
-        const auto nodeTable = storage::StorageManager::Get(*input.context->clientContext)
+        const auto nodeTable = input.context->clientContext->getStorageManager()
                                    ->getTable(bindData->nodeTableEntry->getTableID())
                                    ->ptrCast<storage::NodeTable>();
         auto indexOpt = nodeTable->getIndex(bindData->indexEntry->getIndexName());
@@ -243,9 +241,8 @@ static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput& output) 
                 auto queryVector = HNSWQueryVector<T>(input.context->clientContext,
                     bindData->queryExpression, index.getElementType(), dimension);
                 auto queryVectorHandle = EmbeddingHandle{0, &queryVector};
-                localState->result =
-                    index.search(transaction::Transaction::Get(*input.context->clientContext),
-                        queryVectorHandle, localState->searchState);
+                localState->result = index.search(input.context->clientContext->getTransaction(),
+                    queryVectorHandle, localState->searchState);
             },
             [&](auto) { KU_UNREACHABLE; });
     }
@@ -271,10 +268,10 @@ static std::unique_ptr<TableFuncSharedState> initQueryHNSWSharedState(
     const TableFuncInitSharedStateInput& input) {
     const auto bindData = input.bindData->constPtrCast<QueryHNSWIndexBindData>();
     auto context = input.context->clientContext;
-    auto nodeTable = storage::StorageManager::Get(*context)
+    auto nodeTable = context->getStorageManager()
                          ->getTable(bindData->nodeTableEntry->getTableID())
                          ->ptrCast<storage::NodeTable>();
-    auto numNodes = nodeTable->getStats(transaction::Transaction::Get(*context)).getTableCard();
+    auto numNodes = nodeTable->getStats(context->getTransaction()).getTableCard();
     return std::make_unique<QueryHNSWIndexSharedState>(nodeTable, numNodes);
 }
 
@@ -290,14 +287,12 @@ std::unique_ptr<TableFuncLocalState> initQueryHNSWLocalState(
         hnswBindData->nodeTableEntry->getTableID(), hnswBindData->indexEntry->getIndexName());
     auto lowerRelTableName = HNSWIndexUtils::getLowerGraphTableName(
         hnswBindData->nodeTableEntry->getTableID(), hnswBindData->indexEntry->getIndexName());
-    auto catalog = Catalog::Get(*context);
+    auto catalog = context->getCatalog();
     auto upperRelTableEntry =
-        catalog
-            ->getTableCatalogEntry(transaction::Transaction::Get(*context), upperRelTableName, true)
+        catalog->getTableCatalogEntry(context->getTransaction(), upperRelTableName, true)
             ->ptrCast<RelGroupCatalogEntry>();
     auto lowerRelTableEntry =
-        catalog
-            ->getTableCatalogEntry(transaction::Transaction::Get(*context), lowerRelTableName, true)
+        catalog->getTableCatalogEntry(context->getTransaction(), lowerRelTableName, true)
             ->ptrCast<RelGroupCatalogEntry>();
     HNSWSearchState searchState{context, hnswBindData->nodeTableEntry, upperRelTableEntry,
         lowerRelTableEntry, *hnswSharedState->nodeTable, hnswBindData->indexColumnID,

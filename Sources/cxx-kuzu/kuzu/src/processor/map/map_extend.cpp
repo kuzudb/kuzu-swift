@@ -2,7 +2,6 @@
 #include "binder/expression/property_expression.h"
 #include "binder/expression_binder.h"
 #include "common/enums/extend_direction_util.h"
-#include "main/client_context.h"
 #include "planner/operator/extend/logical_extend.h"
 #include "processor/operator/scan/scan_multi_rel_tables.h"
 #include "processor/operator/scan/scan_rel_table.h"
@@ -73,7 +72,7 @@ static std::vector<ScanRelTableInfo> populateRelTableCollectionScanner(table_id_
     ExtendDirection extendDirection, bool shouldScanNbrID, const expression_vector& properties,
     const std::vector<ColumnPredicateSet>& columnPredicates, main::ClientContext* clientContext) {
     std::vector<ScanRelTableInfo> scanInfos;
-    const auto storageManager = StorageManager::Get(*clientContext);
+    const auto storageManager = clientContext->getStorageManager();
     for (auto& info : entry.getRelEntryInfos()) {
         auto srcTableID = info.nodePair.srcTableID;
         auto dstTableID = info.nodePair.dstTableID;
@@ -136,7 +135,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapExtend(const LogicalOperator* l
     }
     auto scanInfo = ScanOpInfo(inNodeIDPos, outVectorsPos);
     std::vector<std::string> tableNames;
-    auto storageManager = StorageManager::Get(*clientContext);
+    auto storageManager = clientContext->getStorageManager();
     for (auto entry : rel->getEntries()) {
         tableNames.push_back(entry->getName());
     }

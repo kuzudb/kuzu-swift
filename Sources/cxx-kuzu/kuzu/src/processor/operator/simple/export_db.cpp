@@ -12,9 +12,7 @@
 #include "common/string_utils.h"
 #include "extension/extension_manager.h"
 #include "function/scalar_macro_function.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 using namespace kuzu::transaction;
@@ -44,7 +42,7 @@ std::string ExportDBPrintInfo::toString() const {
 
 static void writeStringStreamToFile(ClientContext* context, const std::string& ssString,
     const std::string& path) {
-    const auto fileInfo = VirtualFileSystem::GetUnsafe(*context)->openFile(path,
+    const auto fileInfo = context->getVFSUnsafe()->openFile(path,
         FileOpenFlags(FileFlags::WRITE | FileFlags::CREATE_IF_NOT_EXISTS), context);
     fileInfo->writeFile(reinterpret_cast<const uint8_t*>(ssString.c_str()), ssString.size(),
         0 /* offset */);
@@ -91,8 +89,8 @@ static void writeCopyRelStatement(stringstream& ss, const ClientContext* context
     const std::unordered_map<std::string, const std::atomic<bool>*>& canUseParallelReader) {
     const auto csvConfig = CSVReaderConfig::construct(info->options);
     std::string columns = getTablePropertyDefinitions(entry);
-    auto transaction = Transaction::Get(*context);
-    const auto catalog = Catalog::Get(*context);
+    auto transaction = context->getTransaction();
+    const auto catalog = context->getCatalog();
     for (auto& entryInfo : entry->constCast<RelGroupCatalogEntry>().getRelEntryInfos()) {
         auto fromTableName =
             catalog->getTableCatalogEntry(transaction, entryInfo.nodePair.srcTableID)->getName();
@@ -120,7 +118,7 @@ static void writeCopyRelStatement(stringstream& ss, const ClientContext* context
 }
 
 static void exportLoadedExtensions(stringstream& ss, const ClientContext* clientContext) {
-    auto extensionCypher = extension::ExtensionManager::Get(*clientContext)->toCypher();
+    auto extensionCypher = clientContext->getExtensionManager()->toCypher();
     if (!extensionCypher.empty()) {
         ss << extensionCypher << std::endl;
     }
@@ -129,8 +127,8 @@ static void exportLoadedExtensions(stringstream& ss, const ClientContext* client
 std::string getSchemaCypher(ClientContext* clientContext) {
     stringstream ss;
     exportLoadedExtensions(ss, clientContext);
-    const auto catalog = Catalog::Get(*clientContext);
-    auto transaction = Transaction::Get(*clientContext);
+    const auto catalog = clientContext->getCatalog();
+    auto transaction = clientContext->getTransaction();
     ToCypherInfo toCypherInfo;
     for (const auto& nodeTableEntry :
         catalog->getNodeTableEntries(transaction, false /* useInternal */)) {
@@ -154,8 +152,8 @@ std::string getSchemaCypher(ClientContext* clientContext) {
 std::string getCopyCypher(const ClientContext* context, const FileScanInfo* boundFileInfo,
     const std::unordered_map<std::string, const std::atomic<bool>*>& canUseParallelReader) {
     stringstream ss;
-    auto transaction = Transaction::Get(*context);
-    const auto catalog = Catalog::Get(*context);
+    auto transaction = context->getTransaction();
+    const auto catalog = context->getCatalog();
     for (const auto& nodeTableEntry :
         catalog->getNodeTableEntries(transaction, false /* useInternal */)) {
         writeCopyNodeStatement(ss, nodeTableEntry, boundFileInfo, canUseParallelReader);
@@ -169,9 +167,8 @@ std::string getCopyCypher(const ClientContext* context, const FileScanInfo* boun
 std::string getIndexCypher(ClientContext* clientContext, const FileScanInfo& exportFileInfo) {
     stringstream ss;
     IndexToCypherInfo info{clientContext, exportFileInfo};
-    auto transaction = Transaction::Get(*clientContext);
-    auto catalog = Catalog::Get(*clientContext);
-    for (auto entry : catalog->getIndexEntries(transaction)) {
+    for (auto entry :
+        clientContext->getCatalog()->getIndexEntries(clientContext->getTransaction())) {
         auto indexCypher = entry->toCypher(info);
         if (!indexCypher.empty()) {
             ss << indexCypher << std::endl;
@@ -196,7 +193,7 @@ void ExportDB::executeInternal(ExecutionContext* context) {
     // write the index.cypher file
     writeStringStreamToFile(clientContext, getIndexCypher(clientContext, boundFileInfo),
         boundFileInfo.filePaths[0] + "/" + PortDBConstants::INDEX_FILE_NAME);
-    appendMessage("Exported database successfully.", storage::MemoryManager::Get(*clientContext));
+    appendMessage("Exported database successfully.", clientContext->getMemoryManager());
 }
 
 } // namespace processor

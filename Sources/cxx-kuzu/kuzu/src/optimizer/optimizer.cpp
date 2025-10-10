@@ -14,7 +14,6 @@
 #include "optimizer/schema_populator.h"
 #include "optimizer/top_k_optimizer.h"
 #include "planner/operator/logical_explain.h"
-#include "transaction/transaction.h"
 
 namespace kuzu {
 namespace optimizer {
@@ -64,8 +63,8 @@ void Optimizer::optimize(planner::LogicalPlan* plan, main::ClientContext* contex
         if (plan->getLastOperatorRef().getOperatorType() == planner::LogicalOperatorType::EXPLAIN) {
             const auto& explain = plan->getLastOperatorRef().cast<planner::LogicalExplain>();
             if (explain.getExplainType() == common::ExplainType::LOGICAL_PLAN) {
-                auto cardinalityUpdater = CardinalityUpdater(cardinalityEstimator,
-                    transaction::Transaction::Get(*context));
+                auto cardinalityUpdater =
+                    CardinalityUpdater(cardinalityEstimator, context->getTransaction());
                 cardinalityUpdater.rewrite(plan);
             }
         }

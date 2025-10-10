@@ -19,7 +19,6 @@
 #include "processor/operator/simple/use_database.h"
 #include "processor/plan_mapper.h"
 #include "processor/result/factorized_table_util.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 namespace kuzu {
 namespace processor {
@@ -34,7 +33,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapUseDatabase(
     auto useDatabase = logicalOperator->constPtrCast<LogicalUseDatabase>();
     auto printInfo = std::make_unique<UseDatabasePrintInfo>(useDatabase->getDBName());
     auto messageTable =
-        FactorizedTableUtils::getSingleStringColumnFTable(MemoryManager::Get(*clientContext));
+        FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
     return std::make_unique<UseDatabase>(useDatabase->getDBName(), std::move(messageTable),
         getOperatorID(), std::move(printInfo));
 }
@@ -45,7 +44,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapAttachDatabase(
     auto info = attachDatabase->getAttachInfo();
     auto printInfo = std::make_unique<AttachDatabasePrintInfo>(info.dbAlias, info.dbPath);
     auto messageTable =
-        FactorizedTableUtils::getSingleStringColumnFTable(MemoryManager::Get(*clientContext));
+        FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
     return std::make_unique<AttachDatabase>(std::move(info), std::move(messageTable),
         getOperatorID(), std::move(printInfo));
 }
@@ -55,7 +54,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapDetachDatabase(
     auto detachDatabase = logicalOperator->constPtrCast<LogicalDetachDatabase>();
     auto printInfo = std::make_unique<OPPrintInfo>();
     auto messageTable =
-        FactorizedTableUtils::getSingleStringColumnFTable(MemoryManager::Get(*clientContext));
+        FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
     return std::make_unique<DetachDatabase>(detachDatabase->getDBName(), std::move(messageTable),
         getOperatorID(), std::move(printInfo));
 }
@@ -75,7 +74,7 @@ static void exportDatabaseCollectParallelFlags(const std::unique_ptr<DummySimple
 std::unique_ptr<PhysicalOperator> PlanMapper::mapExportDatabase(
     const LogicalOperator* logicalOperator) {
     auto exportDatabase = logicalOperator->constPtrCast<LogicalExportDatabase>();
-    auto fs = VirtualFileSystem::GetUnsafe(*clientContext);
+    auto fs = clientContext->getVFSUnsafe();
     auto boundFileInfo = exportDatabase->getBoundFileInfo();
     KU_ASSERT(boundFileInfo->filePaths.size() == 1);
     auto filePath = boundFileInfo->filePaths[0];
@@ -85,7 +84,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapExportDatabase(
     fs->createDir(filePath);
     auto printInfo = std::make_unique<ExportDBPrintInfo>(filePath, boundFileInfo->options);
     auto messageTable =
-        FactorizedTableUtils::getSingleStringColumnFTable(MemoryManager::Get(*clientContext));
+        FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
     auto exportDB = std::make_unique<ExportDB>(boundFileInfo->copy(),
         exportDatabase->isSchemaOnly(), messageTable, getOperatorID(), std::move(printInfo));
     auto sink = std::make_unique<DummySimpleSink>(messageTable, getOperatorID());
@@ -102,7 +101,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapImportDatabase(
     auto importDatabase = logicalOperator->constPtrCast<LogicalImportDatabase>();
     auto printInfo = std::make_unique<OPPrintInfo>();
     auto messageTable =
-        FactorizedTableUtils::getSingleStringColumnFTable(MemoryManager::Get(*clientContext));
+        FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
     return std::make_unique<ImportDB>(importDatabase->getQuery(), importDatabase->getIndexQuery(),
         std::move(messageTable), getOperatorID(), std::move(printInfo));
 }
@@ -112,7 +111,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapExtension(const LogicalOperator
     auto& auxInfo = logicalExtension->getAuxInfo();
     auto path = auxInfo.path;
     auto messageTable =
-        FactorizedTableUtils::getSingleStringColumnFTable(MemoryManager::Get(*clientContext));
+        FactorizedTableUtils::getSingleStringColumnFTable(clientContext->getMemoryManager());
     switch (auxInfo.action) {
     case ExtensionAction::INSTALL: {
         auto installAuxInfo = auxInfo.contCast<InstallExtensionAuxInfo>();

@@ -37,11 +37,10 @@ void CardinalityEstimator::init(const QueryGraph& queryGraph) {
 void CardinalityEstimator::init(const NodeExpression& node) {
     auto key = node.getInternalID()->getUniqueName();
     cardinality_t numNodes = 0u;
-    auto storageManager = storage::StorageManager::Get(*context);
-    auto transaction = transaction::Transaction::Get(*context);
     for (auto tableID : node.getTableIDs()) {
         auto stats =
-            storageManager->getTable(tableID)->cast<storage::NodeTable>().getStats(transaction);
+            context->getStorageManager()->getTable(tableID)->cast<storage::NodeTable>().getStats(
+                context->getTransaction());
         numNodes += stats.getTableCard();
         if (!nodeTableStats.contains(tableID)) {
             nodeTableStats.insert({tableID, std::move(stats)});
@@ -158,9 +157,8 @@ static std::optional<cardinality_t> getTableStatsIfPossible(main::ClientContext*
         auto& propertyExpr = predicate.getChild(0)->cast<PropertyExpression>();
         auto tableID = propertyExpr.getSingleTableID();
         if (nodeTableStats.contains(tableID) && propertyExpr.hasProperty(tableID)) {
-            auto transaction = Transaction::Get(*context);
             auto entry =
-                catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, tableID);
+                context->getCatalog()->getTableCatalogEntry(context->getTransaction(), tableID);
             auto columnID = entry->getColumnID(propertyExpr.getPropertyName());
             if (columnID != INVALID_COLUMN_ID && columnID != ROW_IDX_COLUMN_ID) {
                 auto& stats = nodeTableStats.at(tableID);
@@ -205,8 +203,7 @@ uint64_t CardinalityEstimator::getNumRels(const Transaction* transaction,
     const std::vector<table_id_t>& tableIDs) const {
     cardinality_t numRels = 0u;
     for (auto tableID : tableIDs) {
-        numRels +=
-            storage::StorageManager::Get(*context)->getTable(tableID)->getNumTotalRows(transaction);
+        numRels += context->getStorageManager()->getTable(tableID)->getNumTotalRows(transaction);
     }
     return atLeastOne(numRels);
 }

@@ -21,12 +21,12 @@ FTSIndex::FTSIndex(IndexInfo indexInfo, std::unique_ptr<IndexStorageInfo> storag
 
 std::unique_ptr<Index> FTSIndex::load(main::ClientContext* context, StorageManager*,
     IndexInfo indexInfo, std::span<uint8_t> storageInfoBuffer) {
-    auto catalog = catalog::Catalog::Get(*context);
+    auto catalog = context->getCatalog();
     auto reader =
         std::make_unique<BufferReader>(storageInfoBuffer.data(), storageInfoBuffer.size());
     auto storageInfo = FTSStorageInfo::deserialize(std::move(reader));
-    auto indexEntry = catalog->getIndex(transaction::Transaction::Get(*context), indexInfo.tableID,
-        indexInfo.name);
+    auto indexEntry =
+        catalog->getIndex(context->getTransaction(), indexInfo.tableID, indexInfo.name);
     auto ftsConfig = indexEntry->getAuxInfo().cast<FTSIndexAuxInfo>().config;
     return std::make_unique<FTSIndex>(std::move(indexInfo), std::move(storageInfo),
         std::move(ftsConfig), context);
@@ -75,7 +75,8 @@ static std::vector<std::string> getTerms(Transaction* transaction, FTSConfig& co
         }
         content = indexVector->getValue<ku_string_t>(pos).getAsString();
         FTSUtils::normalizeQuery(content, regexPattern);
-        auto termsInContent = FTSUtils::tokenizeString(content, config);
+        auto termsInContent =
+            StringUtils::split(content, " " /* delimiter */, true /* ignoreEmptyStringParts */);
         termsInContent = FTSUtils::stemTerms(termsInContent, config, mm, stopWordsTable,
             transaction, true /* isConjunctive */, false /* isQuery */);
         // TODO(Ziyi): StringUtils::split() has a bug which doesn't ignore empty parts even
@@ -140,8 +141,8 @@ std::unique_ptr<Index::UpdateState> FTSIndex::initUpdateState(main::ClientContex
     auto ftsUpdateState =
         std::make_unique<FTSUpdateState>(context, internalTableInfo, indexInfo.columnIDs, columnID);
     ftsUpdateState->ftsInsertState = initInsertState(context, isVisible);
-    ftsUpdateState->ftsDeleteState = initDeleteState(transaction::Transaction::Get(*context),
-        MemoryManager::Get(*context), isVisible);
+    ftsUpdateState->ftsDeleteState =
+        initDeleteState(context->getTransaction(), context->getMemoryManager(), isVisible);
     return ftsUpdateState;
 }
 
@@ -206,10 +207,10 @@ void FTSIndex::finalize(main::ClientContext* context) {
     if (numTotalRows == ftsStorageInfo.numCheckpointedNodes) {
         return;
     }
-    auto transaction = transaction::Transaction::Get(*context);
+    auto transaction = context->getTransaction();
     auto dataChunk = DataChunkState::getSingleValueDataChunkState();
-    ValueVector idVector{LogicalType::INTERNAL_ID(), MemoryManager::Get(*context), dataChunk};
-    IndexTableState indexTableState{MemoryManager::Get(*context), transaction, internalTableInfo,
+    ValueVector idVector{LogicalType::INTERNAL_ID(), context->getMemoryManager(), dataChunk};
+    IndexTableState indexTableState{context->getMemoryManager(), transaction, internalTableInfo,
         indexInfo.columnIDs, idVector, dataChunk};
     internalID_t insertedNodeID = {INVALID_OFFSET, internalTableInfo.table->getTableID()};
     for (auto offset = ftsStorageInfo.numCheckpointedNodes; offset < numTotalRows; offset++) {
@@ -226,7 +227,7 @@ void FTSIndex::finalize(main::ClientContext* context) {
 
 void FTSIndex::checkpoint(main::ClientContext* context, storage::PageAllocator& pageAllocator) {
     KU_ASSERT(!context->isInMemory());
-    auto catalog = catalog::Catalog::Get(*context);
+    auto catalog = context->getCatalog();
     internalTableInfo.docTable->checkpoint(context,
         catalog->getTableCatalogEntry(&DUMMY_CHECKPOINT_TRANSACTION,
             internalTableInfo.docTable->getTableID()),

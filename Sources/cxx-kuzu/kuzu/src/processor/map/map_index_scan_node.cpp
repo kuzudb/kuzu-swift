@@ -1,4 +1,3 @@
-#include "main/client_context.h"
 #include "planner/operator/scan/logical_index_look_up.h"
 #include "processor/expression_mapper.h"
 #include "processor/operator/index_lookup.h"
@@ -17,7 +16,7 @@ std::unique_ptr<PhysicalOperator> PlanMapper::mapIndexLookup(
     auto outSchema = logicalIndexScan.getSchema();
     auto child = logicalOperator->getChild(0).get();
     auto prevOperator = mapOperator(child);
-    auto storageManager = storage::StorageManager::Get(*clientContext);
+    auto storageManager = clientContext->getStorageManager();
     auto exprMapper = ExpressionMapper(child->getSchema());
     std::vector<IndexLookupInfo> indexLookupInfos;
     for (auto i = 0u; i < logicalIndexScan.getNumInfos(); ++i) {

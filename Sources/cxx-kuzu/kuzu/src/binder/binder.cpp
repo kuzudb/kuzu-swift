@@ -8,12 +8,10 @@
 #include "common/string_utils.h"
 #include "function/built_in_function_utils.h"
 #include "function/table/table_function.h"
-#include "parser/statement.h"
 #include "processor/operator/persistent/reader/csv/parallel_csv_reader.h"
 #include "processor/operator/persistent/reader/csv/serial_csv_reader.h"
 #include "processor/operator/persistent/reader/npy/npy_reader.h"
 #include "processor/operator/persistent/reader/parquet/parquet_reader.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::catalog;
 using namespace kuzu::common;
@@ -221,8 +219,8 @@ TableFunction Binder::getScanFunction(const FileTypeInfo& typeInfo,
     Function* func = nullptr;
     std::vector<LogicalType> inputTypes;
     inputTypes.push_back(LogicalType::STRING());
-    auto catalog = Catalog::Get(*clientContext);
-    auto transaction = transaction::Transaction::Get(*clientContext);
+    auto catalog = clientContext->getCatalog();
+    auto transaction = clientContext->getTransaction();
     switch (typeInfo.fileType) {
     case FileType::PARQUET: {
         auto entry = catalog->getFunctionEntry(transaction, ParquetScanFunction::name);
@@ -237,7 +235,7 @@ TableFunction Binder::getScanFunction(const FileTypeInfo& typeInfo,
     case FileType::CSV: {
         bool containCompressedCSV = std::any_of(fileScanInfo.filePaths.begin(),
             fileScanInfo.filePaths.end(), [&](const auto& file) {
-                return VirtualFileSystem::GetUnsafe(*clientContext)->isCompressedFile(file);
+                return clientContext->getVFSUnsafe()->isCompressedFile(file);
             });
         auto csvConfig = CSVReaderConfig::construct(fileScanInfo.options);
         // Parallel CSV scanning is only allowed:
@@ -272,6 +270,14 @@ TableFunction Binder::getScanFunction(const FileTypeInfo& typeInfo,
         KU_UNREACHABLE;
     }
     return *func->ptrCast<TableFunction>();
+}
+
+void Binder::validateAllInputParametersParsed() const {
+    for (const auto& [name, _] : expressionBinder.parameterMap) {
+        if (!expressionBinder.parsedParameters.contains(name)) {
+            throw Exception("Parameter " + name + " not found.");
+        }
+    }
 }
 
 } // namespace binder

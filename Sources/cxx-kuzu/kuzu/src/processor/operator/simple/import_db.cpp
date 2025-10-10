@@ -1,10 +1,7 @@
 #include "processor/operator/simple/import_db.h"
 
 #include "common/exception/runtime.h"
-#include "main/client_context.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
-#include "transaction/transaction_context.h"
 
 using namespace kuzu::common;
 using namespace kuzu::transaction;
@@ -26,15 +23,14 @@ static void validateQueryResult(main::QueryResult* queryResult) {
 void ImportDB::executeInternal(ExecutionContext* context) {
     auto clientContext = context->clientContext;
     if (query.empty()) { // Export empty database.
-        appendMessage("Imported database successfully.",
-            storage::MemoryManager::Get(*clientContext));
+        appendMessage("Imported database successfully.", clientContext->getMemoryManager());
         return;
     }
     // TODO(Guodong): this is special for "Import database". Should refactor after we support
     // multiple DDL and COPY statements in a single transaction.
     // Currently, we split multiple query statements into single query and execute them one by one,
     // each with an auto transaction.
-    auto transactionContext = transaction::TransactionContext::Get(*clientContext);
+    auto transactionContext = clientContext->getTransactionContext();
     if (transactionContext->hasActiveTransaction()) {
         transactionContext->commit();
     }
@@ -44,7 +40,7 @@ void ImportDB::executeInternal(ExecutionContext* context) {
         res = clientContext->queryNoLock(indexQuery);
         validateQueryResult(res.get());
     }
-    appendMessage("Imported database successfully.", storage::MemoryManager::Get(*clientContext));
+    appendMessage("Imported database successfully.", clientContext->getMemoryManager());
 }
 
 } // namespace processor

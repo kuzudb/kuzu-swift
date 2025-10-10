@@ -35,7 +35,7 @@ bool RJOutputWriter::inOutputNodeMask(common::offset_t offset) {
 }
 
 std::unique_ptr<ValueVector> RJOutputWriter::createVector(const LogicalType& type) {
-    auto vector = std::make_unique<ValueVector>(type.copy(), storage::MemoryManager::Get(*context));
+    auto vector = std::make_unique<ValueVector>(type.copy(), context->getMemoryManager());
     vector->state = DataChunkState::getSingleValueDataChunkState();
     vectors.push_back(vector.get());
     return vector;

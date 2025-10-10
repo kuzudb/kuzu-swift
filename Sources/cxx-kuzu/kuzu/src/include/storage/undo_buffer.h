@@ -88,7 +88,7 @@ public:
     void createDeleteInfo(common::node_group_idx_t nodeGroupIdx, common::row_idx_t startRow,
         common::row_idx_t numRows, const VersionRecordHandler* versionRecordHandler);
     void createVectorUpdateInfo(UpdateInfo* updateInfo, common::idx_t vectorIdx,
-        VectorUpdateInfo* vectorUpdateInfo, common::transaction_t version);
+        VectorUpdateInfo* vectorUpdateInfo);
 
     void commit(common::transaction_t commitTS) const;
     void rollback(main::ClientContext* context) const;
@@ -117,7 +117,8 @@ private:
         const uint8_t* record);
 
     static void commitVectorUpdateInfo(const uint8_t* record, common::transaction_t commitTS);
-    static void rollbackVectorUpdateInfo(const uint8_t* record);
+    static void rollbackVectorUpdateInfo(const transaction::Transaction* transaction,
+        const uint8_t* record);
 
 private:
     std::mutex mtx;

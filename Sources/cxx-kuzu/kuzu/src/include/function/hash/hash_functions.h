@@ -9,7 +9,6 @@
 #include "common/types/interval_t.h"
 #include "common/types/ku_string.h"
 #include "common/types/types.h"
-#include "common/types/uint128_t.h"
 
 namespace kuzu {
 namespace function {
@@ -108,11 +107,6 @@ inline void Hash::operation(const int8_t& key, common::hash_t& result) {
 
 template<>
 inline void Hash::operation(const common::int128_t& key, common::hash_t& result) {
-    result = murmurhash64(key.low) ^ murmurhash64(key.high);
-}
-
-template<>
-inline void Hash::operation(const common::uint128_t& key, common::hash_t& result) {
     result = murmurhash64(key.low) ^ murmurhash64(key.high);
 }
 

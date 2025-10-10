@@ -25,7 +25,6 @@
 #include "parser/ddl/drop.h"
 #include "parser/expression/parsed_function_expression.h"
 #include "parser/expression/parsed_literal_expression.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::common;
 using namespace kuzu::parser;
@@ -112,7 +111,6 @@ static void validatePrimaryKey(const std::string& pkColName,
     case PhysicalTypeID::INT32:
     case PhysicalTypeID::INT64:
     case PhysicalTypeID::INT128:
-    case PhysicalTypeID::UINT128:
     case PhysicalTypeID::STRING:
     case PhysicalTypeID::FLOAT:
     case PhysicalTypeID::DOUBLE:
@@ -154,8 +152,7 @@ void Binder::validateNodeTableType(const TableCatalogEntry* entry) {
 
 void Binder::validateTableExistence(const main::ClientContext& context,
     const std::string& tableName) {
-    auto transaction = transaction::Transaction::Get(context);
-    if (!Catalog::Get(context)->containsTable(transaction, tableName)) {
+    if (!context.getCatalog()->containsTable(context.getTransaction(), tableName)) {
         throw BinderException{stringFormat("Table {} does not exist.", tableName)};
     }
 }
@@ -268,8 +265,8 @@ std::unique_ptr<BoundStatement> Binder::bindCreateTableAs(const Statement& state
         }
         propertyDefinitions.insert(propertyDefinitions.begin(),
             PropertyDefinition(ColumnDefinition(InternalKeyword::ID, LogicalType::INTERNAL_ID())));
-        auto catalog = Catalog::Get(*clientContext);
-        auto transaction = transaction::Transaction::Get(*clientContext);
+        auto catalog = clientContext->getCatalog();
+        auto transaction = clientContext->getTransaction();
         auto fromTable =
             catalog->getTableCatalogEntry(transaction, extraInfo.srcDstTablePairs[0].first)
                 ->ptrCast<NodeTableCatalogEntry>();
@@ -296,8 +293,7 @@ std::unique_ptr<BoundStatement> Binder::bindCreateType(const Statement& statemen
     auto createType = statement.constPtrCast<CreateType>();
     auto name = createType->getName();
     LogicalType type = LogicalType::convertFromString(createType->getDataType(), clientContext);
-    auto transaction = transaction::Transaction::Get(*clientContext);
-    if (Catalog::Get(*clientContext)->containsType(transaction, name)) {
+    if (clientContext->getCatalog()->containsType(clientContext->getTransaction(), name)) {
         throw BinderException{stringFormat("Duplicated type name: {}.", name)};
     }
     return std::make_unique<BoundCreateType>(std::move(name), std::move(type));
@@ -311,10 +307,10 @@ std::unique_ptr<BoundStatement> Binder::bindCreateSequence(const Statement& stat
     int64_t increment = 0;
     int64_t minValue = 0;
     int64_t maxValue = 0;
-    auto transaction = transaction::Transaction::Get(*clientContext);
     switch (info.onConflict) {
     case ConflictAction::ON_CONFLICT_THROW: {
-        if (Catalog::Get(*clientContext)->containsSequence(transaction, sequenceName)) {
+        if (clientContext->getCatalog()->containsSequence(clientContext->getTransaction(),
+                sequenceName)) {
             throw BinderException(sequenceName + " already exists in catalog.");
         }
     } break;

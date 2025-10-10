@@ -74,9 +74,9 @@ table_id_map_t<SemiMask*> ScanNodeTable::getSemiMasks() const {
 
 void ScanNodeTableInfo::initScanState(TableScanState& scanState,
     const std::vector<ValueVector*>& outVectors, main::ClientContext* context) {
-    auto transaction = transaction::Transaction::Get(*context);
+    auto transaction = context->getTransaction();
     scanState.setToTable(transaction, table, columnIDs, copyVector(columnPredicates));
-    initScanStateVectors(scanState, outVectors, MemoryManager::Get(*context));
+    initScanStateVectors(scanState, outVectors, context->getMemoryManager());
 }
 
 void ScanNodeTable::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* context) {
@@ -96,13 +96,13 @@ void ScanNodeTable::initCurrentTable(ExecutionContext* context) {
 void ScanNodeTable::initGlobalStateInternal(ExecutionContext* context) {
     KU_ASSERT(sharedStates.size() == tableInfos.size());
     for (auto i = 0u; i < tableInfos.size(); i++) {
-        sharedStates[i]->initialize(transaction::Transaction::Get(*context->clientContext),
+        sharedStates[i]->initialize(context->clientContext->getTransaction(),
             tableInfos[i].table->ptrCast<NodeTable>(), *progressSharedState);
     }
 }
 
 bool ScanNodeTable::getNextTuplesInternal(ExecutionContext* context) {
-    const auto transaction = transaction::Transaction::Get(*context->clientContext);
+    const auto transaction = context->clientContext->getTransaction();
     while (currentTableIdx < tableInfos.size()) {
         auto& info = tableInfos[currentTableIdx];
         while (info.table->scan(transaction, *scanState)) {

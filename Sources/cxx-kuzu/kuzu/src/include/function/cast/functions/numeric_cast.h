@@ -12,7 +12,7 @@ template<class SRC, class DST>
 inline bool tryCastWithOverflowCheck(SRC value, DST& result) {
     if (NumericLimits<SRC>::isSigned() != NumericLimits<DST>::isSigned()) {
         if (NumericLimits<SRC>::isSigned()) {
-            if (NumericLimits<SRC>::maxNumDigits() > NumericLimits<DST>::maxNumDigits()) {
+            if (NumericLimits<SRC>::digits() > NumericLimits<DST>::digits()) {
                 if (value < 0 || value > (SRC)NumericLimits<DST>::maximum()) {
                     return false;
                 }
@@ -25,7 +25,7 @@ inline bool tryCastWithOverflowCheck(SRC value, DST& result) {
             return true;
         } else {
             // unsigned to signed conversion
-            if (NumericLimits<SRC>::maxNumDigits() >= NumericLimits<DST>::maxNumDigits()) {
+            if (NumericLimits<SRC>::digits() >= NumericLimits<DST>::digits()) {
                 if (value <= (SRC)NumericLimits<DST>::maximum()) {
                     result = (DST)value;
                     return true;
@@ -38,7 +38,7 @@ inline bool tryCastWithOverflowCheck(SRC value, DST& result) {
         }
     } else {
         // same sign conversion
-        if (NumericLimits<DST>::maxNumDigits() >= NumericLimits<SRC>::maxNumDigits()) {
+        if (NumericLimits<DST>::digits() >= NumericLimits<SRC>::digits()) {
             result = (DST)value;
             return true;
         } else {

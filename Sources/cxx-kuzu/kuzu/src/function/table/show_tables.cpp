@@ -67,9 +67,9 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
     columnNames.emplace_back("comment");
     columnTypes.emplace_back(LogicalType::STRING());
     std::vector<TableInfo> tableInfos;
-    auto transaction = transaction::Transaction::Get(*context);
+    auto transaction = context->getTransaction();
     if (!context->hasDefaultDatabase()) {
-        auto catalog = Catalog::Get(*context);
+        auto catalog = context->getCatalog();
         for (auto& entry :
             catalog->getTableEntries(transaction, context->useInternalCatalogEntry())) {
             tableInfos.emplace_back(entry->getName(), entry->getTableID(),
@@ -78,11 +78,12 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
         }
     }
 
-    for (auto attachedDatabase : main::DatabaseManager::Get(*context)->getAttachedDatabases()) {
+    auto databaseManager = context->getDatabaseManager();
+    for (auto attachedDatabase : databaseManager->getAttachedDatabases()) {
         auto databaseName = attachedDatabase->getDBName();
         auto databaseType = attachedDatabase->getDBType();
-        for (auto& entry : attachedDatabase->getCatalog()->getTableEntries(transaction,
-                 context->useInternalCatalogEntry())) {
+        for (auto& entry : attachedDatabase->getCatalog()->getTableEntries(
+                 context->getTransaction(), context->useInternalCatalogEntry())) {
             auto tableInfo = TableInfo{entry->getName(), entry->getTableID(),
                 TableTypeUtils::toString(entry->getTableType()),
                 stringFormat("{}({})", databaseName, databaseType), entry->getComment()};

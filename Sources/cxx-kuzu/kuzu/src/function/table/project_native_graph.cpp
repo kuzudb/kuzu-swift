@@ -2,7 +2,6 @@
 #include "common/types/value/nested.h"
 #include "function/gds/gds.h"
 #include "function/table/bind_data.h"
-#include "function/table/bind_input.h"
 #include "function/table/standalone_call_function.h"
 #include "graph/graph_entry_set.h"
 #include "parser/parser.h"
@@ -34,12 +33,12 @@ struct ProjectGraphNativeBindData final : TableFuncBindData {
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
     const auto bindData = ku_dynamic_cast<ProjectGraphNativeBindData*>(input.bindData);
-    auto graphEntrySet = GraphEntrySet::Get(*input.context->clientContext);
-    graphEntrySet->validateGraphNotExist(bindData->graphName);
+    auto& graphEntrySet = input.context->clientContext->getGraphEntrySetUnsafe();
+    graphEntrySet.validateGraphNotExist(bindData->graphName);
     auto entry = std::make_unique<ParsedNativeGraphEntry>(bindData->nodeInfos, bindData->relInfos);
     // bind graph entry to check if input is valid or not. Ignore bind result.
     GDSFunction::bindGraphEntry(*input.context->clientContext, *entry);
-    graphEntrySet->addGraph(bindData->graphName, std::move(entry));
+    graphEntrySet.addGraph(bindData->graphName, std::move(entry));
     return 0;
 }
 

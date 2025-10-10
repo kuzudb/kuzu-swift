@@ -83,7 +83,7 @@ static std::string getCopyFilePath(const std::string& boundFilePath, const std::
 
 std::unique_ptr<BoundStatement> Binder::bindImportDatabaseClause(const Statement& statement) {
     auto& importDB = statement.constCast<ImportDB>();
-    auto fs = VirtualFileSystem::GetUnsafe(*clientContext);
+    auto fs = clientContext->getVFSUnsafe();
     auto boundFilePath = fs->expandPath(clientContext, importDB.getFilePath());
     if (!fs->fileOrPathExists(boundFilePath, clientContext)) {
         throw BinderException(stringFormat("Directory {} does not exist.", boundFilePath));

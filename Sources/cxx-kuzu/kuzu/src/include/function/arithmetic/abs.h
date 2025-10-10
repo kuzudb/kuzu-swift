@@ -3,8 +3,6 @@
 #include <cstdint>
 
 #include "common/types/int128_t.h"
-#include "common/types/types.h"
-#include "common/types/uint128_t.h"
 
 namespace kuzu {
 namespace function {
@@ -12,7 +10,7 @@ namespace function {
 struct Abs {
     template<class T>
     static inline void operation(T& input, T& result) {
-        if constexpr (common::UnsignedIntegerTypes<T>) {
+        if constexpr (std::is_unsigned_v<T>) {
             result = input;
         } else {
             result = std::abs(input);

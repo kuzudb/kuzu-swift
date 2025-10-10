@@ -1,6 +1,5 @@
 #include "function/table/bind_data.h"
 #include "function/table/standalone_call_function.h"
-#include "function/table/table_function.h"
 #include "processor/execution_context.h"
 #include "processor/warning_context.h"
 
@@ -10,8 +9,7 @@ namespace kuzu {
 namespace function {
 
 static offset_t tableFunc(const TableFuncInput& input, TableFuncOutput&) {
-    auto warningContext = processor::WarningContext::Get(*input.context->clientContext);
-    warningContext->clearPopulatedWarnings();
+    input.context->clientContext->getWarningContextUnsafe().clearPopulatedWarnings();
     return 0;
 }
 

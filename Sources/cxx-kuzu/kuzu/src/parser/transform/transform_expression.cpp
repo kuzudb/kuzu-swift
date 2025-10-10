@@ -313,24 +313,23 @@ std::unique_ptr<ParsedExpression> Transformer::transformListOperatorExpression(
         listContains->addChild(std::move(child));
         return listContains;
     }
-    if (ctx.COLON() || ctx.DOTDOT()) { // x[:]/x[..]
+    if (ctx.COLON()) { // x[:]
         auto listSlice =
             std::make_unique<ParsedFunctionExpression>(ListSliceFunction::name, std::move(raw));
         listSlice->addChild(std::move(child));
         std::unique_ptr<ParsedExpression> left;
         std::unique_ptr<ParsedExpression> right;
-        if (ctx.oC_Expression().size() == 2) { // [left:right]/[left..right]
+        if (ctx.oC_Expression().size() == 2) { // [left:right]
             left = transformExpression(*ctx.oC_Expression(0));
             right = transformExpression(*ctx.oC_Expression(1));
-        } else if (ctx.oC_Expression().size() == 0) { // [:]/[..]
+        } else if (ctx.oC_Expression().size() == 0) { // [:]
             left = std::make_unique<ParsedLiteralExpression>(Value(1), "1");
             right = std::make_unique<ParsedLiteralExpression>(Value(-1), "-1");
         } else {
-            if (ctx.children[1]->getText() == ":" ||
-                ctx.children[1]->getText() == "..") { // [:right]/[..right]
+            if (ctx.children[1]->getText() == ":") { // [:right]
                 left = std::make_unique<ParsedLiteralExpression>(Value(1), "1");
                 right = transformExpression(*ctx.oC_Expression(0));
-            } else { // [left:]/[left..]
+            } else { // [left:]
                 left = transformExpression(*ctx.oC_Expression(0));
                 right = std::make_unique<ParsedLiteralExpression>(Value(-1), "-1");
             }
@@ -599,13 +598,6 @@ std::unique_ptr<ParsedExpression> Transformer::transformOcQuantifier(
 }
 
 std::unique_ptr<ParsedExpression> Transformer::createPropertyExpression(
-    CypherParser::OC_PropertyKeyNameContext& ctx, std::unique_ptr<ParsedExpression> child) {
-    auto key = transformPropertyKeyName(ctx);
-    return std::make_unique<ParsedPropertyExpression>(key, std::move(child),
-        child->toString() + "." + key);
-}
-
-std::unique_ptr<ParsedExpression> Transformer::createPropertyExpression(
     CypherParser::OC_PropertyLookupContext& ctx, std::unique_ptr<ParsedExpression> child) {
     auto key =
         ctx.STAR() ? InternalKeyword::STAR : transformPropertyKeyName(*ctx.oC_PropertyKeyName());
@@ -678,13 +670,8 @@ std::unique_ptr<ParsedExpression> Transformer::transformIntegerLiteral(
         return std::make_unique<ParsedLiteralExpression>(Value(result), ctx.getText());
     }
     int128_t result128 = 0;
-    if (function::trySimpleIntegerCast(reinterpret_cast<const char*>(literal.getData()),
-            literal.len, result128)) {
-        return std::make_unique<ParsedLiteralExpression>(Value(result128), ctx.getText());
-    }
-    uint128_t resultu128 = 0;
-    function::CastString::operation(literal, resultu128);
-    return std::make_unique<ParsedLiteralExpression>(Value(resultu128), ctx.getText());
+    function::CastString::operation(literal, result128);
+    return std::make_unique<ParsedLiteralExpression>(Value(result128), ctx.getText());
 }
 
 std::unique_ptr<ParsedExpression> Transformer::transformDoubleLiteral(

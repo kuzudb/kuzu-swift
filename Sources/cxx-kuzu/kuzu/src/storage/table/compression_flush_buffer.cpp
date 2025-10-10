@@ -1,12 +1,8 @@
 #include "storage/table/compression_flush_buffer.h"
 
-#include <type_traits>
-
-#include "common/types/types.h"
 #include "storage/file_handle.h"
 #include "storage/page_manager.h"
 #include "storage/table/column_chunk_data.h"
-#include <concepts>
 
 namespace kuzu::storage {
 using namespace common;
@@ -15,7 +11,6 @@ using namespace transaction;
 ColumnChunkMetadata uncompressedFlushBuffer(std::span<const uint8_t> buffer, FileHandle* dataFH,
     const PageRange& entry, const ColumnChunkMetadata& metadata) {
     KU_ASSERT(dataFH->getNumPages() >= entry.startPageIdx + entry.numPages);
-    KU_ASSERT(buffer.size_bytes() <= entry.numPages * KUZU_PAGE_SIZE);
     dataFH->writePagesToFile(buffer.data(), buffer.size(), entry.startPageIdx);
     return ColumnChunkMetadata(entry.startPageIdx, entry.numPages, metadata.numValues,
         metadata.compMeta);
@@ -119,17 +114,18 @@ std::pair<std::unique_ptr<uint8_t[]>, uint64_t> flushCompressedFloats(const Comp
 template<std::floating_point T>
 void flushALPExceptions(std::span<const uint8_t> exceptionBuffer, FileHandle* dataFH,
     const PageRange& entry, const ColumnChunkMetadata& metadata) {
-    const auto encodedType = std::is_same_v<T, float> ? PhysicalTypeID::ALP_EXCEPTION_FLOAT :
-                                                        PhysicalTypeID::ALP_EXCEPTION_DOUBLE;
     // we don't care about the min/max values for exceptions
-    const auto preExceptionMetadata = uncompressedGetMetadata(encodedType,
-        metadata.compMeta.floatMetadata()->exceptionCapacity, StorageValue{0}, StorageValue{0});
+    const auto preExceptionMetadata =
+        uncompressedGetMetadata(exceptionBuffer, exceptionBuffer.size(),
+            metadata.compMeta.floatMetadata()->exceptionCapacity, StorageValue{0}, StorageValue{0});
 
     const auto exceptionStartPageIdx =
         entry.startPageIdx + entry.numPages - preExceptionMetadata.getNumPages();
     KU_ASSERT(exceptionStartPageIdx + preExceptionMetadata.getNumPages() <= dataFH->getNumPages());
     PageRange exceptionBlock{exceptionStartPageIdx, preExceptionMetadata.getNumPages()};
 
+    const auto encodedType = std::is_same_v<T, float> ? PhysicalTypeID::ALP_EXCEPTION_FLOAT :
+                                                        PhysicalTypeID::ALP_EXCEPTION_DOUBLE;
     CompressedFlushBuffer exceptionFlushBuffer{
         std::make_shared<Uncompressed>(EncodeException<T>::sizeInBytes()), encodedType};
     (void)exceptionFlushBuffer.operator()(exceptionBuffer, dataFH, exceptionBlock,

@@ -6,7 +6,6 @@
 #include "common/file_system/local_file_system.h"
 #include "common/string_utils.h"
 #include "main/client_context.h"
-#include "main/database.h"
 
 namespace kuzu {
 namespace common {
@@ -129,10 +128,6 @@ FileSystem* VirtualFileSystem::findFileSystem(const std::string& path) const {
         }
     }
     return defaultFS.get();
-}
-
-VirtualFileSystem* VirtualFileSystem::GetUnsafe(const main::ClientContext& context) {
-    return context.getDatabase()->getVFS();
 }
 
 } // namespace common

@@ -3,7 +3,6 @@
 #include "extension/extension_manager.h"
 #include "function/table/bind_data.h"
 #include "function/table/simple_table_function.h"
-#include "main/client_context.h"
 
 using namespace kuzu::catalog;
 using namespace kuzu::common;
@@ -66,7 +65,7 @@ static binder::expression_vector bindColumns(const TableFuncBindInput& input) {
 
 static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* context,
     const TableFuncBindInput* input) {
-    auto loadedExtensions = extension::ExtensionManager::Get(*context)->getLoadedExtensions();
+    auto loadedExtensions = context->getExtensionManager()->getLoadedExtensions();
     std::vector<LoadedExtensionInfo> loadedExtensionInfo;
     for (auto& loadedExtension : loadedExtensions) {
         loadedExtensionInfo.emplace_back(loadedExtension.getExtensionName(),

@@ -48,8 +48,6 @@ public:
 
     void clearEvictedBMEntriesIfNeeded(BufferManager* bufferManager);
 
-    static PageManager* Get(const main::ClientContext& context);
-
 private:
     std::unique_ptr<FreeSpaceManager> freeSpaceManager;
     std::mutex mtx;

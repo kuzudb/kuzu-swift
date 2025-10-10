@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "common/api.h"
-#include "common/types/value/value.h"
 #include "query_summary.h"
 
 namespace kuzu {
@@ -15,12 +14,6 @@ class LogicalType;
 }
 namespace parser {
 class Statement;
-}
-namespace binder {
-class Expression;
-}
-namespace planner {
-class LogicalPlan;
 }
 
 namespace main {
@@ -46,6 +39,8 @@ struct CachedPreparedStatement {
 class PreparedStatement {
     friend class Connection;
     friend class ClientContext;
+    friend class testing::TestHelper;
+    friend class testing::TestRunner;
 
 public:
     KUZU_API ~PreparedStatement();
@@ -62,16 +57,15 @@ public:
      */
     KUZU_API bool isReadOnly() const;
 
-    const std::unordered_set<std::string>& getUnknownParameters() const {
-        return unknownParameters;
+    std::unordered_map<std::string, std::shared_ptr<common::Value>>& getParameterMapUnsafe() {
+        return parameterMap;
     }
-    std::unordered_set<std::string> getKnownParameters();
-    void updateParameter(const std::string& name, common::Value* value);
-    void addParameter(const std::string& name, common::Value* value);
 
     std::string getName() const { return cachedPreparedStatementName; }
 
     common::StatementType getStatementType() const;
+
+    void validateExecuteParam(const std::string& paramName, common::Value* param) const;
 
     static std::unique_ptr<PreparedStatement> getPreparedStatementWithError(
         const std::string& errorMessage);
@@ -82,7 +76,6 @@ private:
     std::string errMsg;
     PreparedSummary preparedSummary;
     std::string cachedPreparedStatementName;
-    std::unordered_set<std::string> unknownParameters;
     std::unordered_map<std::string, std::shared_ptr<common::Value>> parameterMap;
 };
 

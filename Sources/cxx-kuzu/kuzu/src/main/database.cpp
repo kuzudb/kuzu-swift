@@ -34,7 +34,7 @@ namespace main {
 
 SystemConfig::SystemConfig(uint64_t bufferPoolSize_, uint64_t maxNumThreads, bool enableCompression,
     bool readOnly, uint64_t maxDBSize, bool autoCheckpoint, uint64_t checkpointThreshold,
-    bool forceCheckpointOnClose, bool throwOnWalReplayFailure, bool enableChecksums
+    bool forceCheckpointOnClose
 #if defined(__APPLE__)
     ,
     uint32_t threadQos
@@ -42,8 +42,7 @@ SystemConfig::SystemConfig(uint64_t bufferPoolSize_, uint64_t maxNumThreads, boo
     )
     : maxNumThreads{maxNumThreads}, enableCompression{enableCompression}, readOnly{readOnly},
       autoCheckpoint{autoCheckpoint}, checkpointThreshold{checkpointThreshold},
-      forceCheckpointOnClose{forceCheckpointOnClose},
-      throwOnWalReplayFailure(throwOnWalReplayFailure), enableChecksums(enableChecksums) {
+      forceCheckpointOnClose{forceCheckpointOnClose} {
 #if defined(__APPLE__)
     this->threadQos = threadQos;
 #endif
@@ -84,7 +83,9 @@ SystemConfig::SystemConfig(uint64_t bufferPoolSize_, uint64_t maxNumThreads, boo
 }
 
 Database::Database(std::string_view databasePath, SystemConfig systemConfig)
-    : Database(databasePath, systemConfig, initBufferManager) {}
+    : dbConfig{systemConfig} {
+    initMembers(databasePath);
+}
 
 Database::Database(std::string_view databasePath, SystemConfig systemConfig,
     construct_bm_func_t constructBMFunc)
@@ -122,7 +123,7 @@ void Database::initMembers(std::string_view dbPath, construct_bm_func_t initBmFu
 
     catalog = std::make_unique<Catalog>();
     storageManager = std::make_unique<StorageManager>(databasePath, dbConfig.readOnly,
-        dbConfig.enableChecksums, *memoryManager, dbConfig.enableCompression, vfs.get());
+        *memoryManager, dbConfig.enableCompression, vfs.get());
     transactionManager = std::make_unique<TransactionManager>(storageManager->getWAL());
     databaseManager = std::make_unique<DatabaseManager>();
 
@@ -133,8 +134,7 @@ void Database::initMembers(std::string_view dbPath, construct_bm_func_t initBmFu
         extensionManager->autoLoadLinkedExtensions(&clientContext);
         return;
     }
-    StorageManager::recover(clientContext, dbConfig.throwOnWalReplayFailure,
-        dbConfig.enableChecksums);
+    StorageManager::recover(clientContext);
 }
 
 Database::~Database() {

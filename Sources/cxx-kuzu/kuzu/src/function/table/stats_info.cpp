@@ -2,11 +2,9 @@
 #include "catalog/catalog_entry/table_catalog_entry.h"
 #include "common/exception/binder.h"
 #include "function/table/bind_data.h"
-#include "function/table/bind_input.h"
 #include "function/table/simple_table_function.h"
 #include "storage/storage_manager.h"
 #include "storage/table/node_table.h"
-#include "transaction/transaction.h"
 
 using namespace kuzu::catalog;
 using namespace kuzu::common;
@@ -37,7 +35,7 @@ static offset_t internalTableFunc(const TableFuncMorsel& /*morsel*/, const Table
     switch (table->getTableType()) {
     case TableType::NODE: {
         const auto& nodeTable = table->cast<storage::NodeTable>();
-        const auto stats = nodeTable.getStats(transaction::Transaction::Get(*bindData->context));
+        const auto stats = nodeTable.getStats(bindData->context->getTransaction());
         output.getValueVectorMutable(0).setValue<cardinality_t>(0, stats.getTableCard());
         for (auto i = 0u; i < nodeTable.getNumColumns(); ++i) {
             output.getValueVectorMutable(i + 1).setValue(0, stats.getNumDistinctValues(i));
@@ -53,12 +51,11 @@ static offset_t internalTableFunc(const TableFuncMorsel& /*morsel*/, const Table
 static std::unique_ptr<TableFuncBindData> bindFunc(const ClientContext* context,
     const TableFuncBindInput* input) {
     const auto tableName = input->getLiteralVal<std::string>(0);
-    const auto catalog = Catalog::Get(*context);
-    if (!catalog->containsTable(transaction::Transaction::Get(*context), tableName)) {
+    const auto catalog = context->getCatalog();
+    if (!catalog->containsTable(context->getTransaction(), tableName)) {
         throw BinderException{"Table " + tableName + " does not exist!"};
     }
-    auto tableEntry =
-        catalog->getTableCatalogEntry(transaction::Transaction::Get(*context), tableName);
+    auto tableEntry = catalog->getTableCatalogEntry(context->getTransaction(), tableName);
     if (tableEntry->getTableType() != TableType::NODE) {
         throw BinderException{
             "Stats from a non-node table " + tableName + " is not supported yet!"};
@@ -71,7 +68,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const ClientContext* context,
         columnNames.push_back(propDef.getName() + "_distinct_count");
         columnTypes.push_back(LogicalType::INT64());
     }
-    const auto storageManager = storage::StorageManager::Get(*context);
+    const auto storageManager = context->getStorageManager();
     auto table = storageManager->getTable(tableEntry->getTableID());
     columnNames = TableFunction::extractYieldVariables(columnNames, input->yieldVariables);
     auto columns = input->binder->createVariables(columnNames, columnTypes);

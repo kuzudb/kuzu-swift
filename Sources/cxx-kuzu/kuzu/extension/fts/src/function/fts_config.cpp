@@ -8,8 +8,8 @@
 #include "common/serializer/serializer.h"
 #include "common/string_utils.h"
 #include "function/stem.h"
+#include "main/client_context.h"
 #include "re2.h"
-#include "transaction/transaction.h"
 #include "utils/fts_utils.h"
 
 namespace kuzu {
@@ -100,13 +100,13 @@ void IgnorePattern::validate(const std::string& ignorePattern) {
 
 StopWordsTableInfo StopWords::bind(main::ClientContext& context, common::table_id_t tableID,
     const std::string& indexName, const std::string& stopWords) {
-    auto catalog = catalog::Catalog::Get(context);
+    auto catalog = context.getCatalog();
     if (stopWords == DEFAULT_VALUE) {
         return StopWordsTableInfo{stopWords, FTSUtils::getDefaultStopWordsTableName(),
             StopWordsSource::DEFAULT};
-    } else if (catalog->containsTable(transaction::Transaction::Get(context), stopWords)) {
+    } else if (catalog->containsTable(context.getTransaction(), stopWords)) {
         auto entry =
-            catalog->getTableCatalogEntry(transaction::Transaction::Get(context), stopWords);
+            context.getCatalog()->getTableCatalogEntry(context.getTransaction(), stopWords);
         if (entry->getTableType() != common::TableType::NODE) {
             throw common::BinderException{"The stop words table must be a node table."};
         }
@@ -119,7 +119,7 @@ StopWordsTableInfo StopWords::bind(main::ClientContext& context, common::table_i
         return StopWordsTableInfo{stopWords,
             FTSUtils::getNonDefaultStopWordsTableName(tableID, indexName), StopWordsSource::TABLE};
     } else {
-        if (!common::VirtualFileSystem::GetUnsafe(context)->fileOrPathExists(stopWords, &context)) {
+        if (!context.getVFSUnsafe()->fileOrPathExists(stopWords, &context)) {
             throw common::BinderException{common::stringFormat(
                 "Given stopwords: '{}' is not a node table name nor a valid file path.",
                 stopWords)};
@@ -149,14 +149,6 @@ CreateFTSConfig::CreateFTSConfig(main::ClientContext& context, common::table_id_
             common::StringUtils::replaceAll(ignorePatternQuery, "?", "");
             IgnorePattern::validate(ignorePattern);
             IgnorePattern::validate(ignorePatternQuery);
-        } else if (lowerCaseName == "tokenizer") {
-            value.validateType(common::LogicalTypeID::STRING);
-            tokenizerInfo.tokenizer = common::StringUtils::getLower(value.getValue<std::string>());
-            Tokenizer::validate(tokenizerInfo.tokenizer);
-        } else if (lowerCaseName == "jieba_dict_dir") {
-            value.validateType(common::LogicalTypeID::STRING);
-            tokenizerInfo.jiebaDictDir =
-                common::StringUtils::getLower(value.getValue<std::string>());
         } else {
             throw common::BinderException{"Unrecognized optional parameter: " + name};
         }
@@ -165,7 +157,7 @@ CreateFTSConfig::CreateFTSConfig(main::ClientContext& context, common::table_id_
 
 FTSConfig CreateFTSConfig::getFTSConfig() const {
     return FTSConfig{stemmer, stopWordsTableInfo.tableName, stopWordsTableInfo.stopWords,
-        ignorePattern, ignorePatternQuery, tokenizerInfo.tokenizer, tokenizerInfo.jiebaDictDir};
+        ignorePattern, ignorePatternQuery};
 }
 
 void FTSConfig::serialize(common::Serializer& serializer) const {
@@ -174,8 +166,6 @@ void FTSConfig::serialize(common::Serializer& serializer) const {
     serializer.serializeValue(stopWordsSource);
     serializer.serializeValue(ignorePattern);
     serializer.serializeValue(ignorePatternQuery);
-    serializer.serializeValue(tokenizer);
-    serializer.serializeValue(jiebaDictDir);
 }
 
 FTSConfig FTSConfig::deserialize(common::Deserializer& deserializer) {
@@ -185,8 +175,6 @@ FTSConfig FTSConfig::deserialize(common::Deserializer& deserializer) {
     deserializer.deserializeValue(config.stopWordsSource);
     deserializer.deserializeValue(config.ignorePattern);
     deserializer.deserializeValue(config.ignorePatternQuery);
-    deserializer.deserializeValue(config.tokenizer);
-    deserializer.deserializeValue(config.jiebaDictDir);
     return config;
 }
 
@@ -210,15 +198,6 @@ void TopK::validate(uint64_t value) {
         throw common::BinderException{
             "QUERY_FTS_INDEX requires a positive non-zero value for the 'top' parameter."};
     }
-}
-
-void Tokenizer::validate(const std::string& tokenizer) {
-    if (tokenizer == "simple" || tokenizer == "jieba") {
-        return;
-    }
-    throw common::BinderException{
-        "Unsupported tokenizer: " + tokenizer +
-        ".\nSupported tokenizers: 'simple' (default), 'jieba' (advanced Chinese)"};
 }
 
 } // namespace fts_extension

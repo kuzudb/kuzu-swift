@@ -1,14 +1,13 @@
 #include "function/gds/gds.h"
 
 #include "binder/binder.h"
-#include "binder/expression/rel_expression.h"
 #include "binder/query/reading_clause/bound_table_function_call.h"
 #include "catalog/catalog.h"
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/exception/binder.h"
-#include "function/table/bind_input.h"
 #include "graph/graph_entry_set.h"
 #include "graph/on_disk_graph.h"
+#include "main/client_context.h"
 #include "parser/parser.h"
 #include "planner/operator/logical_table_function_call.h"
 #include "planner/operator/sip/logical_semi_masker.h"
@@ -64,9 +63,9 @@ static void validateRelSrcDstNodeAreProjected(const TableCatalogEntry& entry,
 }
 
 NativeGraphEntry GDSFunction::bindGraphEntry(ClientContext& context, const std::string& name) {
-    auto set = GraphEntrySet::Get(context);
-    set->validateGraphExist(name);
-    auto entry = set->getEntry(name);
+    auto& set = context.getGraphEntrySetUnsafe();
+    set.validateGraphExist(name);
+    auto entry = set.getEntry(name);
     if (entry->type != GraphEntryType::NATIVE) {
         throw BinderException("AA");
     }
@@ -75,8 +74,8 @@ NativeGraphEntry GDSFunction::bindGraphEntry(ClientContext& context, const std::
 
 static NativeGraphEntryTableInfo bindNodeEntry(ClientContext& context, const std::string& tableName,
     const std::string& predicate) {
-    auto catalog = Catalog::Get(context);
-    auto transaction = transaction::Transaction::Get(context);
+    auto catalog = context.getCatalog();
+    auto transaction = context.getTransaction();
     auto nodeEntry = catalog->getTableCatalogEntry(transaction, tableName);
     if (nodeEntry->getType() != CatalogEntryType::NODE_TABLE_ENTRY) {
         throw BinderException(stringFormat("{} is not a NODE table.", tableName));
@@ -96,8 +95,8 @@ static NativeGraphEntryTableInfo bindNodeEntry(ClientContext& context, const std
 
 static NativeGraphEntryTableInfo bindRelEntry(ClientContext& context, const std::string& tableName,
     const std::string& predicate) {
-    auto catalog = Catalog::Get(context);
-    auto transaction = transaction::Transaction::Get(context);
+    auto catalog = context.getCatalog();
+    auto transaction = context.getTransaction();
     auto relEntry = catalog->getTableCatalogEntry(transaction, tableName);
     if (relEntry->getType() != CatalogEntryType::REL_GROUP_ENTRY) {
         throw BinderException(
@@ -119,8 +118,8 @@ static NativeGraphEntryTableInfo bindRelEntry(ClientContext& context, const std:
 
 NativeGraphEntry GDSFunction::bindGraphEntry(ClientContext& context,
     const ParsedNativeGraphEntry& entry) {
-    auto catalog = Catalog::Get(context);
-    auto transaction = transaction::Transaction::Get(context);
+    auto catalog = context.getCatalog();
+    auto transaction = context.getTransaction();
     auto result = NativeGraphEntry();
     table_id_set_t projectedNodeTableIDSet;
     for (auto& nodeInfo : entry.nodeInfos) {
@@ -141,30 +140,11 @@ NativeGraphEntry GDSFunction::bindGraphEntry(ClientContext& context,
     return result;
 }
 
-std::shared_ptr<binder::Expression> GDSFunction::bindRelOutput(const TableFuncBindInput& bindInput,
-    const std::vector<catalog::TableCatalogEntry*>& relEntries,
-    std::shared_ptr<NodeExpression> srcNode, std::shared_ptr<NodeExpression> dstNode,
-    const std::optional<std::string>& name, const std::optional<uint64_t>& yieldVariableIdx) {
-    std::string relColumnName = name.value_or(REL_COLUMN_NAME);
-    StringUtils::toLower(relColumnName);
-    if (!bindInput.yieldVariables.empty()) {
-        relColumnName =
-            bindColumnName(bindInput.yieldVariables[yieldVariableIdx.value_or(0)], relColumnName);
-    }
-    auto rel = bindInput.binder->createNonRecursiveQueryRel(relColumnName, relEntries, srcNode,
-        dstNode, RelDirectionType::SINGLE);
-    bindInput.binder->addToScope(REL_COLUMN_NAME, rel);
-    return rel;
-}
-
 std::shared_ptr<Expression> GDSFunction::bindNodeOutput(const TableFuncBindInput& bindInput,
-    const std::vector<TableCatalogEntry*>& nodeEntries, const std::optional<std::string>& name,
-    const std::optional<uint64_t>& yieldVariableIdx) {
-    std::string nodeColumnName = name.value_or(NODE_COLUMN_NAME);
-    StringUtils::toLower(nodeColumnName);
+    const std::vector<TableCatalogEntry*>& nodeEntries) {
+    std::string nodeColumnName = NODE_COLUMN_NAME;
     if (!bindInput.yieldVariables.empty()) {
-        nodeColumnName =
-            bindColumnName(bindInput.yieldVariables[yieldVariableIdx.value_or(0)], nodeColumnName);
+        nodeColumnName = bindColumnName(bindInput.yieldVariables[0], nodeColumnName);
     }
     auto node = bindInput.binder->createQueryNode(nodeColumnName, nodeEntries);
     bindInput.binder->addToScope(nodeColumnName, node);
@@ -218,7 +198,7 @@ void GDSFunction::getLogicalPlan(Planner* planner, const BoundReadingClause& rea
     op->computeFactorizedSchema();
     planner->planReadOp(std::move(op), predicates, plan);
 
-    auto nodeOutput = bindData->output[0]->ptrCast<NodeExpression>();
+    auto nodeOutput = bindData->nodeOutput->ptrCast<NodeExpression>();
     KU_ASSERT(nodeOutput != nullptr);
     planner->getCardinliatyEstimatorUnsafe().init(*nodeOutput);
     auto scanPlan = planner->getNodePropertyScanPlan(*nodeOutput);
@@ -236,8 +216,8 @@ std::unique_ptr<PhysicalOperator> GDSFunction::getPhysicalPlan(PlanMapper* planM
     auto bindData = logicalCall->getBindData()->copy();
     auto columns = bindData->columns;
     auto tableSchema = PlanMapper::createFlatFTableSchema(columns, *logicalCall->getSchema());
-    auto table = std::make_shared<FactorizedTable>(
-        storage::MemoryManager::Get(*planMapper->clientContext), tableSchema.copy());
+    auto table = std::make_shared<FactorizedTable>(planMapper->clientContext->getMemoryManager(),
+        tableSchema.copy());
     bindData->cast<GDSBindData>().setResultFTable(table);
     auto info = TableFunctionCallInfo();
     info.function = logicalCall->getTableFunc();

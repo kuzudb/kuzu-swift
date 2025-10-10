@@ -2,6 +2,7 @@
 
 #include "binder/expression/expression.h"
 #include "common/types/value/value.h"
+#include "main/client_context.h"
 
 namespace kuzu {
 namespace evaluator {

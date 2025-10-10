@@ -1,10 +1,7 @@
 #include "processor/processor_task.h"
 
-#include "common/task_system/progress_bar.h"
-#include "main/client_context.h"
 #include "main/settings.h"
 #include "processor/execution_context.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 
@@ -26,13 +23,12 @@ void ProcessorTask::run() {
     }
     auto taskRoot = sink->copy();
     lck.unlock();
-    auto resultSet =
-        sink->getResultSet(storage::MemoryManager::Get(*executionContext->clientContext));
+    auto resultSet = sink->getResultSet(executionContext->clientContext->getMemoryManager());
     taskRoot->ptrCast<Sink>()->execute(resultSet.get(), executionContext);
 }
 
 void ProcessorTask::finalize() {
-    ProgressBar::Get(*executionContext->clientContext)->finishPipeline(executionContext->queryID);
+    executionContext->clientContext->getProgressBar()->finishPipeline(executionContext->queryID);
     sink->finalize(executionContext);
 }
 

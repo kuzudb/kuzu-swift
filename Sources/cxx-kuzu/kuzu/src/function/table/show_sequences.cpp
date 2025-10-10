@@ -2,9 +2,8 @@
 #include "catalog/catalog.h"
 #include "catalog/catalog_entry/sequence_catalog_entry.h"
 #include "function/table/bind_data.h"
-#include "function/table/bind_input.h"
 #include "function/table/simple_table_function.h"
-#include "transaction/transaction.h"
+#include "main/client_context.h"
 
 using namespace kuzu::common;
 using namespace kuzu::catalog;
@@ -75,8 +74,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
     columnNames.emplace_back("cycle");
     columnTypes.emplace_back(LogicalType::BOOL());
     std::vector<SequenceInfo> sequenceInfos;
-    for (const auto& entry :
-        Catalog::Get(*context)->getSequenceEntries(transaction::Transaction::Get(*context))) {
+    for (const auto& entry : context->getCatalog()->getSequenceEntries(context->getTransaction())) {
         const auto sequenceData = entry->getSequenceData();
         auto sequenceInfo = SequenceInfo{entry->getName(), LOCAL_DB_NAME, sequenceData.startValue,
             sequenceData.increment, sequenceData.minValue, sequenceData.maxValue,
@@ -85,6 +83,7 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
     }
 
     // TODO: uncomment this when we can test it
+    // auto databaseManager = context->getDatabaseManager();
     // for (auto attachedDatabase : databaseManager->getAttachedDatabases()) {
     //     auto databaseName = attachedDatabase->getDBName();
     //     auto databaseType = attachedDatabase->getDBType();

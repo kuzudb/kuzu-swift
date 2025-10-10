@@ -1,22 +1,55 @@
 #include "storage/checkpointer.h"
 
 #include "catalog/catalog.h"
+#include "common/exception/runtime.h"
 #include "common/file_system/file_system.h"
 #include "common/file_system/virtual_file_system.h"
 #include "common/serializer/buffered_file.h"
 #include "common/serializer/deserializer.h"
 #include "common/serializer/in_mem_file_writer.h"
 #include "extension/extension_manager.h"
-#include "main/client_context.h"
 #include "main/db_config.h"
 #include "storage/buffer_manager/buffer_manager.h"
-#include "storage/database_header.h"
 #include "storage/shadow_utils.h"
 #include "storage/storage_manager.h"
+#include "storage/storage_version_info.h"
 #include "storage/wal/local_wal.h"
 
 namespace kuzu {
 namespace storage {
+
+void DatabaseHeader::updateCatalogPageRange(PageManager& pageManager, PageRange newPageRange) {
+    if (catalogPageRange.startPageIdx != common::INVALID_PAGE_IDX) {
+        pageManager.freePageRange(catalogPageRange);
+    }
+    catalogPageRange = newPageRange;
+}
+
+void DatabaseHeader::freeMetadataPageRange(PageManager& pageManager) const {
+    if (metadataPageRange.startPageIdx != common::INVALID_PAGE_IDX) {
+        pageManager.freePageRange(metadataPageRange);
+    }
+}
+
+static void writeMagicBytes(common::Serializer& serializer) {
+    serializer.writeDebuggingInfo("magic");
+    const auto numMagicBytes = strlen(StorageVersionInfo::MAGIC_BYTES);
+    for (auto i = 0u; i < numMagicBytes; i++) {
+        serializer.serializeValue<uint8_t>(StorageVersionInfo::MAGIC_BYTES[i]);
+    }
+}
+
+void DatabaseHeader::serialize(common::Serializer& ser) const {
+    writeMagicBytes(ser);
+    ser.writeDebuggingInfo("storage_version");
+    ser.serializeValue(StorageVersionInfo::getStorageVersion());
+    ser.writeDebuggingInfo("catalog");
+    ser.serializeValue(catalogPageRange.startPageIdx);
+    ser.serializeValue(catalogPageRange.numPages);
+    ser.writeDebuggingInfo("metadata");
+    ser.serializeValue(metadataPageRange.startPageIdx);
+    ser.serializeValue(metadataPageRange.numPages);
+}
 
 Checkpointer::Checkpointer(main::ClientContext& clientContext)
     : clientContext{clientContext},
@@ -27,7 +60,7 @@ Checkpointer::~Checkpointer() = default;
 PageRange Checkpointer::serializeCatalog(const catalog::Catalog& catalog,
     StorageManager& storageManager) {
     auto catalogWriter =
-        std::make_shared<common::InMemFileWriter>(*MemoryManager::Get(clientContext));
+        std::make_shared<common::InMemFileWriter>(*clientContext.getMemoryManager());
     common::Serializer catalogSerializer(catalogWriter);
     catalog.serialize(catalogSerializer);
     auto pageAllocator = storageManager.getDataFH()->getPageManager();
@@ -37,7 +70,7 @@ PageRange Checkpointer::serializeCatalog(const catalog::Catalog& catalog,
 PageRange Checkpointer::serializeMetadata(const catalog::Catalog& catalog,
     StorageManager& storageManager) {
     auto metadataWriter =
-        std::make_shared<common::InMemFileWriter>(*MemoryManager::Get(clientContext));
+        std::make_shared<common::InMemFileWriter>(*clientContext.getMemoryManager());
     common::Serializer metadataSerializer(metadataWriter);
     storageManager.serialize(catalog, metadataSerializer);
 
@@ -67,8 +100,7 @@ void Checkpointer::writeCheckpoint() {
         return;
     }
 
-    auto databaseHeader =
-        *StorageManager::Get(clientContext)->getOrInitDatabaseHeader(clientContext);
+    auto databaseHeader = getCurrentDatabaseHeader();
     // Checkpoint storage. Note that we first checkpoint storage before serializing the catalog, as
     // checkpointing storage may overwrite columnIDs in the catalog.
     bool hasStorageChanges = checkpointStorage();
@@ -79,16 +111,16 @@ void Checkpointer::writeCheckpoint() {
     // This function will evict all pages that were freed during this checkpoint
     // It must be called before we remove all evicted candidates from the BM
     // Or else the evicted pages may end up appearing multiple times in the eviction queue
-    auto storageManager = StorageManager::Get(clientContext);
+    auto storageManager = clientContext.getStorageManager();
     storageManager->finalizeCheckpoint();
     // When a page is freed by the FSM, it evicts it from the BM. However, if the page is freed,
     // then reused over and over, it can be appended to the eviction queue multiple times. To
     // prevent multiple entries of the same page from existing in the eviction queue, at the end of
     // each checkpoint we remove any already-evicted pages.
-    auto bufferManager = MemoryManager::Get(clientContext)->getBufferManager();
+    auto bufferManager = clientContext.getMemoryManager()->getBufferManager();
     bufferManager->removeEvictedCandidates();
 
-    catalog::Catalog::Get(clientContext)->resetVersion();
+    clientContext.getCatalog()->resetVersion();
     auto* dataFH = storageManager->getDataFH();
     dataFH->getPageManager()->resetVersion();
     storageManager->getWAL().reset();
@@ -96,15 +128,15 @@ void Checkpointer::writeCheckpoint() {
 }
 
 bool Checkpointer::checkpointStorage() {
-    const auto storageManager = StorageManager::Get(clientContext);
+    const auto storageManager = clientContext.getStorageManager();
     auto pageAllocator = storageManager->getDataFH()->getPageManager();
     return storageManager->checkpoint(&clientContext, *pageAllocator);
 }
 
 void Checkpointer::serializeCatalogAndMetadata(DatabaseHeader& databaseHeader,
     bool hasStorageChanges) {
-    const auto storageManager = StorageManager::Get(clientContext);
-    const auto catalog = catalog::Catalog::Get(clientContext);
+    const auto storageManager = clientContext.getStorageManager();
+    const auto catalog = clientContext.getCatalog();
     auto* dataFH = storageManager->getDataFH();
 
     // Serialize the catalog if there are changes
@@ -126,12 +158,12 @@ void Checkpointer::serializeCatalogAndMetadata(DatabaseHeader& databaseHeader,
 
 void Checkpointer::writeDatabaseHeader(const DatabaseHeader& header) {
     auto headerWriter =
-        std::make_shared<common::InMemFileWriter>(*MemoryManager::Get(clientContext));
+        std::make_shared<common::InMemFileWriter>(*clientContext.getMemoryManager());
     common::Serializer headerSerializer(headerWriter);
     header.serialize(headerSerializer);
     auto headerPage = headerWriter->getPage(0);
 
-    const auto storageManager = StorageManager::Get(clientContext);
+    const auto storageManager = clientContext.getStorageManager();
     auto dataFH = storageManager->getDataFH();
     auto& shadowFile = storageManager->getShadowFile();
     auto shadowHeader = ShadowUtils::createShadowVersionIfNecessaryAndPinPage(
@@ -139,17 +171,14 @@ void Checkpointer::writeDatabaseHeader(const DatabaseHeader& header) {
         shadowFile);
     memcpy(shadowHeader.frame, headerPage.data(), common::KUZU_PAGE_SIZE);
     shadowFile.getShadowingFH().unpinPage(shadowHeader.shadowPage);
-
-    // Update the in-memory database header with the new version
-    StorageManager::Get(clientContext)->setDatabaseHeader(std::make_unique<DatabaseHeader>(header));
 }
 
 void Checkpointer::logCheckpointAndApplyShadowPages() {
-    const auto storageManager = StorageManager::Get(clientContext);
+    const auto storageManager = clientContext.getStorageManager();
     auto& shadowFile = storageManager->getShadowFile();
     // Flush the shadow file.
-    shadowFile.flushAll(clientContext);
-    auto wal = WAL::Get(clientContext);
+    shadowFile.flushAll();
+    auto wal = clientContext.getWAL();
     // Log the checkpoint to the WAL and flush WAL. This indicates that all shadow pages and
     // files (snapshots of catalog and metadata) have been written to disk. The part that is not
     // done is to replace them with the original pages or catalog and metadata files. If the
@@ -158,7 +187,7 @@ void Checkpointer::logCheckpointAndApplyShadowPages() {
     wal->logAndFlushCheckpoint(&clientContext);
     shadowFile.applyShadowPages(clientContext);
     // Clear the wal and also shadowing files.
-    auto bufferManager = MemoryManager::Get(clientContext)->getBufferManager();
+    auto bufferManager = clientContext.getMemoryManager()->getBufferManager();
     wal->clear();
     shadowFile.clear(*bufferManager);
 }
@@ -167,8 +196,8 @@ void Checkpointer::rollback() {
     if (isInMemory) {
         return;
     }
-    const auto storageManager = StorageManager::Get(clientContext);
-    auto catalog = catalog::Catalog::Get(clientContext);
+    const auto storageManager = clientContext.getStorageManager();
+    auto catalog = clientContext.getCatalog();
     // Any pages freed during the checkpoint are no longer freed
     storageManager->rollbackCheckpoint(*catalog);
 }
@@ -185,19 +214,83 @@ bool Checkpointer::canAutoCheckpoint(const main::ClientContext& clientContext,
         // Recovery transactions are not allowed to trigger auto checkpoint.
         return false;
     }
-    auto wal = WAL::Get(clientContext);
+    auto wal = clientContext.getWAL();
     const auto expectedSize = transaction.getLocalWAL().getSize() + wal->getFileSize();
     return expectedSize > clientContext.getDBConfig()->checkpointThreshold;
 }
 
-void Checkpointer::readCheckpoint() {
-    auto storageManager = StorageManager::Get(clientContext);
-    storageManager->initDataFileHandle(common::VirtualFileSystem::GetUnsafe(clientContext),
-        &clientContext);
-    if (!isInMemory && storageManager->getDataFH()->getNumPages() > 0) {
-        readCheckpoint(&clientContext, catalog::Catalog::Get(clientContext), storageManager);
+static void validateStorageVersion(common::Deserializer& deSer) {
+    std::string key;
+    deSer.validateDebuggingInfo(key, "storage_version");
+    storage_version_t savedStorageVersion = 0;
+    deSer.deserializeValue(savedStorageVersion);
+    const auto storageVersion = StorageVersionInfo::getStorageVersion();
+    if (savedStorageVersion != storageVersion) {
+        // TODO(Guodong): Add a test case for this.
+        throw common::RuntimeException(
+            common::stringFormat("Trying to read a database file with a different version. "
+                                 "Database file version: {}, Current build storage version: {}",
+                savedStorageVersion, storageVersion));
     }
-    extension::ExtensionManager::Get(clientContext)->autoLoadLinkedExtensions(&clientContext);
+}
+
+static void validateMagicBytes(common::Deserializer& deSer) {
+    std::string key;
+    deSer.validateDebuggingInfo(key, "magic");
+    const auto numMagicBytes = strlen(StorageVersionInfo::MAGIC_BYTES);
+    uint8_t magicBytes[4];
+    for (auto i = 0u; i < numMagicBytes; i++) {
+        deSer.deserializeValue<uint8_t>(magicBytes[i]);
+    }
+    if (memcmp(magicBytes, StorageVersionInfo::MAGIC_BYTES, numMagicBytes) != 0) {
+        throw common::RuntimeException(
+            "Unable to open database. The file is not a valid Kuzu database file!");
+    }
+}
+
+static DatabaseHeader readDatabaseHeader(common::Deserializer& deSer) {
+    validateMagicBytes(deSer);
+    validateStorageVersion(deSer);
+    PageRange catalogPageRange{}, metaPageRange{};
+    std::string key;
+    deSer.validateDebuggingInfo(key, "catalog");
+    deSer.deserializeValue(catalogPageRange.startPageIdx);
+    deSer.deserializeValue(catalogPageRange.numPages);
+    deSer.validateDebuggingInfo(key, "metadata");
+    deSer.deserializeValue(metaPageRange.startPageIdx);
+    deSer.deserializeValue(metaPageRange.numPages);
+    return {
+        catalogPageRange,
+        metaPageRange,
+    };
+}
+
+DatabaseHeader Checkpointer::getCurrentDatabaseHeader() const {
+    static const auto defaultHeader = DatabaseHeader{{}, {}};
+    auto dataFileInfo = clientContext.getStorageManager()->getDataFH()->getFileInfo();
+    if (dataFileInfo->getFileSize() < common::KUZU_PAGE_SIZE) {
+        // If the data file hasn't been written to there is no existing database header
+        return defaultHeader;
+    }
+    auto reader = std::make_unique<common::BufferedFileReader>(*dataFileInfo);
+    common::Deserializer deSer(std::move(reader));
+    try {
+        return readDatabaseHeader(deSer);
+    } catch (const common::RuntimeException&) {
+        // It is possible we optimistically write to the database file before the first checkpoint
+        // In this case the magic bytes check will fail and we assume there is no existing header
+        return defaultHeader;
+    }
+}
+
+void Checkpointer::readCheckpoint() {
+    auto storageManager = clientContext.getStorageManager();
+    storageManager->initDataFileHandle(clientContext.getVFSUnsafe(), &clientContext);
+    if (!isInMemory && storageManager->getDataFH()->getNumPages() > 0) {
+        readCheckpoint(&clientContext, clientContext.getCatalog(),
+            clientContext.getStorageManager());
+    }
+    clientContext.getExtensionManager()->autoLoadLinkedExtensions(&clientContext);
 }
 
 void Checkpointer::readCheckpoint(main::ClientContext* context, catalog::Catalog* catalog,
@@ -205,19 +298,19 @@ void Checkpointer::readCheckpoint(main::ClientContext* context, catalog::Catalog
     auto fileInfo = storageManager->getDataFH()->getFileInfo();
     auto reader = std::make_unique<common::BufferedFileReader>(*fileInfo);
     common::Deserializer deSer(std::move(reader));
-    auto currentHeader = std::make_unique<DatabaseHeader>(DatabaseHeader::deserialize(deSer));
-    // If the catalog page range is invalid, it means there is no catalog to read; thus, the
-    // database is empty.
-    if (currentHeader->catalogPageRange.startPageIdx != common::INVALID_PAGE_IDX) {
-        deSer.getReader()->cast<common::BufferedFileReader>()->resetReadOffset(
-            currentHeader->catalogPageRange.startPageIdx * common::KUZU_PAGE_SIZE);
-        catalog->deserialize(deSer);
-        deSer.getReader()->cast<common::BufferedFileReader>()->resetReadOffset(
-            currentHeader->metadataPageRange.startPageIdx * common::KUZU_PAGE_SIZE);
-        storageManager->deserialize(context, catalog, deSer);
-        storageManager->getDataFH()->getPageManager()->deserialize(deSer);
+    auto currentHeader = readDatabaseHeader(deSer);
+    if (currentHeader.catalogPageRange.startPageIdx == common::INVALID_PAGE_IDX) {
+        // If the catalog page range is invalid, it means there is no catalog to read; thus, the
+        // database is empty.
+        return;
     }
-    storageManager->setDatabaseHeader(std::move(currentHeader));
+    deSer.getReader()->cast<common::BufferedFileReader>()->resetReadOffset(
+        currentHeader.catalogPageRange.startPageIdx * common::KUZU_PAGE_SIZE);
+    catalog->deserialize(deSer);
+    deSer.getReader()->cast<common::BufferedFileReader>()->resetReadOffset(
+        currentHeader.metadataPageRange.startPageIdx * common::KUZU_PAGE_SIZE);
+    storageManager->deserialize(context, catalog, deSer);
+    storageManager->getDataFH()->getPageManager()->deserialize(deSer);
 }
 
 } // namespace storage

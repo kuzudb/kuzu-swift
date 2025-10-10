@@ -1,6 +1,5 @@
 #pragma once
 
-#include "binder/expression/expression.h"
 #include "expression_evaluator/expression_evaluator.h"
 #include "processor/operator/physical_operator.h"
 
@@ -27,8 +26,8 @@ private:
 struct ProjectionInfo {
     std::vector<std::unique_ptr<evaluator::ExpressionEvaluator>> evaluators;
     std::vector<DataPos> exprsOutputPos;
-    std::unordered_set<common::idx_t> activeChunkIndices;
-    std::unordered_set<common::idx_t> discardedChunkIndices;
+    std::unordered_set<common::idx_t> outputChunkPosSet;
+    std::unordered_set<common::idx_t> discardedChunkPosSet;
 
     ProjectionInfo() = default;
     EXPLICIT_COPY_DEFAULT_MOVE(ProjectionInfo);
@@ -37,14 +36,14 @@ struct ProjectionInfo {
         const DataPos& outputPos) {
         evaluators.push_back(std::move(evaluator));
         exprsOutputPos.push_back(outputPos);
-        activeChunkIndices.insert(outputPos.dataChunkPos);
+        outputChunkPosSet.insert(outputPos.dataChunkPos);
     }
 
 private:
     ProjectionInfo(const ProjectionInfo& other)
         : evaluators{copyVector(other.evaluators)}, exprsOutputPos{other.exprsOutputPos},
-          activeChunkIndices{other.activeChunkIndices},
-          discardedChunkIndices{other.discardedChunkIndices} {}
+          outputChunkPosSet{other.outputChunkPosSet},
+          discardedChunkPosSet{other.discardedChunkPosSet} {}
 };
 
 class Projection final : public PhysicalOperator {

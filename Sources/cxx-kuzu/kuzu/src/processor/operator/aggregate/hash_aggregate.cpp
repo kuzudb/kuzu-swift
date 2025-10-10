@@ -11,7 +11,6 @@
 #include "processor/operator/aggregate/aggregate_input.h"
 #include "processor/operator/aggregate/base_aggregate.h"
 #include "processor/result/factorized_table_schema.h"
-#include "storage/buffer_manager/memory_manager.h"
 
 using namespace kuzu::common;
 using namespace kuzu::function;
@@ -51,7 +50,7 @@ HashAggregateSharedState::HashAggregateSharedState(main::ClientContext* context,
     std::vector<LogicalType> payloadTypes)
     : BaseAggregateSharedState{aggregateFunctions, getNumPartitionsForParallelism(context)},
       aggInfo{std::move(hashAggInfo)}, limitNumber{common::INVALID_LIMIT},
-      memoryManager{MemoryManager::Get(*context)},
+      memoryManager{context->getMemoryManager()},
       globalPartitions{getNumPartitionsForParallelism(context)} {
     std::vector<LogicalType> distinctAggregateKeyTypes;
     for (auto& aggInfo : aggregateInfos) {
@@ -66,12 +65,12 @@ HashAggregateSharedState::HashAggregateSharedState(main::ClientContext* context,
     }
 
     auto& partition = globalPartitions[0];
-    partition.queue = std::make_unique<HashTableQueue>(MemoryManager::Get(*context),
+    partition.queue = std::make_unique<HashTableQueue>(context->getMemoryManager(),
         this->aggInfo.tableSchema.copy());
 
     // Always create a hash table for the first partition. Any other partitions which are non-empty
     // when finalizing will create an empty copy of this table
-    partition.hashTable = std::make_unique<AggregateHashTable>(*MemoryManager::Get(*context),
+    partition.hashTable = std::make_unique<AggregateHashTable>(*context->getMemoryManager(),
         std::move(keyTypes), std::move(payloadTypes), aggregateFunctions, distinctAggregateKeyTypes,
         0, this->aggInfo.tableSchema.copy());
     for (size_t functionIdx = 0; functionIdx < aggregateFunctions.size(); functionIdx++) {
@@ -95,7 +94,7 @@ HashAggregateSharedState::HashAggregateSharedState(main::ClientContext* context,
                 ColumnSchema(false /* isUnFlat */, 0 /* groupID */, sizeof(hash_t)));
 
             partition.distinctTableQueues.emplace_back(std::make_unique<HashTableQueue>(
-                MemoryManager::Get(*context), std::move(distinctTableSchema)));
+                context->getMemoryManager(), std::move(distinctTableSchema)));
         } else {
             // dummy entry so that indices line up with the aggregateFunctions
             partition.distinctTableQueues.emplace_back();
@@ -104,7 +103,7 @@ HashAggregateSharedState::HashAggregateSharedState(main::ClientContext* context,
     // Each partition is the same, so we create the list of distinct queues for the first partition
     // and copy it to the other partitions
     for (size_t i = 1; i < globalPartitions.size(); i++) {
-        globalPartitions[i].queue = std::make_unique<HashTableQueue>(MemoryManager::Get(*context),
+        globalPartitions[i].queue = std::make_unique<HashTableQueue>(context->getMemoryManager(),
             this->aggInfo.tableSchema.copy());
         globalPartitions[i].distinctTableQueues.resize(partition.distinctTableQueues.size());
         std::transform(partition.distinctTableQueues.begin(), partition.distinctTableQueues.end(),
@@ -228,7 +227,7 @@ void HashAggregateLocalState::init(HashAggregateSharedState* sharedState, Result
     }
 
     aggregateHashTable = std::make_unique<PartitioningAggregateHashTable>(sharedState,
-        *MemoryManager::Get(*context), std::move(keyDataTypes), std::move(payloadDataTypes),
+        *context->getMemoryManager(), std::move(keyDataTypes), std::move(payloadDataTypes),
         aggregateFunctions, std::move(distinctKeyTypes), info.tableSchema.copy());
 }
 
