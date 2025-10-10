@@ -13,7 +13,7 @@ jobs:
               generate-documentation --target Kuzu --disable-indexing \
               --output-path ./docs \
               --transform-for-static-hosting \
-              --hosting-base-path swift
+              --hosting-base-path /api-docs/swift
       # upload-artifact rejects certain characters in the path, so we zip the 
       # documentation directory before uploading.
       - name: Zip documentation
