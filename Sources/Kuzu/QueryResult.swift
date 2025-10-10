@@ -5,8 +5,24 @@
 //  Copyright © 2023 - 2025 Kùzu Inc.
 //  This code is licensed under MIT license (see LICENSE for details)
 
+import cxx_kuzu
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
-@_implementationOnly import cxx_kuzu
+#endif
+
+#if os(macOS) || os(iOS)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#elseif os(Windows)
+import ucrt
+#else
+#error("Unknown platform")
+#endif
 
 /// A class representing the result of a query, which can be used to iterate over the result set.
 /// QueryResult is returned by the `query` and `execute` methods of Connection.

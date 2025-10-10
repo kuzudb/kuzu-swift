@@ -5,7 +5,7 @@
 //  Copyright © 2023 - 2025 Kùzu Inc.
 //  This code is licensed under MIT license (see LICENSE for details)
 
-@_implementationOnly import cxx_kuzu
+import cxx_kuzu
 
 /// Represents a connection to a Kuzu database.
 public final class Connection: @unchecked Sendable {
